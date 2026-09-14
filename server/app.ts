@@ -24,11 +24,11 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.get('/api/health',(_req,res)=>res.json({status:'ok',configured:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_ANON_KEY)}));
  app.get('/api/public/shop/:slug',async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
-  const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url').eq('slug',slug).maybeSingle();dbError(shop.error);
+  const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color').eq('slug',slug).maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
   const [services,team]=await Promise.all([
    db.from('services').select('id,name,duration_minutes,price_cents').eq('barbershop_id',shop.data.id).eq('active',true).order('name'),
-   db.from('memberships').select('user_id,display_name').eq('barbershop_id',shop.data.id).eq('role','BARBER').eq('active',true).order('display_name')
+   db.from('memberships').select('user_id,display_name,role').eq('barbershop_id',shop.data.id).in('role',['OWNER','BARBER']).eq('active',true).order('display_name')
   ]);dbError(services.error);dbError(team.error);
   res.json({shop:shop.data,services:services.data??[],team:team.data??[]});
  });
@@ -76,8 +76,8 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const r=await c.db.rpc('update_own_contact',{p_shop:c.shopId,p_phone:v.phone});dbError(r.error);res.json({ok:true});
  });
  app.patch('/api/shop/branding',async(req,res)=>{
-  const c=ctx(res);requireOwner(c);const v=z.object({title:z.string().trim().max(100).default(''),description:z.string().trim().max(280).default(''),logoUrl:z.string().trim().max(500).default(''),coverUrl:z.string().trim().max(500).default('')}).strict().parse(req.body);
-  const r=await c.db.rpc('update_shop_branding',{p_shop:c.shopId,p_title:v.title,p_description:v.description,p_logo_url:v.logoUrl,p_cover_url:v.coverUrl});dbError(r.error);res.json({ok:true});
+  const c=ctx(res);requireOwner(c);const v=z.object({title:z.string().trim().max(100).default(''),description:z.string().trim().max(280).default(''),logoUrl:z.string().trim().max(500).default(''),coverUrl:z.string().trim().max(500).default(''),backgroundUrl:z.string().trim().max(500).default(''),accentColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#ffffff')}).strict().parse(req.body);
+  const r=await c.db.rpc('update_shop_branding',{p_shop:c.shopId,p_title:v.title,p_description:v.description,p_logo_url:v.logoUrl,p_cover_url:v.coverUrl,p_background_url:v.backgroundUrl,p_accent_color:v.accentColor});dbError(r.error);res.json({ok:true});
  });
  app.post('/api/staff',async(req,res)=>{
   const c=ctx(res);requireOwner(c);

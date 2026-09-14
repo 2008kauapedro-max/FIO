@@ -1,4 +1,5 @@
 import { useEffect,useMemo,useRef,useState,type ChangeEvent,type FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Camera,ImagePlus,Plus,Trash2,X } from 'lucide-react';
 import type { FeedPost } from '../../shared/domain';
 import { api,supabase } from '../lib/api';
@@ -19,7 +20,7 @@ const relative=(iso:string)=>{
 };
 
 export function Feed(p:WorkspaceProps){
- const {data}=p,canPost=data.membership.role==='OWNER'||data.membership.role==='BARBER';
+ const {data}=p,canPost=data.membership.role==='OWNER'||data.membership.role==='BARBER',navigate=useNavigate();
  const [composer,setComposer]=useState(false),[urls,setUrls]=useState<Record<string,string>>({}),[removing,setRemoving]=useState<string|null>(null);
  useEffect(()=>{
   let alive=true;
@@ -52,7 +53,7 @@ export function Feed(p:WorkspaceProps){
  }
  return <>
   <PageTitle eyebrow="INSPIRAÇÃO DA CASA" title="Feed" description="Cortes, detalhes e trabalhos da equipe em um só lugar." action={canPost?<button className="primary" onClick={()=>setComposer(true)}><Plus size={18}/>Nova publicação</button>:undefined}/>
-  {featured.length>0&&<section className="feed-team" aria-label="Profissionais"><div className="section-title"><h2>Profissionais</h2><span className="muted">Trabalhos recentes da equipe</span></div><div className="feed-team-scroll">{featured.map(member=><div className="feed-team-person" key={member.user_id}><span className="feed-team-avatar">{member.display_name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><strong>{member.display_name.split(' ')[0]}</strong><small>FIO</small></div>)}</div></section>}
+  {featured.length>0&&<section className="feed-team" aria-label="Profissionais"><div className="section-title"><h2>Profissionais</h2><span className="muted">Trabalhos recentes da equipe</span></div><div className="feed-team-scroll">{featured.map(member=><button className="feed-team-person feed-team-button" key={member.user_id} onClick={()=>navigate(`${p.base}/equipe`)}><span className="feed-team-avatar">{member.display_name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><strong>{member.display_name.split(' ')[0]}</strong><small>Contato</small></button>)}</div></section>}
   {data.posts.length?<section className="feed-grid">{data.posts.map(post=>{
    const canDelete=canPost&&(data.membership.role==='OWNER'||post.author_id===data.membership.user_id);
    return <article className="feed-card" key={post.id}>

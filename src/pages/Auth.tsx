@@ -10,7 +10,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  const [email,setEmail]=useState(''),[password,setPassword]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  async function submit(e:FormEvent){
   e.preventDefault();setMessage('');
-  if(!supabase){setMessage('A conexão do Supabase precisa ser configurada para acessar uma conta real. A demonstração está disponível abaixo.');return;}
+  if(!supabase){setMessage('A conexão do Supabase precisa ser configurada para acessar sua conta.');return;}
   setBusy(true);
   try{
    const redirect=`${window.location.origin}/reset-password`;
@@ -23,7 +23,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  }
  const heading=reset?'Uma nova senha.':mode==='signup'?'Seu próximo capítulo.':mode==='forgot'?'Vamos recuperar seu acesso.':audience==='client'?'Seu espaço está pronto.':'Tudo começa aqui.';
  return <div className="auth-page">
-  <Link className="auth-logo" to="/"><img src="/branding/FIObranco.png" alt="FIO"/></Link>
+  <Link className="auth-logo" to="/"><img src="/branding/fio-mark.png" alt="FIO"/></Link>
   <div className="auth-card">
    <p className="eyebrow">{audience==='client'?'ACESSO DO CLIENTE':'BEM-VINDO AO FIO'}</p>
    <h1>{heading}</h1>
@@ -35,7 +35,6 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     <button className="primary full" disabled={busy}>{busy?'Aguarde…':reset?'Salvar senha':mode==='signup'?'Criar conta':mode==='forgot'?'Enviar instruções':'Entrar'}</button>
    </form>
    {!reset&&<div className="auth-options"><button className="text-button" onClick={()=>{setMode(mode==='signup'?'login':'signup');setMessage('');}}>{mode==='signup'?'Já tenho uma conta':'Criar uma conta'}</button><button className="text-button" onClick={()=>{setMode('forgot');setMessage('');}}>Esqueci minha senha</button></div>}
-   <Link className="demo-link" to="/demo/owner">Explorar demonstração ↗</Link>
   </div>
   <p className="auth-footer">MENOS RUÍDO. MAIS FIO.</p>
  </div>;
@@ -55,7 +54,7 @@ export function Onboarding({onDone}:{onDone:()=>void}) {
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  return <div className="auth-page">
-  <span className="auth-logo"><img src="/branding/FIObranco.png" alt="FIO"/></span>
+  <span className="auth-logo"><img src="/branding/fio-mark.png" alt="FIO"/></span>
   <div className="auth-card">
    <p className="eyebrow">SEU ESPAÇO</p><h1>Vamos conectar os pontos.</h1>
    <div className="segmented">{([['create','Sou responsável'],['join','Sou cliente'],['invite','Tenho convite']] as const).map(([v,t])=><button type="button" className={mode===v?'selected':''} key={v} onClick={()=>setMode(v)}>{t}</button>)}</div>

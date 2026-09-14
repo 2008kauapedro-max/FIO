@@ -1,4 +1,4 @@
-const CACHE='fio-shell-v2';
+const CACHE='fio-shell-v3';
 const SHELL=['/','/manifest.webmanifest','/icons/icon-192.png','/icons/icon-512.png','/textures/fio-pattern-dark.png','/textures/fio-pattern-light.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).catch(()=>undefined));self.skipWaiting();});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));});
