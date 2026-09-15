@@ -2,6 +2,7 @@ import { useEffect,useState,type FormEvent } from 'react';
 import { Link,useLocation,useNavigate } from 'react-router-dom';
 import { supabase,api } from '../lib/api';
 import { Field } from '../components/ui';
+import { Eye,EyeOff } from 'lucide-react';
 import { OwnerOnboarding } from './OwnerOnboarding';
 
 type AuthMode='login'|'signup'|'forgot';
@@ -22,6 +23,8 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  const [busy,setBusy]=useState(false);
  const [resetReady,setResetReady]=useState(!reset);
  const [resetInvalid,setResetInvalid]=useState(false);
+ const [showPassword,setShowPassword]=useState(false);
+ const [showConfirmPassword,setShowConfirmPassword]=useState(false);
 
  useEffect(()=>{
   if(!reset||!supabase)return;
@@ -68,8 +71,11 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   return '/login';
  };
 
- async function submit(e:FormEvent){
+ async function submit(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
+  const form=new FormData(e.currentTarget);
+  const submittedPassword=String(form.get('password')??password);
+  const submittedConfirmPassword=String(form.get('confirmPassword')??confirmPassword);
   setMessage('');
 
   if(!supabase){
@@ -82,11 +88,11 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     setMessage('Este link de recuperação é inválido ou expirou. Solicite um novo link.');
     return;
    }
-   if(password.length<8){
+   if(submittedPassword.length<8){
     setMessage('A nova senha precisa ter pelo menos 8 caracteres.');
     return;
    }
-   if(password!==confirmPassword){
+   if(submittedPassword!==submittedConfirmPassword){
     setMessage('As senhas não são iguais. Confira e tente novamente.');
     return;
    }
@@ -96,7 +102,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
   try{
    if(reset){
-    const result=await supabase.auth.updateUser({password});
+    const result=await supabase.auth.updateUser({password:submittedPassword});
     if(result.error){
      setMessage('Não foi possível alterar a senha. O link pode ter expirado. Solicite um novo link.');
      return;
@@ -143,7 +149,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     return;
    }
 
-   const result=await supabase.auth.signInWithPassword({email,password});
+   const result=await supabase.auth.signInWithPassword({email,password:submittedPassword});
    if(result.error){
     setMessage('Não foi possível entrar. Confira seu e-mail e senha.');
     return;
@@ -230,26 +236,32 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     </Field>}
 
     {(reset||mode!=='forgot')&&<Field label={reset?'Nova senha':'Senha'}>
-     <input
-      type="password"
-      minLength={8}
-      autoComplete={mode==='login'&&!reset?'current-password':'new-password'}
-      value={password}
-      onChange={e=>setPassword(e.target.value)}
-      required
-     />
-    </Field>}
+      <div style={{position:'relative'}}>
+       <input name="password" type={showPassword?'text':'password'} minLength={8}
+        autoComplete={mode==='login'&&!reset?'current-password':'new-password'}
+        value={password} onChange={e=>setPassword(e.target.value)}
+        style={{paddingRight:48}} required />
+       <button type="button" aria-label={showPassword?'Ocultar senha':'Mostrar senha'}
+        title={showPassword?'Ocultar senha':'Mostrar senha'} onClick={()=>setShowPassword(v=>!v)}
+        style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',display:'grid',placeItems:'center',width:32,height:32,padding:0,border:0,background:'transparent',color:'inherit',cursor:'pointer'}}>
+        {showPassword?<EyeOff size={18}/>:<Eye size={18}/>}
+       </button>
+      </div>
+     </Field>}
 
     {reset&&<Field label="Confirmar nova senha">
-     <input
-      type="password"
-      minLength={8}
-      autoComplete="new-password"
-      value={confirmPassword}
-      onChange={e=>setConfirmPassword(e.target.value)}
-      required
-     />
-    </Field>}
+      <div style={{position:'relative'}}>
+       <input name="confirmPassword" type={showConfirmPassword?'text':'password'} minLength={8}
+        autoComplete="new-password" value={confirmPassword}
+        onChange={e=>setConfirmPassword(e.target.value)}
+        style={{paddingRight:48}} required />
+       <button type="button" aria-label={showConfirmPassword?'Ocultar confirmação de senha':'Mostrar confirmação de senha'}
+        title={showConfirmPassword?'Ocultar senha':'Mostrar senha'} onClick={()=>setShowConfirmPassword(v=>!v)}
+        style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',display:'grid',placeItems:'center',width:32,height:32,padding:0,border:0,background:'transparent',color:'inherit',cursor:'pointer'}}>
+        {showConfirmPassword?<EyeOff size={18}/>:<Eye size={18}/>}
+       </button>
+      </div>
+     </Field>}
 
     {message&&<p role="status" className="notice">{message}</p>}
 
