@@ -25,7 +25,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.get('/api/health',(_req,res)=>res.json({status:'ok',configured:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_ANON_KEY)}));
  app.get('/api/public/shop/:slug',async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
-  const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
+  const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
   const [services,team,palette]=await Promise.all([
    db.from('services').select('id,name,duration_minutes,price_cents').eq('barbershop_id',shop.data.id).eq('active',true).order('name'),
