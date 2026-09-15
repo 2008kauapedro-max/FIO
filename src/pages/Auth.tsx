@@ -2,6 +2,7 @@ import { useState,type FormEvent } from 'react';
 import { Link,useLocation,useNavigate } from 'react-router-dom';
 import { supabase,api } from '../lib/api';
 import { Field } from '../components/ui';
+import { OwnerOnboarding } from './OwnerOnboarding';
 
 export function AuthPage({reset=false}:{reset?:boolean}) {
  const location=useLocation(),navigate=useNavigate();
@@ -40,7 +41,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  </div>;
 }
 
-export function Onboarding({onDone}:{onDone:()=>void}) {
+function LegacyOnboarding({onDone}:{onDone:()=>void}) {
  const params=new URLSearchParams(window.location.search),token=params.get('invite'),presetShop=params.get('shop')??'';
  const [mode,setMode]=useState<'create'|'join'|'invite'>(token?'invite':presetShop?'join':'create');
  const [name,setName]=useState(''),[slug,setSlug]=useState(presetShop),[displayName,setDisplayName]=useState(''),[phone,setPhone]=useState(''),[invite,setInvite]=useState(token??''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
@@ -69,4 +70,8 @@ export function Onboarding({onDone}:{onDone:()=>void}) {
    <button className="text-button" onClick={()=>supabase?.auth.signOut()}>Sair da conta</button>
   </div>
  </div>;
+}
+
+export function Onboarding({onDone,shopId}:{onDone:()=>void;shopId?:string}) {
+ return <OwnerOnboarding onDone={onDone} shopId={shopId}/>;
 }

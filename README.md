@@ -129,3 +129,7 @@ TODO.md                  configurações externas e evolução pendente
 Consulte `TODO.md` antes de utilizar em produção. O texto recebido nesta conversa cobria identidade visual, mobile e IA; nenhum outro “MASTER BUILD PROMPT” completo estava disponível no contexto. As decisões adicionais de core estão explicitadas aqui e na arquitetura.
 
 Referências consultadas: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) e [validação de usuário via getUser](https://supabase.com/docs/reference/javascript/auth-getuser).
+
+## Painel PLATFORM_ADMIN
+
+Acesso em `/acesso/plataforma`, separado de OWNER/BARBER/CLIENT. Consulte `docs/PLATFORM-ADMIN.md` para migration, permissões, validações e ativação. O vínculo de um usuário Auth existente está em `supabase/register-existing-platform-admin.sql`; nenhuma senha é necessária no código.

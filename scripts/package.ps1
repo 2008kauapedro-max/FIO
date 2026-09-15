@@ -5,13 +5,13 @@ $fioRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $fioDestination = [IO.Path]::GetFullPath($Destination)
 if ([IO.Path]::GetExtension($fioDestination) -ne '.zip') { throw 'Destination must be a ZIP file.' }
 if (Test-Path -LiteralPath $fioDestination) { throw 'Destination already exists; choose a new file.' }
-$fioExcluded = @('node_modules','.npm-cache','.git','work','test-results','playwright-report')
+$fioExcluded = @('node_modules','.npm-cache','.git','work','dist','dist-server','test-results','playwright-report','.temp','.branches','.package-stage')
 function Get-FioFiles([string]$Directory) {
  foreach ($fioItem in Get-ChildItem -LiteralPath $Directory -Force) {
   if (($fioItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Symlink/reparse point is not permitted in the distribution.' }
   if ($fioItem.PSIsContainer) {
    if ($fioItem.Name -notin $fioExcluded) { Get-FioFiles $fioItem.FullName }
-  } elseif ($fioItem.Name -notlike '*.zip' -and $fioItem.Name -notlike '*.log' -and ($fioItem.Name -notlike '.env*' -or $fioItem.Name -eq '.env.example')) { $fioItem }
+  } elseif ($fioItem.Name -notlike '*.zip' -and $fioItem.Name -notlike '*.sha256' -and $fioItem.Name -notlike '*.log' -and ($fioItem.Name -notlike '.env*' -or $fioItem.Name -eq '.env.example')) { $fioItem }
  }
 }
 $fioFiles = @(Get-FioFiles $fioRoot)
@@ -28,7 +28,7 @@ $fioArchive = [IO.Compression.ZipFile]::OpenRead($fioDestination)
 try {
  if ($fioArchive.Entries.Count -ne $fioFiles.Count) { throw 'ZIP entry count mismatch.' }
  foreach ($fioEntry in $fioArchive.Entries) {
-  if (-not $fioEntry.FullName.StartsWith('fio-saas-v2/') -or $fioEntry.FullName.Contains('..')) { throw 'Invalid archive entry.' }
+  if (-not $fioEntry.FullName.StartsWith('fio-saas-v2/') -or ($fioEntry.FullName -split '/') -contains '..') { throw 'Invalid archive entry.' }
   $fioRelative = $fioEntry.FullName.Substring(12)
   $fioSource = Join-Path $fioRoot $fioRelative
   $fioHasher = [Security.Cryptography.SHA256]::Create()

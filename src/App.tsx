@@ -1,4 +1,4 @@
-import { useCallback,useEffect,useState } from 'react';
+import { useCallback,useEffect,useState,lazy,Suspense } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
 import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,Settings,LogOut,Menu,X,ArrowUpRight,PanelLeftClose,Images,Megaphone,Sun,Moon } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
@@ -10,6 +10,8 @@ import { Agenda,Customers,Dashboard,Reports,Services,Settings as SettingsPage,Su
 import { AssistantChat } from './components/AssistantChat';
 import { Feed } from './pages/Feed';
 import { PublicPortal } from './pages/PublicPortal';
+const PlatformApp=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformApp})));
+const PlatformLogin=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformLogin})));
 import { Spinner } from './components/ui';
 
 type NavItem={path:string;label:string;icon:typeof LayoutDashboard;roles:Role[]};
@@ -31,26 +33,29 @@ type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outc
 
 export default function App(){
  const location=useLocation(),navigate=useNavigate();
+ const isPlatform=location.pathname==='/acesso/plataforma'||location.pathname==='/platform'||location.pathname.startsWith('/platform/');
  const demo=false,demoRole='OWNER' as Role;
- const [session,setSession]=useState<Session|null>(null),[authReady,setAuthReady]=useState(!supabase),[memberships,setMemberships]=useState<Membership[]|null>(null),[shopId,setShopId]=useState(sessionStorage.getItem('fio-shop')??''),[data,setData]=useState<Bootstrap|null>(null),[error,setError]=useState(''),[toast,setToast]=useState(''),[menu,setMenu]=useState(false);
+ const [session,setSession]=useState<Session|null>(null),[authReady,setAuthReady]=useState(!supabase),[memberships,setMemberships]=useState<Membership[]|null>(null),[onboardingShopId,setOnboardingShopId]=useState(''),[shopId,setShopId]=useState(sessionStorage.getItem('fio-shop')??''),[data,setData]=useState<Bootstrap|null>(null),[error,setError]=useState(''),[toast,setToast]=useState(''),[menu,setMenu]=useState(false);
  const [theme,setTheme]=useState<Theme>(()=>(localStorage.getItem('fio-theme')==='light'?'light':'dark'));
  const [installPrompt,setInstallPrompt]=useState<InstallPromptEvent|null>(null);
 
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('fio-theme',theme);},[theme]);
  useEffect(()=>{const onInstall=(event:Event)=>{event.preventDefault();setInstallPrompt(event as InstallPromptEvent);};window.addEventListener('beforeinstallprompt',onInstall);return()=>window.removeEventListener('beforeinstallprompt',onInstall);},[]);
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{setSession(s);setAuthReady(true);if(!s){setData(null);setMemberships(null);}});return()=>subscription.unsubscribe();},[]);
- const loadMemberships=useCallback(async()=>{try{const m=await api<Membership[]>('/memberships');setMemberships(m);setShopId(prev=>m.some(x=>x.barbershop_id===prev)?prev:m[0]?.barbershop_id??'');setError('');}catch(e){setError((e as Error).message);}},[]);
- useEffect(()=>{if(session&&!demo)void loadMemberships();},[session?.user.id,demo,loadMemberships]);
+ const loadMemberships=useCallback(async()=>{try{const m=await api<Membership[]>('/memberships');setMemberships(m);const owner=m.find(x=>x.role==='OWNER');if(owner){try{const snapshot=await api<{shop:{onboarding_completed:boolean}}>('/onboarding/progress',owner.barbershop_id);setOnboardingShopId(snapshot.shop.onboarding_completed?'':owner.barbershop_id);}catch{setOnboardingShopId('');}}else setOnboardingShopId('');setShopId(prev=>m.some(x=>x.barbershop_id===prev)?prev:m[0]?.barbershop_id??'');setError('');}catch(e){setError((e as Error).message);}},[]);
+ useEffect(()=>{if(session&&!demo&&!isPlatform)void loadMemberships();},[session?.user.id,demo,isPlatform,loadMemberships]);
  const refresh=useCallback(async()=>{if(demo||!shopId)return;const next=await api<Bootstrap>('/bootstrap',shopId);setData(next);setError('');},[demo,shopId]);
- useEffect(()=>{if(session&&shopId){setData(null);void refresh().catch(e=>setError(e.message));}},[shopId,session?.user.id,refresh]);
+ useEffect(()=>{if(session&&shopId&&!isPlatform&&!onboardingShopId){setData(null);void refresh().catch(e=>setError(e.message));}},[shopId,session?.user.id,refresh,isPlatform,onboardingShopId]);
  useEffect(()=>{setMenu(false);},[location.pathname]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),5000);return()=>clearTimeout(timer);},[toast]);
  useEffect(()=>{
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-  if(!manifest||!data)return;
+  if(!manifest||!data||isPlatform)return;
   manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':'/manifest-client.webmanifest';
- },[data?.membership.role]);
+ },[data?.membership.role,isPlatform]);
 
+ if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<Spinner/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
+ if(isPlatform)return <Suspense fallback={<Spinner/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
  if(location.pathname.startsWith('/b/'))return <PublicPortal/>;
  if(location.pathname==='/acesso/gestao')return <Navigate replace to="/login?audience=owner"/>;
  if(location.pathname==='/acesso/equipe')return <Navigate replace to="/login?audience=staff"/>;
@@ -60,7 +65,7 @@ export default function App(){
  if(location.pathname==='/')return <Navigate replace to={(!session?'/login':data?roleHome(data.membership.role):'/owner')+location.search}/>;
  if(!demo&&!authReady)return <Spinner/>;
  if(!demo&&!session)return <Navigate replace to="/login"/>;
- if(!demo&&memberships?.length===0)return <Onboarding onDone={()=>void loadMemberships()}/>;
+ if(!demo&&(memberships?.length===0||Boolean(onboardingShopId)))return <Onboarding shopId={onboardingShopId||undefined} onDone={()=>void loadMemberships()}/>;
  if(error)return <div className="full-error"><h1>Não foi possível abrir seu espaço.</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>Tentar novamente</button><Link to="/login">Voltar ao acesso</Link></div>;
  if(!data)return <Spinner/>;
 

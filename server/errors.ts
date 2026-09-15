@@ -12,6 +12,10 @@ const errors: Record<string, [number, string]> = {
  OWNER_SHOP_LIMIT: [409, 'Sua conta já possui uma barbearia.'], SHOP_NOT_FOUND: [404, 'Barbearia não encontrada.'],
  INVALID_APPOINTMENT: [400, 'Conclua o atendimento antes de registrar o recebimento.'],
  INVALID_BARBER: [400, 'Profissional indisponível.'], INVALID_SERVICE: [400, 'Serviço indisponível.'], INVALID_SERVICE_OR_BARBER: [400, 'Serviço ou profissional indisponível.']
+ ,SLUG_TAKEN: [409, 'Este link já está em uso. Escolha outro.']
+ ,INVALID_SLUG: [400, 'Use apenas letras minúsculas, números e hífens no link.']
+ ,INVALID_ACCENT_COLOR: [400, 'Escolha uma cor válida.']
+ ,ONBOARDING_INCOMPLETE: [400, 'Complete os campos obrigatórios antes de ativar.']
 };
 export function dbError(error: { message: string; code?: string } | null) {
  if (!error) return;

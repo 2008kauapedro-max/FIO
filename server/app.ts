@@ -1,4 +1,5 @@
 import express from 'express';
+import { platformRouter } from './platform.js';
 import { createClient } from '@supabase/supabase-js';
 import helmet from 'helmet';
 import { resolve } from 'node:path';
@@ -24,17 +25,19 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.get('/api/health',(_req,res)=>res.json({status:'ok',configured:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_ANON_KEY)}));
  app.get('/api/public/shop/:slug',async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
-  const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color').eq('slug',slug).maybeSingle();dbError(shop.error);
+  const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
-  const [services,team]=await Promise.all([
+  const [services,team,palette]=await Promise.all([
    db.from('services').select('id,name,duration_minutes,price_cents').eq('barbershop_id',shop.data.id).eq('active',true).order('name'),
-   db.from('memberships').select('user_id,display_name,role').eq('barbershop_id',shop.data.id).in('role',['OWNER','BARBER']).eq('active',true).order('display_name')
-  ]);dbError(services.error);dbError(team.error);
-  res.json({shop:shop.data,services:services.data??[],team:team.data??[]});
+   db.from('memberships').select('user_id,display_name,role').eq('barbershop_id',shop.data.id).in('role',['OWNER','BARBER']).eq('active',true).order('display_name'),
+   db.from('shop_palettes').select('*').eq('palette_key',shop.data.palette_key??'fio-black').maybeSingle()
+  ]);dbError(services.error);dbError(team.error);dbError(palette.error);
+  const asset=(path:string|null)=>path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:null;
+  res.json({shop:{...shop.data,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[]});
  });
  app.get('/api/public/manifest/:slug',async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
-  const shop=await db.from('barbershops').select('name,public_title').eq('slug',slug).maybeSingle();dbError(shop.error);
+  const shop=await db.from('barbershops').select('name,public_title').eq('slug',slug).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
   const name=shop.data.public_title||shop.data.name;
   res.type('application/manifest+json').set('Cache-Control','public, max-age=300').send(JSON.stringify({id:`/b/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/b/${slug}`,scope:`/b/${slug}`,display:'standalone',background_color:'#000000',theme_color:'#000000',orientation:'portrait-primary',icons:[{src:'/icons/icon-192.png',sizes:'192x192',type:'image/png',purpose:'any'},{src:'/icons/icon-512.png',sizes:'512x512',type:'image/png',purpose:'any'}]}));
@@ -54,6 +57,36 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const result=v.mode==='create'?await a.db.rpc('create_barbershop',{p_name:v.name,p_slug:v.slug,p_display_name:v.displayName}):v.mode==='join'?await a.db.rpc('join_barbershop',{p_slug:v.slug,p_name:v.displayName}):await a.db.rpc('accept_invitation',{p_token:v.token,p_name:v.displayName});
   dbError(result.error);res.status(201).json({barbershopId:result.data});
  });
+ app.get('/api/onboarding/progress',async(req,res)=>{
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);
+  const [progress,shop,services,hours,amenities,palettes]=await Promise.all([
+   a.db.from('onboarding_progress').select('*').eq('barbershop_id',c.shopId).maybeSingle(),
+   a.db.from('barbershops').select('id,name,slug,timezone,public_title,public_description,logo_url,cover_url,background_url,accent_color,onboarding_step,onboarding_completed,whatsapp,instagram,address,theme_mode,palette_key,custom_accent,logo_asset_path,cover_asset_path,background_asset_path').eq('id',c.shopId).single(),
+   a.db.from('services').select('id,name,duration_minutes,price_cents,active').eq('barbershop_id',c.shopId).order('name'),
+   a.db.from('business_hours').select('weekday,opens_at,closes_at').eq('barbershop_id',c.shopId).order('weekday'),
+   a.db.from('shop_amenities').select('amenity_key,enabled').eq('barbershop_id',c.shopId).eq('enabled',true),
+   a.db.from('shop_palettes').select('*').order('palette_key')
+  ]);[progress,shop,services,hours,amenities,palettes].forEach(r=>dbError(r.error));
+  res.json({progress:progress.data,shop:shop.data,services:services.data??[],hours:hours.data??[],amenities:amenities.data?.map(x=>x.amenity_key)??[],palettes:palettes.data??[],owner:c.member});
+ });
+ app.post('/api/onboarding/setup',async(req,res)=>{
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);
+  const v=z.object({setup:z.object({name:z.string().trim().min(2).max(100).optional(),slug:z.string().regex(/^[a-z0-9-]{3,60}$/).optional(),whatsapp:z.string().trim().max(24).optional(),instagram:z.string().trim().max(120).optional(),address:z.string().trim().max(240).optional(),themeMode:z.enum(['light','dark']).optional(),paletteKey:z.string().regex(/^[a-z][a-z0-9-]{1,40}$/).optional(),customAccent:z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(),amenities:z.array(z.string().regex(/^[a-z][a-z0-9-]{1,40}$/)).max(30).optional(),logoAssetPath:z.string().max(500).nullable().optional(),coverAssetPath:z.string().max(500).nullable().optional(),backgroundAssetPath:z.string().max(500).nullable().optional()}).strict(),step:z.number().int().min(1).max(5),completedSteps:z.array(z.number().int().min(1).max(5)).max(5),draft:z.record(z.string(),z.unknown()).default({})}).strict().parse(req.body);
+  const saved=await a.db.rpc('save_owner_setup',{p_shop:c.shopId,p_setup:v.setup});dbError(saved.error);
+  const progress=await a.db.rpc('save_onboarding_progress',{p_shop:c.shopId,p_step:v.step,p_completed:v.completedSteps,p_draft:v.draft});dbError(progress.error);res.json({ok:true});
+ });
+ app.post('/api/onboarding/services',async(req,res)=>{
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const v=z.object({id:z.uuid().optional(),name:z.string().trim().min(2).max(100),durationMinutes:z.number().int().min(10).max(240),priceCents:z.number().int().min(0).max(1000000),active:z.boolean().default(true)}).strict().parse(req.body);
+  const q=v.id?a.db.from('services').update({name:v.name,duration_minutes:v.durationMinutes,price_cents:v.priceCents,active:v.active}).eq('id',v.id).eq('barbershop_id',c.shopId):a.db.from('services').insert({barbershop_id:c.shopId,name:v.name,duration_minutes:v.durationMinutes,price_cents:v.priceCents,active:v.active});
+  const r=await q.select().single();dbError(r.error);res.status(v.id?200:201).json(r.data);
+ });
+ app.post('/api/onboarding/hours',async(req,res)=>{
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const v=z.object({weekdays:z.array(z.number().int().min(0).max(6)).min(1).max(7),opensAt:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),closesAt:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),breakStart:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),breakEnd:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional()}).strict().parse(req.body);
+  if(v.opensAt>=v.closesAt)throw new ApiError(400,'INVALID_DATA','O fechamento deve ser depois da abertura.');
+  const rows=v.weekdays.map(weekday=>({barbershop_id:c.shopId,weekday,opens_at:v.opensAt,closes_at:v.closesAt}));const del=await a.db.from('business_hours').delete().eq('barbershop_id',c.shopId);dbError(del.error);const r=await a.db.from('business_hours').insert(rows);dbError(r.error);res.json({ok:true});
+ });
+ app.post('/api/onboarding/activate',async(req,res)=>{const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const r=await a.db.rpc('activate_owner_onboarding',{p_shop:c.shopId});dbError(r.error);res.json({ok:true,shopId:c.shopId});});
+ app.use('/api/platform',platformRouter());
  app.use('/api',async(req,res,next)=>{res.locals.ctx=await tenant(res.locals.auth,req);next();});
  const ctx=(res:express.Response)=>res.locals.ctx as TenantContext;
  app.get('/api/bootstrap',async(_req,res)=>res.json(await bootstrap(ctx(res))));
@@ -86,7 +119,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const created=await admin.auth.admin.createUser({email:v.email,password:v.temporaryPassword,email_confirm:true,user_metadata:{display_name:v.name}});
   if(created.error||!created.data.user) throw new ApiError(400,'STAFF_CREATE_FAILED','Não foi possível criar o acesso. Confira se o e-mail já está em uso.');
   const userId=created.data.user.id;
-  const membership=await admin.from('memberships').insert({barbershop_id:c.shopId,user_id:userId,role:'BARBER',display_name:v.name,phone:cleanPhone(v.phone),active:true});
+  const membership=await admin.rpc('platform_attach_provisioned_staff',{p_shop:c.shopId,p_user:userId,p_name:v.name,p_phone:cleanPhone(v.phone),p_actor:c.userId});
   if(membership.error){await admin.auth.admin.deleteUser(userId);dbError(membership.error);}
   res.status(201).json({userId});
  });

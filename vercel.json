@@ -1,12 +1,37 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/owner/:path*", "destination": "/index.html" },
-    { "source": "/barber/:path*", "destination": "/index.html" },
-    { "source": "/client/:path*", "destination": "/index.html" },
-    { "source": "/login", "destination": "/index.html" },
-    { "source": "/reset-password", "destination": "/index.html" },
-    { "source": "/acesso/:path*", "destination": "/index.html" },
-    { "source": "/b/:path*", "destination": "/index.html" }
+    {
+      "source": "/owner/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/barber/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/client/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reset-password",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/acesso/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/b/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/platform/:path*",
+      "destination": "/index.html"
+    }
   ]
 }
