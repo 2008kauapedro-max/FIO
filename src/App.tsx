@@ -40,7 +40,42 @@ export default function App(){
  const [installPrompt,setInstallPrompt]=useState<InstallPromptEvent|null>(null);
 
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('fio-theme',theme);},[theme]);
- useEffect(()=>{const onInstall=(event:Event)=>{event.preventDefault();setInstallPrompt(event as InstallPromptEvent);};window.addEventListener('beforeinstallprompt',onInstall);return()=>window.removeEventListener('beforeinstallprompt',onInstall);},[]);
+ useEffect(()=>{
+  const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+  if(!manifest)return;
+
+  const params=new URLSearchParams(location.search);
+  const audience=params.get('audience');
+
+  let href='/manifest.webmanifest';
+
+  if(location.pathname.startsWith('/b/')){
+   return;
+  }else if(isPlatform){
+   href='/manifest-platform.webmanifest';
+  }else if(data?.membership.role==='OWNER'||location.pathname==='/acesso/gestao'||audience==='owner'){
+   href='/manifest-owner.webmanifest';
+  }else if(data?.membership.role==='BARBER'||location.pathname==='/acesso/equipe'||audience==='staff'){
+   href='/manifest-staff.webmanifest';
+  }else if(data?.membership.role==='CLIENT'||audience==='client'){
+   href='/manifest-client.webmanifest';
+  }
+
+  const absolute=new URL(href,window.location.origin).href;
+  if(manifest.href!==absolute){
+   manifest.href=href;
+   setInstallPrompt(null);
+  }
+ },[location.pathname,location.search,data?.membership.role,isPlatform]);
+
+ useEffect(()=>{
+  const onInstall=(event:Event)=>{
+   event.preventDefault();
+   setInstallPrompt(event as InstallPromptEvent);
+  };
+  window.addEventListener('beforeinstallprompt',onInstall);
+  return()=>window.removeEventListener('beforeinstallprompt',onInstall);
+ },[]);
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{setSession(s);setAuthReady(true);if(!s){setData(null);setMemberships(null);}});return()=>subscription.unsubscribe();},[]);
  const loadMemberships=useCallback(async()=>{try{const m=await api<Membership[]>('/memberships');setMemberships(m);const owner=m.find(x=>x.role==='OWNER');if(owner){try{const snapshot=await api<{shop:{onboarding_completed:boolean}}>('/onboarding/progress',owner.barbershop_id);setOnboardingShopId(snapshot.shop.onboarding_completed?'':owner.barbershop_id);}catch{setOnboardingShopId('');}}else setOnboardingShopId('');setShopId(prev=>m.some(x=>x.barbershop_id===prev)?prev:m[0]?.barbershop_id??'');setError('');}catch(e){setError((e as Error).message);}},[]);
  useEffect(()=>{if(session&&!demo&&!isPlatform)void loadMemberships();},[session?.user.id,demo,isPlatform,loadMemberships]);
@@ -48,17 +83,17 @@ export default function App(){
  useEffect(()=>{if(session&&shopId&&!isPlatform&&!onboardingShopId){setData(null);void refresh().catch(e=>setError(e.message));}},[shopId,session?.user.id,refresh,isPlatform,onboardingShopId]);
  useEffect(()=>{setMenu(false);},[location.pathname]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),5000);return()=>clearTimeout(timer);},[toast]);
- useEffect(()=>{
-  const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-  if(!manifest||!data||isPlatform)return;
-  manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':'/manifest-client.webmanifest';
- },[data?.membership.role,isPlatform]);
-
  if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<Spinner/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
  if(isPlatform)return <Suspense fallback={<Spinner/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
  if(location.pathname.startsWith('/b/'))return <PublicPortal/>;
- if(location.pathname==='/acesso/gestao')return <Navigate replace to="/login?audience=owner"/>;
- if(location.pathname==='/acesso/equipe')return <Navigate replace to="/login?audience=staff"/>;
+ if(location.pathname==='/acesso/gestao'){
+  if(!authReady)return <Spinner/>;
+  return <Navigate replace to={session?'/owner':'/login?audience=owner'}/>;
+ }
+ if(location.pathname==='/acesso/equipe'){
+  if(!authReady)return <Spinner/>;
+  return <Navigate replace to={session?'/barber':'/login?audience=staff'}/>;
+ }
  if(location.pathname==='/login')return <AuthPage/>;
  if(location.pathname==='/reset-password')return <AuthPage reset/>;
  if(location.pathname==='/'&&!authReady)return <Spinner/>;

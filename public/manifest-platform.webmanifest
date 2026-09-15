@@ -2,11 +2,13 @@
   "id": "/fio-platform",
   "name": "FIO Platform",
   "short_name": "FIO Platform",
-  "start_url": "/platform",
+  "description": "Administração da plataforma FIO.",
+  "start_url": "/acesso/plataforma",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
+  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "/icons/icon-192.png",
