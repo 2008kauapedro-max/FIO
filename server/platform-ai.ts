@@ -180,29 +180,30 @@ async function callProvider(fetcher:typeof fetch,url:string,key:string,body:stri
 }
 
 
-function deterministicToolAnswer(name:string,data:unknown):string|null{
- const d=data as Record<string,unknown>;
- if(name==='get_platform_summary'){
-  const shops=typeof d.shops==='number'?d.shops:0,active=typeof d.activeShops==='number'?d.activeShops:0,suspended=typeof d.suspendedShops==='number'?d.suspendedShops:0,customers=typeof d.customerRecords==='number'?d.customerRecords:0;
-  return `O FIO tem **${shops}** barbearia${shops===1?'':'s'} cadastrada${shops===1?'':'s'}, sendo **${active} ativa${active===1?'':'s'}** e **${suspended} suspensa${suspended===1?'':'s'}**. Há **${customers}** cadastro${customers===1?'':'s'} de cliente na plataforma.`;
- }
- if(name==='get_platform_alerts'){
-  const total=typeof d.total==='number'?d.total:0;
-  return total===0?'Não há alertas abertos nesse filtro no momento.':`Existem **${total}** alerta${total===1?'':'s'} nesse filtro.`;
- }
- if(name==='get_saas_revenue')return 'A receita SaaS confirmada ainda está indisponível porque o FIO não possui uma fonte de pagamentos SaaS reais integrada. Os status administrativos das assinaturas não são tratados como receita.';
- return null;
-}
 
 type Message={role:string;content:string|null;tool_calls?:{id:string;type:'function';function:{name:string;arguments:string}}[];tool_call_id?:string};
 export async function askPlatformAI(ctx:AuthContext,body:unknown,fetcher:typeof fetch=fetch){
  await requirePlatformAdmin(ctx);const input=aiInput.parse(body),id=randomUUID();
  if(looksLikePromptAttack(input.message)||clearlyGenericAIRequest(input.message))return {requestId:id,message:AI_SCOPE_REPLY,tools:[],proposals:[] as Proposal[]};
  await aiAudit(ctx,'question',id,createHash('sha256').update(input.message).digest('hex'));
+ const directQuestion=input.message.toLocaleLowerCase('pt-BR');
+ const isDirectPlatformRead=
+  /quantas?.*barbear|barbearias?.*(ativas?|cadastrad)/.test(directQuestion) ||
+  /alerta/.test(directQuestion) ||
+  /receita|mrr|faturamento/.test(directQuestion);
+
+ if(isDirectPlatformRead){
+  const direct=await platformReadFallback(ctx,input.message,id,input.history);
+  if(direct){
+   await requirePlatformAdmin(ctx);
+   await aiAudit(ctx,'answer',id,'direct_platform_read');
+   return direct;
+  }
+ }
+
  const quota=await ctx.db.rpc('consume_platform_ai_quota');dbError(quota.error);if(quota.data!==true)throw new ApiError(429,'RATE_LIMIT','Limite do copiloto atingido. Aguarde antes de tentar novamente.');
  const url=process.env.AI_API_URL,key=process.env.AI_API_KEY,model=process.env.AI_MODEL;
  const signal=AbortSignal.timeout(25000),proposals:Proposal[]=[],used:string[]=[];
- let lastToolResult:{name:string;data:unknown}|null=null;
  try{
   if(!url||!key||!model||new URL(url).protocol!=='https:')throw Error('configuration');
   const messages:Message[]=[
@@ -223,7 +224,14 @@ export async function askPlatformAI(ctx:AuthContext,body:unknown,fetcher:typeof 
     const parsed=z.array(z.object({id:z.string().min(1).max(100),type:z.literal('function'),function:z.object({name:z.string().max(80),arguments:z.string().max(4000)}).strict()}).strict()).max(6).parse(m.tool_calls);
     if(calls+parsed.length>6)throw new ApiError(422,'TOOL_CALL_LIMIT','Limite de consultas atingido. Faça uma pergunta mais específica.');
     messages.push({role:'assistant',content:null,tool_calls:parsed});
-    for(const call of parsed){calls++;const r=await executeTool(ctx,call.function.name,JSON.parse(call.function.arguments),id,signal);used.push(call.function.name);lastToolResult={name:call.function.name,data:r.data};if(r.proposal)proposals.push(r.proposal);messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({trust:'UNTRUSTED_DATA',data:r.data})});}
+    for(const call of parsed){
+     calls++;
+     const r=await executeTool(ctx,call.function.name,JSON.parse(call.function.arguments),id,signal);
+     used.push(call.function.name);
+     if(r.proposal)proposals.push(r.proposal);
+
+     messages.push({role:'tool',tool_call_id:call.id,content:JSON.stringify({trust:'UNTRUSTED_DATA',data:r.data})});
+    }
    }else{
     if(typeof m.content!=='string'||!m.content.trim()||m.content.length>8000)throw Error('invalid_response');
     await requirePlatformAdmin(ctx);await aiAudit(ctx,'answer',id,'completed');
@@ -233,15 +241,7 @@ export async function askPlatformAI(ctx:AuthContext,body:unknown,fetcher:typeof 
  }catch(e){
   const detail=signal.aborted?'timeout':e instanceof ProviderHttpError?`provider_status=${e.status};kind=${e.kind}`:'request_failed';
    await aiAudit(ctx,'error',id,detail);
-    if(e instanceof ApiError)throw e;
-   if(e instanceof ProviderHttpError&&e.kind==='request'&&lastToolResult){
-    const deterministic=deterministicToolAnswer(lastToolResult.name,lastToolResult.data);
-    if(deterministic){
-     await requirePlatformAdmin(ctx);
-     await aiAudit(ctx,'answer',id,'tool_result_fallback');
-     return {requestId:id,message:deterministic,tools:used,proposals};
-    }
-   }
+   if(e instanceof ApiError)throw e;
   // Uma consulta simples continua útil mesmo se o provedor externo estiver temporariamente fora.
   // O fallback usa as mesmas tools autorizadas/RLS e nunca executa ações.
   const fallback=await platformReadFallback(ctx,input.message,id,input.history);
