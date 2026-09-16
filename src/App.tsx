@@ -56,7 +56,7 @@ export default function App(){
 
  if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<Spinner/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
  if(isPlatform)return <Suspense fallback={<Spinner/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
- if(location.pathname.startsWith('/b/'))return <PublicPortal/>;
+ if(location.pathname.startsWith('/b/')||location.pathname.startsWith('/barbearia/'))return <PublicPortal/>;
  if(location.pathname==='/acesso/gestao')return <Navigate replace to="/login?audience=owner"/>;
  if(location.pathname==='/acesso/equipe')return <Navigate replace to="/login?audience=staff"/>;
  if(location.pathname==='/login')return <AuthPage/>;

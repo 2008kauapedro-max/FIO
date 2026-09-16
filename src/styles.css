@@ -628,3 +628,35 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
   .settings-meta>div+div{border-left:0;border-top:1px solid var(--border)}
 }
 
+
+
+/* ===== FIO onboarding mobile stability + clearer public link ===== */
+.ob-fio-logo{display:block;width:auto;height:30px;max-width:112px;object-fit:contain}
+.owner-onboarding{min-height:100dvh;height:auto;overflow-x:hidden;overflow-y:visible;-webkit-overflow-scrolling:touch;padding-bottom:0}
+.ob-content{flex:1 0 auto;overflow:visible!important;overscroll-behavior:auto!important;padding-bottom:28px!important}
+.ob-footer{position:sticky!important;left:auto!important;bottom:0;transform:none!important;width:100%!important;margin-top:auto}
+.ob-instagram-field,.ob-public-link-field{display:flex;align-items:stretch;width:100%;min-width:0;border:1px solid color-mix(in srgb,var(--ob-text) 20%,transparent);background:color-mix(in srgb,var(--ob-surface) 92%,transparent);border-radius:9px;overflow:hidden}
+.ob-instagram-field:focus-within,.ob-public-link-field:focus-within{border-color:var(--ob-accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--ob-accent) 25%,transparent)}
+.ob-instagram-field>span,.ob-public-link-field>span{display:flex;align-items:center;flex:0 0 auto;padding:0 12px;border-right:1px solid color-mix(in srgb,var(--ob-text) 14%,transparent);color:var(--ob-muted);font-size:.82rem;white-space:nowrap;user-select:none}
+.ob-instagram-field>span{font-size:1rem}
+.ob-instagram-field input,.ob-public-link-field input{min-width:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.ob-public-link-field>span{max-width:58%;overflow:hidden;text-overflow:ellipsis}
+.ob-link-preview{margin-top:2px;color:var(--ob-muted)!important;overflow-wrap:anywhere}
+.ob-link-preview b{color:var(--ob-text);font-weight:500}
+@media(max-width:430px){
+ .owner-onboarding{min-height:100svh}
+ .ob-header{height:56px}
+ .ob-fio-logo{height:26px;max-width:96px}
+ .ob-content{padding:22px 17px 24px!important}
+ .ob-content h1{font-size:1.7rem}
+ .ob-muted{margin-bottom:20px}
+ .ob-content label{margin-bottom:12px}
+ .ob-content input:not([type=checkbox]):not([type=color]),.ob-content select{min-height:44px}
+ .ob-public-link-field{display:grid;grid-template-columns:1fr}
+ .ob-public-link-field>span{max-width:none;min-height:34px;border-right:0;border-bottom:1px solid color-mix(in srgb,var(--ob-text) 14%,transparent);padding:0 12px;font-size:.72rem}
+ .ob-amenities>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .ob-amenities button{justify-content:flex-start;text-align:left;border-radius:9px;min-height:42px}
+ .ob-footer{padding-inline:17px!important}
+}
+.install-nudge>div:nth-child(2){min-width:0}
+@media(max-width:760px){.install-nudge{align-items:start}.install-nudge span{line-height:1.35}}

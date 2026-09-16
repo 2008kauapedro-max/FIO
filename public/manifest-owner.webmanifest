@@ -3,7 +3,7 @@
   "name": "FIO Gestão",
   "short_name": "FIO Gestão",
   "description": "Gestão simples, agenda e inteligência para sua barbearia.",
-  "start_url": "/acesso/gestao",
+  "start_url": "/owner",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
@@ -22,5 +22,9 @@
       "type": "image/png",
       "purpose": "any"
     }
+  ],
+  "categories": [
+    "business",
+    "productivity"
   ]
 }

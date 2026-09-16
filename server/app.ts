@@ -41,14 +41,18 @@ app.get('/api/health', (_req, res) =>
    db.from('shop_palettes').select('*').eq('palette_key',shop.data.palette_key??'fio-black').maybeSingle()
   ]);dbError(services.error);dbError(team.error);dbError(palette.error);
   const asset=(path:string|null)=>path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:null;
-  res.json({shop:{...shop.data,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[]});
+  const instagram=shop.data.instagram?`@${String(shop.data.instagram).replace(/^@+/,'').trim()}`:null;
+  res.json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[]});
  });
  app.get('/api/public/manifest/:slug',async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
-  const shop=await db.from('barbershops').select('name,public_title').eq('slug',slug).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
+  const shop=await db.from('barbershops').select('name,public_title,logo_url,logo_asset_path,accent_color,custom_accent').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
   const name=shop.data.public_title||shop.data.name;
-  res.type('application/manifest+json').set('Cache-Control','public, max-age=300').send(JSON.stringify({id:`/b/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/b/${slug}`,scope:`/b/${slug}`,display:'standalone',background_color:'#000000',theme_color:'#000000',orientation:'portrait-primary',icons:[{src:'/icons/icon-192.png',sizes:'192x192',type:'image/png',purpose:'any'},{src:'/icons/icon-512.png',sizes:'512x512',type:'image/png',purpose:'any'}]}));
+  const icon=shop.data.logo_url||(shop.data.logo_asset_path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${shop.data.logo_asset_path}`:null);
+  if(!icon) throw new ApiError(409,'SHOP_LOGO_REQUIRED','A barbearia precisa de uma logo antes de disponibilizar o aplicativo.');
+  const theme=shop.data.custom_accent||shop.data.accent_color||'#000000';
+  res.type('application/manifest+json').set('Cache-Control','public, max-age=300').send(JSON.stringify({id:`/barbearia/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/barbearia/${slug}`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
  });
  app.use('/api',async(req,res,next)=>{res.locals.auth=await authenticator(req);next();});
  app.get('/api/memberships',async(_req,res)=>{

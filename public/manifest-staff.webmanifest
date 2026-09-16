@@ -3,7 +3,7 @@
   "name": "FIO Equipe",
   "short_name": "FIO Equipe",
   "description": "Agenda e rotina da equipe no FIO.",
-  "start_url": "/acesso/equipe",
+  "start_url": "/barber",
   "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
@@ -22,5 +22,9 @@
       "type": "image/png",
       "purpose": "any"
     }
+  ],
+  "categories": [
+    "business",
+    "productivity"
   ]
 }
