@@ -33,7 +33,7 @@ export function PlatformLogin({session,ready}:{session:Session|null;ready:boolea
  if(!ready)return <div className="pf-login"><State loading/></div>;
  if(session)return <Navigate replace to="/platform"/>;
  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const f=new FormData(e.currentTarget);try{if(!supabase)throw Error('Configure o Supabase para entrar.');const r=await supabase.auth.signInWithPassword({email:String(f.get('email')).trim(),password:String(f.get('password'))});if(r.error)throw Error('Não foi possível entrar. Confira suas credenciais.');navigate('/platform',{replace:true});}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- return <main className="pf-login"><form onSubmit={submit}><Link className="pf-logo" to="/">fio<span>®</span></Link><small>PLATFORM</small><h1>Administração do FIO</h1><p>Acesse com sua conta autorizada.</p><label>E-mail<input name="email" type="email" autoComplete="username" required/></label><label>Senha<input name="password" type="password" autoComplete="current-password" required/></label><Link to="/login?mode=forgot&audience=platform">Esqueci minha senha</Link>{error&&<p role="alert">{error}</p>}<button className="pf-primary" disabled={busy}>{busy?'Entrando…':'Entrar'}</button><Link to="/login">Outros acessos</Link></form></main>;
+ return <main className="pf-login"><form onSubmit={submit}><Link className="pf-logo pf-logo-image" to="/" aria-label="FIO"><img src="/FIOlogo+nome/Branco.png" alt="FIO"/></Link><small>PLATFORM</small><h1>Administração do FIO</h1><p>Acesse com sua conta autorizada.</p><label>E-mail<input name="email" type="email" autoComplete="username" required/></label><label>Senha<input name="password" type="password" autoComplete="current-password" required/></label><Link to="/login?mode=forgot&audience=platform">Esqueci minha senha</Link>{error&&<p role="alert">{error}</p>}<button className="pf-primary" disabled={busy}>{busy?'Entrando…':'Entrar'}</button><Link to="/login">Outros acessos</Link></form></main>;
 }
 export function PlatformApp({session,ready}:{session:Session|null;ready:boolean}){
  useEffect(()=>{const m=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');if(m)m.href='/manifest-platform.webmanifest';},[]);
@@ -104,8 +104,8 @@ function PlatformWorkspace({ admin }: { admin: PlatformAdmin }) {
   return (
     <div className="pf-shell">
       <aside className="pf-sidebar">
-        <Link className="pf-logo" to="/platform">
-          fio<span>®</span>
+        <Link className="pf-logo pf-logo-image" to="/platform" aria-label="FIO">
+          <img src="/FIOlogo+nome/Branco.png" alt="FIO"/>
         </Link>
 
         <small className="pf-kicker">PLATFORM</small>

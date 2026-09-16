@@ -1,9 +1,9 @@
 import { useState,useEffect,type FormEvent,type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight,Plus,Scissors,Clock3,Users,CalendarDays,Check,Search,Copy,SlidersHorizontal,MessageCircle,Star,Link as LinkIcon,Download,X,Share2,SquarePlus } from 'lucide-react';
+import { ArrowUpRight,ArrowLeft,Plus,Scissors,Clock3,Users,CalendarDays,Check,Search,Copy,SlidersHorizontal,MessageCircle,Star,Link as LinkIcon,Download,X,Share2,SquarePlus,UserRound,Store,ShieldCheck,KeyRound,LogOut,Palette,Eye,EyeOff } from 'lucide-react';
 import type { Bootstrap,Appointment,Service } from '../../shared/domain';
 import { money } from '../../shared/domain';
-import { api } from '../lib/api';
+import { api,supabase } from '../lib/api';
 import { Empty,Field,Modal,PageTitle,ArrowLink } from '../components/ui';
 export interface WorkspaceProps {data:Bootstrap;demo:boolean;base:string;refresh:()=>Promise<void>;notify:(text:string)=>void;updateDemo:(fn:(d:Bootstrap)=>Bootstrap)=>void;canInstall?:boolean;installApp?:()=>Promise<void>}
 const time=(date:string,zone:string)=>new Date(date).toLocaleTimeString('pt-BR',{timeZone:zone,hour:'2-digit',minute:'2-digit'});
@@ -84,13 +84,156 @@ export function Communication(p:WorkspaceProps){
  return <><PageTitle eyebrow="PERTO DE QUEM IMPORTA" title="Comunicação" description="Avisos internos para clientes e equipe. WhatsApp/e-mail entram depois via provedor." action={<button className="primary" onClick={()=>setModal(true)}><Plus size={18}/>Nova comunicação</button>}/>{p.data.campaigns.length?<div className="people-list">{p.data.campaigns.map(c=><div className="person-row" key={c.id}><div><h3>{c.title}</h3><p>{c.body}</p><small className="muted">Público: {c.audience} · {c.status==='published'?'Publicado':'Rascunho'}</small></div>{c.status==='draft'&&<button className="secondary" disabled={busy} onClick={()=>publish(c.id)}>Publicar</button>}</div>)}</div>:<Empty title="Nenhuma comunicação criada">Crie avisos para aparecerem como notificações dentro do FIO.</Empty>}{modal&&<Modal title="Nova comunicação" onClose={()=>setModal(false)}><form onSubmit={create}><Field label="Título"><input required minLength={2} maxLength={120} value={title} onChange={e=>setTitle(e.target.value)}/></Field><Field label="Mensagem"><textarea required maxLength={1000} rows={5} value={body} onChange={e=>setBody(e.target.value)}/></Field><Field label="Público"><select value={audience} onChange={e=>setAudience(e.target.value as 'CLIENT'|'BARBER'|'ALL')}><option value="CLIENT">Clientes</option><option value="BARBER">Equipe</option><option value="ALL">Todos</option></select></Field>{error&&<p className="notice" role="alert">{error}</p>}<button className="primary full" disabled={busy}>Salvar rascunho</button></form></Modal>}</>;
 }
 export function Settings(p:WorkspaceProps){
- const owner=p.data.membership.role==='OWNER';
- const [phone,setPhone]=useState(p.data.membership.phone??''),[title,setTitle]=useState(p.data.shop.public_title??p.data.shop.name),[description,setDescription]=useState(p.data.shop.public_description??''),[logoUrl,setLogoUrl]=useState(p.data.shop.logo_url??''),[coverUrl,setCoverUrl]=useState(p.data.shop.cover_url??''),[backgroundUrl,setBackgroundUrl]=useState(p.data.shop.background_url??''),[accentColor,setAccentColor]=useState(p.data.shop.accent_color??'#ffffff'),[busy,setBusy]=useState(false);
+ const owner=p.data.membership.role==='OWNER',navigate=useNavigate();
+ const [section,setSection]=useState<'profile'|'barbershop'|'access'|'account'>('profile');
+ const [phone,setPhone]=useState(p.data.membership.phone??'');
+ const [title,setTitle]=useState(p.data.shop.public_title??p.data.shop.name);
+ const [description,setDescription]=useState(p.data.shop.public_description??'');
+ const [logoUrl,setLogoUrl]=useState(p.data.shop.logo_url??'');
+ const [coverUrl,setCoverUrl]=useState(p.data.shop.cover_url??'');
+ const [backgroundUrl,setBackgroundUrl]=useState(p.data.shop.background_url??'');
+ const [accentColor,setAccentColor]=useState(p.data.shop.accent_color??'#ffffff');
+ const [busy,setBusy]=useState(false),[accountEmail,setAccountEmail]=useState('');
+ const [newPassword,setNewPassword]=useState(''),[confirmPassword,setConfirmPassword]=useState('');
+ const [showPassword,setShowPassword]=useState(false),[showConfirm,setShowConfirm]=useState(false),[passwordBusy,setPasswordBusy]=useState(false);
  const origin=typeof window==='undefined'?'':window.location.origin;
  const links={gestao:`${origin}/acesso/gestao`,equipe:`${origin}/acesso/equipe`,clientes:`${origin}/b/${p.data.shop.slug}`};
- async function saveContact(){setBusy(true);try{await api('/profile/contact',p.data.shop.id,{phone},'PATCH');await p.refresh();p.notify('Seu contato foi atualizado.');}catch(e){p.notify((e as Error).message);}finally{setBusy(false);}}
- async function saveBrand(){setBusy(true);try{await api('/shop/branding',p.data.shop.id,{title,description,logoUrl,coverUrl,backgroundUrl,accentColor},'PATCH');await p.refresh();p.notify('Visual dos clientes atualizado.');}catch(e){p.notify((e as Error).message);}finally{setBusy(false);}}
- async function copy(value:string){try{await navigator.clipboard.writeText(value);p.notify('Link copiado.');}catch{p.notify('Não foi possível copiar automaticamente.');}}
- return <><PageTitle eyebrow="CONFIGURAÇÕES" title="Seu espaço" description="Perfil, aparência e links de acesso."/><div className="settings-sections"><section className="settings-card install-card"><div><h2>{p.data.membership.role==='OWNER'?'FIO Gestão':p.data.membership.role==='BARBER'?'FIO Equipe':'Aplicativo da barbearia'}</h2><p className="muted">Instale para abrir direto pela tela inicial.</p></div><button className="primary" onClick={()=>void p.installApp?.()}>{p.canInstall?'Instalar aplicativo':'Como instalar'}</button></section><section className="settings-card"><div className="section-title"><h2>Seu contato</h2></div><Field label="WhatsApp / telefone"><input type="tel" inputMode="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="(61) 99999-9999"/></Field><button className="secondary" disabled={busy} onClick={saveContact}>Salvar contato</button></section>{owner&&<><section className="settings-card branding-card"><div className="section-title"><h2>Visual do cliente</h2><span className="muted">Aplique a identidade da barbearia.</span></div><Field label="Nome exibido"><input maxLength={100} value={title} onChange={e=>setTitle(e.target.value)}/></Field><Field label="Descrição"><textarea maxLength={280} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Uma frase curta sobre a barbearia."/></Field><div className="form-grid"><Field label="URL da logo"><input type="url" value={logoUrl} onChange={e=>setLogoUrl(e.target.value)} placeholder="https://..."/></Field><Field label="URL da capa"><input type="url" value={coverUrl} onChange={e=>setCoverUrl(e.target.value)} placeholder="https://..."/></Field></div><Field label="URL do fundo"><input type="url" value={backgroundUrl} onChange={e=>setBackgroundUrl(e.target.value)} placeholder="https://..."/></Field><Field label="Cor principal"><div className="color-field"><input type="color" value={accentColor} onChange={e=>setAccentColor(e.target.value)}/><input value={accentColor} maxLength={7} pattern="#[0-9A-Fa-f]{6}" onChange={e=>setAccentColor(e.target.value)}/></div></Field><div className="branding-preview" style={{'--preview-accent':accentColor,backgroundImage:backgroundUrl?`linear-gradient(#0009,#000b),url(${backgroundUrl})`:undefined} as CSSProperties}><span style={{backgroundImage:logoUrl?`url(${logoUrl})`:undefined}}>{!logoUrl?'LOGO':''}</span><div><strong>{title||p.data.shop.name}</strong><small>{description||'Prévia da experiência do cliente.'}</small></div><button type="button">Agendar</button></div><button className="primary" disabled={busy} onClick={saveBrand}>Salvar visual</button></section><section className="settings-card"><div className="section-title"><h2>Links de acesso</h2><span className="muted">Prontos para enviar.</span></div><div className="share-links"><button onClick={()=>copy(links.gestao)}><LinkIcon size={17}/><div><span>FIO Gestão</span><small>{links.gestao}</small></div><Copy size={16}/></button><button onClick={()=>copy(links.equipe)}><LinkIcon size={17}/><div><span>FIO Equipe</span><small>{links.equipe}</small></div><Copy size={16}/></button><button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>Link dos clientes</span><small>{links.clientes}</small></div><Copy size={16}/></button></div></section></>}<section className="settings-card settings-meta"><div><span>Barbearia</span><strong>{p.data.shop.name}</strong></div><div><span>Plano FIO</span><strong>{p.data.plan}</strong></div><div><span>Assistente</span><strong>{p.data.aiEnabled?'Incluído':'Indisponível'}</strong></div></section></div></>;
-}
 
+ useEffect(()=>{let active=true;if(!supabase)return;void supabase.auth.getUser().then(({data})=>{if(active)setAccountEmail(data.user?.email??'');});return()=>{active=false;};},[]);
+
+ async function saveContact(){
+  setBusy(true);
+  try{await api('/profile/contact',p.data.shop.id,{phone},'PATCH');await p.refresh();p.notify('Seu contato foi atualizado.');}
+  catch(e){p.notify((e as Error).message);}
+  finally{setBusy(false);}
+ }
+ async function saveBrand(){
+  setBusy(true);
+  try{await api('/shop/branding',p.data.shop.id,{title,description,logoUrl,coverUrl,backgroundUrl,accentColor},'PATCH');await p.refresh();p.notify('Visual dos clientes atualizado.');}
+  catch(e){p.notify((e as Error).message);}
+  finally{setBusy(false);}
+ }
+ async function copy(value:string){
+  try{await navigator.clipboard.writeText(value);p.notify('Link copiado.');}
+  catch{p.notify('Não foi possível copiar automaticamente.');}
+ }
+ async function changePassword(e:FormEvent){
+  e.preventDefault();
+  if(newPassword.length<8){p.notify('A nova senha precisa ter pelo menos 8 caracteres.');return;}
+  if(newPassword!==confirmPassword){p.notify('As duas senhas precisam ser iguais.');return;}
+  if(!supabase){p.notify('A conexão da conta não está disponível agora.');return;}
+  setPasswordBusy(true);
+  try{
+   const r=await supabase.auth.updateUser({password:newPassword});
+   if(r.error)throw r.error;
+   setNewPassword('');setConfirmPassword('');
+   p.notify('Senha atualizada com segurança.');
+  }catch(e){p.notify((e as Error).message||'Não foi possível alterar a senha agora.');}
+  finally{setPasswordBusy(false);}
+ }
+
+ const sections=[
+  ['profile','Meu perfil',UserRound],
+  ...(owner?[['barbershop','Barbearia',Store] as const]:[]),
+  ['access','Acessos e app',ShieldCheck],
+  ['account','Conta e segurança',KeyRound],
+ ] as const;
+
+ return <>
+  <button className="settings-back" type="button" onClick={()=>navigate(-1)}><ArrowLeft size={16}/>Voltar</button>
+  <PageTitle eyebrow="CONFIGURAÇÕES" title="Seu espaço" description="Perfil, identidade, acessos e segurança em um só lugar."/>
+  <div className="settings-workspace">
+   <nav className="settings-nav" aria-label="Seções das configurações">
+    {sections.map(([key,label,Icon])=><button key={key} type="button" className={section===key?'active':''} onClick={()=>setSection(key)}><Icon size={17}/><span>{label}</span></button>)}
+   </nav>
+
+   <div className="settings-content">
+    {section==='profile'&&<>
+     <section className="settings-card settings-profile-card">
+      <div className="settings-profile-head">
+       <span className="avatar settings-avatar">{p.data.membership.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>
+       <div><h2>{p.data.membership.display_name}</h2><p className="muted">{owner?'Responsável pela barbearia':p.data.membership.role==='BARBER'?'Profissional da equipe':'Cliente'}</p></div>
+      </div>
+      {accountEmail&&<div className="settings-readonly"><span>E-mail da conta</span><strong>{accountEmail}</strong></div>}
+      <Field label="WhatsApp / telefone"><input type="tel" inputMode="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="(61) 99999-9999"/></Field>
+      <button className="primary" disabled={busy} onClick={saveContact}>{busy?'Salvando…':'Salvar meu contato'}</button>
+     </section>
+     <section className="settings-card">
+      <div className="section-title"><h2>Aplicativo</h2><span className="muted">{owner?'FIO Gestão':p.data.membership.role==='BARBER'?'FIO Equipe':'App da barbearia'}</span></div>
+      <p className="muted">Instale o FIO para abrir direto pela tela inicial sem depender de procurar o link novamente.</p>
+      <button className="secondary" onClick={()=>void p.installApp?.()}><Download size={16}/>{p.canInstall?'Instalar aplicativo':'Como instalar'}</button>
+     </section>
+    </>}
+
+    {section==='barbershop'&&owner&&<>
+     <section className="settings-card branding-card">
+      <div className="section-title"><h2>Identidade da barbearia</h2><span className="muted">O que o cliente vê.</span></div>
+      <Field label="Nome exibido"><input maxLength={100} value={title} onChange={e=>setTitle(e.target.value)}/></Field>
+      <Field label="Descrição"><textarea maxLength={280} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Uma frase curta sobre a barbearia."/></Field>
+      <div className="form-grid">
+       <Field label="URL da logo"><input type="url" value={logoUrl} onChange={e=>setLogoUrl(e.target.value)} placeholder="https://..."/></Field>
+       <Field label="URL da capa"><input type="url" value={coverUrl} onChange={e=>setCoverUrl(e.target.value)} placeholder="https://..."/></Field>
+      </div>
+      <Field label="URL do fundo"><input type="url" value={backgroundUrl} onChange={e=>setBackgroundUrl(e.target.value)} placeholder="https://..."/></Field>
+      <Field label="Cor principal"><div className="color-field"><input type="color" value={accentColor} onChange={e=>setAccentColor(e.target.value)}/><input value={accentColor} maxLength={7} pattern="#[0-9A-Fa-f]{6}" onChange={e=>setAccentColor(e.target.value)}/></div></Field>
+      <div className="branding-preview" style={{'--preview-accent':accentColor,backgroundImage:backgroundUrl?`linear-gradient(#0009,#000b),url(${backgroundUrl})`:undefined} as CSSProperties}>
+       <span style={{backgroundImage:logoUrl?`url(${logoUrl})`:undefined}}>{!logoUrl?'LOGO':''}</span>
+       <div><strong>{title||p.data.shop.name}</strong><small>{description||'Prévia da experiência do cliente.'}</small></div>
+       <button type="button">Agendar</button>
+      </div>
+      <button className="primary" disabled={busy} onClick={saveBrand}><Palette size={16}/>{busy?'Salvando…':'Salvar identidade'}</button>
+     </section>
+     <section className="settings-card">
+      <div className="section-title"><h2>Site e app dos clientes</h2><span className="muted">Link público da barbearia.</span></div>
+      <div className="share-links">
+       <button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>Link dos clientes</span><small>{links.clientes}</small></div><Copy size={16}/></button>
+      </div>
+      <p className="muted settings-help">A logo da barbearia identifica a experiência instalada pelos clientes.</p>
+     </section>
+    </>}
+
+    {section==='access'&&<>
+     <section className="settings-card">
+      <div className="section-title"><h2>Links de acesso</h2><span className="muted">Prontos para enviar.</span></div>
+      <div className="share-links">
+       {owner&&<button onClick={()=>copy(links.gestao)}><LinkIcon size={17}/><div><span>FIO Gestão</span><small>{links.gestao}</small></div><Copy size={16}/></button>}
+       {owner&&<button onClick={()=>copy(links.equipe)}><LinkIcon size={17}/><div><span>FIO Equipe</span><small>{links.equipe}</small></div><Copy size={16}/></button>}
+       <button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>Link dos clientes</span><small>{links.clientes}</small></div><Copy size={16}/></button>
+      </div>
+     </section>
+     {owner&&<section className="settings-card">
+      <div className="section-title"><h2>Equipe e permissões</h2><span className="muted">Controle quem trabalha no espaço.</span></div>
+      <p className="muted">Os acessos da equipe continuam separados do acesso do responsável. Adicione e consulte profissionais na área Equipe.</p>
+      <button className="secondary" onClick={()=>navigate(`${p.base}/equipe`)}><Users size={16}/>Abrir equipe</button>
+     </section>}
+    </>}
+
+    {section==='account'&&<>
+     <section className="settings-card">
+      <div className="section-title"><h2>Alterar senha</h2><span className="muted">Proteja sua conta.</span></div>
+      <form onSubmit={changePassword}>
+       <Field label="Nova senha"><div className="password-field"><input type={showPassword?'text':'password'} minLength={8} autoComplete="new-password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} required/><button type="button" className="password-toggle" aria-label={showPassword?'Ocultar senha':'Mostrar senha'} onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div></Field>
+       <Field label="Confirmar nova senha"><div className="password-field"><input type={showConfirm?'text':'password'} minLength={8} autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} required/><button type="button" className="password-toggle" aria-label={showConfirm?'Ocultar confirmação':'Mostrar confirmação'} onClick={()=>setShowConfirm(v=>!v)}>{showConfirm?<EyeOff size={17}/>:<Eye size={17}/>}</button></div></Field>
+       <button className="primary" disabled={passwordBusy}>{passwordBusy?'Alterando…':'Alterar senha'}</button>
+      </form>
+     </section>
+     <section className="settings-card">
+      <div className="section-title"><h2>Sessão</h2></div>
+      <p className="muted">Encerre o acesso neste dispositivo quando terminar de usar.</p>
+      <button className="secondary" onClick={()=>void supabase?.auth.signOut()}><LogOut size={16}/>Sair da conta</button>
+     </section>
+     <section className="settings-card settings-danger-zone">
+      <div className="section-title"><h2>Excluir conta</h2><span className="muted">Ação permanente.</span></div>
+      <p className="muted">A exclusão permanente ainda não está liberada por autoatendimento. O FIO não vai fingir que apagou seus dados sem um fluxo seguro de confirmação e auditoria.</p>
+      <button className="danger" type="button" onClick={()=>p.notify('A exclusão automática ainda não está disponível. Nenhum dado foi removido.')}>Excluir conta</button>
+     </section>
+    </>}
+   </div>
+  </div>
+  <section className="settings-card settings-meta">
+   <div><span>Barbearia</span><strong>{p.data.shop.name}</strong></div>
+   <div><span>Plano FIO</span><strong>{p.data.plan}</strong></div>
+   <div><span>Assistente</span><strong>{p.data.aiEnabled?'Incluído':'Indisponível'}</strong></div>
+  </section>
+ </>;
+}

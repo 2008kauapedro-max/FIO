@@ -29,14 +29,14 @@ export function PublicPortal(){
  const ios=typeof navigator!=='undefined'&&/iphone|ipad|ipod/i.test(navigator.userAgent);
  async function install(){if(installEvent){await installEvent.prompt();await installEvent.userChoice;setInstallEvent(null);return;}setInstallGuide(true);}
  function dismissInstall(){localStorage.setItem(`fio-public-install:${slug}`,'1');setInstallDismissed(true);}
- if(error)return <div className="public-portal centered-state"><img src="/branding/fio-mark.png" alt="FIO"/><h1>Não foi possível abrir.</h1><p>{error}</p></div>;
- if(!data)return <div className="public-portal centered-state"><img className="pulse-mark" src="/branding/fio-mark.png" alt="FIO"/><p>Preparando seu espaço…</p></div>;
+ if(error)return <div className="public-portal centered-state"><img src="/FIOlogo/FIObranco.png" alt="FIO"/><h1>Não foi possível abrir.</h1><p>{error}</p></div>;
+ if(!data)return <div className="public-portal centered-state"><img className="pulse-mark" src="/FIOlogo/FIObranco.png" alt="FIO"/><p>Preparando seu espaço…</p></div>;
  const dark=data.shop.theme_mode!=='light',p=data.palette;const accent=data.shop.custom_accent||data.shop.accent_color||(dark?p?.dark_accent:p?.light_accent)||'#ffffff';
  const portalStyle={'--shop-accent':accent,'--public-bg':dark?p?.dark_background||'#050505':p?.light_background||'#f5f5f2','--public-surface':dark?p?.dark_surface||'#0d0d0d':p?.light_surface||'#fff','--public-text':dark?p?.dark_text||'#f4f4f4':p?.light_text||'#111','--public-muted':dark?p?.dark_text_muted||'#777':p?.light_text_muted||'#666',backgroundImage:data.shop.background_url?`linear-gradient(${dark?'#050505e8,#050505f3':'#f5f5f2df,#f5f5f2ee'}),url(${data.shop.background_url})`:undefined} as CSSProperties;
  return <div className="public-portal branded-portal" style={portalStyle}>
   <InAppBrowserBanner/>
   <header className="public-hero" style={data.shop.cover_url?{backgroundImage:`linear-gradient(#0007,#000d),url(${data.shop.cover_url})`}:undefined}>
-   <div className="public-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt={title}/>:<img src="/branding/fio-mark.png" alt="FIO"/>}</div>
+   <div className="public-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt={title}/>:<img src={dark?'/FIOlogo/FIObranco.png':'/FIOlogo/FIOpreto.png'} alt="FIO"/>}</div>
    <div className="public-hero-copy"><span className="eyebrow">AGENDE SEU HORÁRIO</span><h1>{title}</h1><p>{data.shop.public_description||'Escolha o serviço, o profissional e o melhor horário.'}</p><button className="primary public-cta brand-button" onClick={()=>navigate(`/login?shop=${encodeURIComponent(slug)}&audience=client`)}><CalendarDays size={18}/> Agendar ou entrar <ArrowRight size={17}/></button></div>
   </header>
   <main className="public-content">

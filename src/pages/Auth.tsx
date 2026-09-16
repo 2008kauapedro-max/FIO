@@ -183,7 +183,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
  if(reset&&!supabase){
   return <div className="auth-page">
-   <Link className="auth-logo" to="/"><img src="/branding/fio-mark.png" alt="FIO"/></Link>
+   <Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>
    <div className="auth-card">
     <p className="eyebrow">RECUPERAÇÃO DE SENHA</p>
     <h1>Não foi possível abrir.</h1>
@@ -194,7 +194,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
  if(reset&&!resetReady&&!resetInvalid){
   return <div className="auth-page">
-   <span className="auth-logo"><img src="/branding/fio-mark.png" alt="FIO"/></span>
+   <span className="auth-logo"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></span>
    <div className="auth-card">
     <p className="eyebrow">RECUPERAÇÃO DE SENHA</p>
     <h1>Validando seu link…</h1>
@@ -205,7 +205,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
  if(reset&&resetInvalid){
   return <div className="auth-page">
-   <Link className="auth-logo" to={destination()}><img src="/branding/fio-mark.png" alt="FIO"/></Link>
+   <Link className="auth-logo" to={destination()}><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>
    <div className="auth-card">
     <p className="eyebrow">RECUPERAÇÃO DE SENHA</p>
     <h1>Esse link não é mais válido.</h1>
@@ -217,7 +217,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  }
 
  return <div className="auth-page">
-  <Link className="auth-logo" to="/"><img src="/branding/fio-mark.png" alt="FIO"/></Link>
+  <Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>
 
   <div className="auth-card">
    <p className="eyebrow">{reset?'RECUPERAÇÃO DE SENHA':audience==='client'?'ACESSO DO CLIENTE':'BEM-VINDO AO FIO'}</p>
@@ -316,7 +316,7 @@ function LegacyOnboarding({onDone}:{onDone:()=>void}) {
  }
 
  return <div className="auth-page">
-  <span className="auth-logo"><img src="/branding/fio-mark.png" alt="FIO"/></span>
+  <span className="auth-logo"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></span>
   <div className="auth-card">
    <p className="eyebrow">SEU ESPAÇO</p>
    <h1>Vamos conectar os pontos.</h1>

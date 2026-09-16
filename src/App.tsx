@@ -1,6 +1,6 @@
 import { useCallback,useEffect,useState,lazy,Suspense } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
-import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,Settings,LogOut,Menu,X,ArrowUpRight,PanelLeftClose,Images,Megaphone,Sun,Moon } from 'lucide-react';
+import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,ArrowUpRight,Images,Megaphone,Sun,Moon } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { Bootstrap,Membership,Role } from '../shared/domain';
 import { roleHome } from '../shared/domain';
@@ -40,42 +40,7 @@ export default function App(){
  const [installPrompt,setInstallPrompt]=useState<InstallPromptEvent|null>(null);
 
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('fio-theme',theme);},[theme]);
- useEffect(()=>{
-  const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-  if(!manifest)return;
-
-  const params=new URLSearchParams(location.search);
-  const audience=params.get('audience');
-
-  let href='/manifest.webmanifest';
-
-  if(location.pathname.startsWith('/b/')){
-   return;
-  }else if(isPlatform){
-   href='/manifest-platform.webmanifest';
-  }else if(data?.membership.role==='OWNER'||location.pathname==='/acesso/gestao'||audience==='owner'){
-   href='/manifest-owner.webmanifest';
-  }else if(data?.membership.role==='BARBER'||location.pathname==='/acesso/equipe'||audience==='staff'){
-   href='/manifest-staff.webmanifest';
-  }else if(data?.membership.role==='CLIENT'||audience==='client'){
-   href='/manifest-client.webmanifest';
-  }
-
-  const absolute=new URL(href,window.location.origin).href;
-  if(manifest.href!==absolute){
-   manifest.href=href;
-   setInstallPrompt(null);
-  }
- },[location.pathname,location.search,data?.membership.role,isPlatform]);
-
- useEffect(()=>{
-  const onInstall=(event:Event)=>{
-   event.preventDefault();
-   setInstallPrompt(event as InstallPromptEvent);
-  };
-  window.addEventListener('beforeinstallprompt',onInstall);
-  return()=>window.removeEventListener('beforeinstallprompt',onInstall);
- },[]);
+ useEffect(()=>{const onInstall=(event:Event)=>{event.preventDefault();setInstallPrompt(event as InstallPromptEvent);};window.addEventListener('beforeinstallprompt',onInstall);return()=>window.removeEventListener('beforeinstallprompt',onInstall);},[]);
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{setSession(s);setAuthReady(true);if(!s){setData(null);setMemberships(null);}});return()=>subscription.unsubscribe();},[]);
  const loadMemberships=useCallback(async()=>{try{const m=await api<Membership[]>('/memberships');setMemberships(m);const owner=m.find(x=>x.role==='OWNER');if(owner){try{const snapshot=await api<{shop:{onboarding_completed:boolean}}>('/onboarding/progress',owner.barbershop_id);setOnboardingShopId(snapshot.shop.onboarding_completed?'':owner.barbershop_id);}catch{setOnboardingShopId('');}}else setOnboardingShopId('');setShopId(prev=>m.some(x=>x.barbershop_id===prev)?prev:m[0]?.barbershop_id??'');setError('');}catch(e){setError((e as Error).message);}},[]);
  useEffect(()=>{if(session&&!demo&&!isPlatform)void loadMemberships();},[session?.user.id,demo,isPlatform,loadMemberships]);
@@ -83,17 +48,17 @@ export default function App(){
  useEffect(()=>{if(session&&shopId&&!isPlatform&&!onboardingShopId){setData(null);void refresh().catch(e=>setError(e.message));}},[shopId,session?.user.id,refresh,isPlatform,onboardingShopId]);
  useEffect(()=>{setMenu(false);},[location.pathname]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),5000);return()=>clearTimeout(timer);},[toast]);
+ useEffect(()=>{
+  const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+  if(!manifest||!data||isPlatform)return;
+  manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':'/manifest-client.webmanifest';
+ },[data?.membership.role,isPlatform]);
+
  if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<Spinner/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
  if(isPlatform)return <Suspense fallback={<Spinner/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
  if(location.pathname.startsWith('/b/'))return <PublicPortal/>;
- if(location.pathname==='/acesso/gestao'){
-  if(!authReady)return <Spinner/>;
-  return <Navigate replace to={session?'/owner':'/login?audience=owner'}/>;
- }
- if(location.pathname==='/acesso/equipe'){
-  if(!authReady)return <Spinner/>;
-  return <Navigate replace to={session?'/barber':'/login?audience=staff'}/>;
- }
+ if(location.pathname==='/acesso/gestao')return <Navigate replace to="/login?audience=owner"/>;
+ if(location.pathname==='/acesso/equipe')return <Navigate replace to="/login?audience=staff"/>;
  if(location.pathname==='/login')return <AuthPage/>;
  if(location.pathname==='/reset-password')return <AuthPage reset/>;
  if(location.pathname==='/'&&!authReady)return <Spinner/>;
@@ -126,19 +91,34 @@ export default function App(){
  return <div className="app-shell">
   {menu&&<button className="menu-backdrop" aria-label="Fechar menu" onClick={()=>setMenu(false)}/>}
   <aside className={`sidebar ${menu?'is-open':''}`}>
-   <div className="sidebar-brand"><Link to={base} className="wordmark">fio<span>®</span></Link><button className="icon-button close-menu" aria-label="Fechar navegação" onClick={()=>setMenu(false)}><X size={20}/></button><PanelLeftClose className="sidebar-decoration" size={18}/></div>
-   <div className="shop-switch"><span className="shop-icon"><Scissors size={19}/></span><div><strong>{data.shop.name}</strong><small>{{OWNER:'Workspace do responsável',BARBER:'Espaço do profissional',CLIENT:'Seu espaço de cuidado'}[role]}</small></div></div>
-   <p className="nav-label">WORKSPACE</p>
+   <div className="sidebar-brand sidebar-shop-brand">
+    <Link to={base} className="sidebar-shop-link" aria-label={`Abrir ${data.shop.name}`}>
+     <span className="sidebar-shop-logo">
+      {data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={18}/>}
+     </span>
+     <span className="sidebar-shop-copy">
+      <strong>{data.shop.public_title||data.shop.name}</strong>
+      <small>{role==='OWNER'?'FIO Gestão':role==='BARBER'?'FIO Equipe':'Área do cliente'}</small>
+     </span>
+    </Link>
+    <button className="icon-button close-menu" aria-label="Fechar navegação" onClick={()=>setMenu(false)}><X size={20}/></button>
+   </div>
+   <p className="nav-label">NAVEGAÇÃO</p>
    <nav aria-label="Navegação principal">{items.map(n=><NavLink end={n.path===''} className={({isActive})=>`nav-link ${isActive?'active':''}`} to={base+n.path} key={n.path}><n.icon size={19} strokeWidth={1.6}/>{n.label}{n.path==='/assistente'&&<span className="ai-tag">IA</span>}</NavLink>)}</nav>
    <div className="sidebar-bottom">
     {memberships&&memberships.length>1?<label className="field">Trocar barbearia<select value={shopId} onChange={e=>{sessionStorage.setItem('fio-shop',e.target.value);setShopId(e.target.value);}}>{memberships.map(m=><option key={m.barbershop_id} value={m.barbershop_id}>{m.role} · {m.barbershop_id.slice(0,8)}</option>)}</select></label>:null}
     <button className="nav-link theme-toggle" onClick={toggleTheme}>{theme==='dark'?<Sun size={19}/>:<Moon size={19}/>} {theme==='dark'?'Tema claro':'Tema escuro'}</button>
-    <NavLink className="nav-link" to={`${base}/configuracoes`}><Settings size={19}/>Seu espaço</NavLink>
-    <div className="profile"><span className="avatar small">{data.membership.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span><div><strong>{data.membership.display_name}</strong><small>{role==='OWNER'?'Responsável':role==='BARBER'?'Barbeiro':'Cliente'}</small></div><button className="icon-button" aria-label="Sair" onClick={()=>{if(demo)navigate('/login');else void supabase?.auth.signOut();}}><LogOut size={17}/></button></div>
+    <div className="profile">
+     <NavLink className="profile-account" to={`${base}/configuracoes`} aria-label="Abrir perfil e configurações">
+      <span className="avatar small">{data.membership.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>
+      <span className="profile-copy"><strong>{data.membership.display_name}</strong><small>{role==='OWNER'?'Responsável':role==='BARBER'?'Barbeiro':'Cliente'} · Configurações</small></span>
+     </NavLink>
+     <button className="icon-button" aria-label="Sair" title="Sair" onClick={()=>{if(demo)navigate('/login');else void supabase?.auth.signOut();}}><LogOut size={17}/></button>
+    </div>
    </div>
   </aside>
   <div className="workspace">
-   <header className="topbar"><div className="mobile-brand"><Link to={base} className="wordmark">fio<span>®</span></Link></div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'Seu espaço':items.find(n=>n.path===page)?.label??'Visão geral'}</strong></div><div className="header-right"><span className="plan-badge">FIO {data.plan}</span><button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
+   <header className="topbar"><div className="mobile-brand"><Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link></div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'Configurações':items.find(n=>n.path===page)?.label??'Visão geral'}</strong></div><div className="header-right"><span className="plan-badge">FIO {data.plan}</span><button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
    <main key={`${base}:${shopId}:${page}`} className={page==='/assistente'?'chat-main':'main-content'}>{content}</main>
    <nav className="bottom-nav" aria-label="Navegação mobile">{role==='CLIENT'?<><NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink><NavLink to={`${base}/agenda`}><CalendarDays size={21}/><span>Agenda</span></NavLink><NavLink to={`${base}/assinaturas`}><Wallet size={21}/><span>Assinatura</span></NavLink><NavLink to={`${base}/feed`}><Images size={21}/><span>Feed</span></NavLink><button onClick={()=>setMenu(true)}><Menu size={21}/><span>Mais</span></button></>:role==='BARBER'?<><NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink><NavLink to={`${base}/agenda`}><CalendarDays size={21}/><span>Agenda</span></NavLink><NavLink to={`${base}/clientes`}><Users size={21}/><span>Clientes</span></NavLink><NavLink to={`${base}/feed`}><Images size={21}/><span>Feed</span></NavLink><button onClick={()=>setMenu(true)}><Menu size={21}/><span>Mais</span></button></>:<><NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink><NavLink to={`${base}/agenda`}><CalendarDays size={21}/><span>Agenda</span></NavLink><NavLink to={`${base}/clientes`}><Users size={21}/><span>Clientes</span></NavLink><NavLink to={`${base}/equipe`}><UserRound size={21}/><span>Equipe</span></NavLink><button onClick={()=>setMenu(true)}><Menu size={21}/><span>Mais</span></button></>}</nav>
   </div>

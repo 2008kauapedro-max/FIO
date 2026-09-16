@@ -992,7 +992,7 @@
 .pf-mobile-nav, .pf-mobile-overlay {
   display: none;
 }
-@media (max-width: 700px) {
+@media (max-width: 960px) {
   .pf-sidebar {
     display: none !important;
   }
@@ -1130,3 +1130,27 @@
     min-width: 40px;
   }
 }
+
+/* Official FIO asset in Platform surfaces. */
+.pf-logo-image{
+  display:inline-flex;
+  align-items:center;
+  width:max-content;
+  max-width:132px;
+}
+.pf-logo-image img{
+  display:block;
+  width:auto;
+  height:34px;
+  max-width:118px;
+  object-fit:contain;
+}
+.pf-login .pf-logo-image img{height:42px;max-width:145px}
+
+@media (max-width: 960px) {
+  .pf-shell main:not(.pf-ai-main){
+    padding-left:18px;
+    padding-right:18px;
+  }
+}
+
