@@ -1,11 +1,17 @@
-import { useEffect,useRef,useState,type FormEvent } from 'react';
+import { useEffect,useRef,useState,type FormEvent,type ReactNode } from 'react';
 import { ArrowUp, Plus, Sparkles, History, WifiOff, LockKeyhole, TriangleAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api,RequestError } from '../lib/api';
 import { suggestions,type Role,type Plan } from '../../shared/domain';
 import { Modal } from './ui';
 interface Message { id:string;role:'user'|'assistant';content:string }
-export function AssistantMessage({message}:{message:Message}){return <article className={`message ${message.role}`}><span className="message-author">{message.role==='assistant'?<><Sparkles size={15}/> FIO IA</>:'Você'}</span><div>{message.content}</div></article>;}
+function InlineMarkdown({text}:{text:string}){
+ const parts:ReactNode[]=[];const re=/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g;let last=0,m:RegExpExecArray|null,i=0;
+ while((m=re.exec(text))){if(m.index>last)parts.push(text.slice(last,m.index));const t=m[0];parts.push(t.startsWith('**')?<strong key={i++}>{t.slice(2,-2)}</strong>:<code key={i++}>{t.slice(1,-1)}</code>);last=m.index+t.length;}if(last<text.length)parts.push(text.slice(last));return <>{parts}</>;
+}
+function SafeMarkdown({text}:{text:string}){return <div className="fio-markdown">{text.split(/\n{2,}/).map((b,i)=><p key={i}>{b.split('\n').map((l,j,a)=><span key={j}><InlineMarkdown text={l}/>{j<a.length-1&&<br/>}</span>)}</p>)}</div>;}
+
+export function AssistantMessage({message}:{message:Message}){return <article className={`message ${message.role}`}><span className="message-author">{message.role==='assistant'?<><Sparkles size={15}/> FIO IA</>:'Você'}</span><div>{message.role==='assistant'?<SafeMarkdown text={message.content}/>:message.content}</div></article>;}
 export function AssistantSuggestions({role,onSelect}:{role:Role;onSelect:(text:string)=>void}){return <div className="suggestions">{suggestions[role].map(s=><button key={s} onClick={()=>onSelect(s)}>{s}<ArrowUp size={16}/></button>)}</div>;}
 export function AssistantEmptyState({role,onSelect}:{role:Role;onSelect:(text:string)=>void}){return <div className="assistant-empty"><div className="ai-symbol"><Sparkles size={30} strokeWidth={1.3}/></div><p className="eyebrow">SEU ASSISTENTE FIO</p><h1>Uma boa pergunta.<br/><span>Novas possibilidades.</span></h1><p className="muted">{role==='OWNER'?'Mais clareza para cuidar do seu negócio.':role==='BARBER'?'Sua rotina, com tudo no lugar.':'Seu próximo cuidado começa aqui.'}</p><AssistantSuggestions role={role} onSelect={onSelect}/></div>;}
 export function AssistantErrorState({error}:{error:RequestError}){const Icon=error.code==='OFFLINE'?WifiOff:error.code==='PLAN_REQUIRED'?LockKeyhole:TriangleAlert;return <div className="notice" role="alert"><Icon size={18}/><span>{error.message}</span></div>;}

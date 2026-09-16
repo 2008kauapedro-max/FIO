@@ -22,21 +22,15 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.disable('x-powered-by');
  app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'",'https://*.supabase.co','wss://*.supabase.co'],imgSrc:["'self'",'data:','blob:','https://*.supabase.co'],objectSrc:["'none'"],frameAncestors:["'none'"]}}}));
  app.use(express.json({limit:'12kb'}));
- app.get('/api/health', (_req, res) => {
-  const supabaseUrl = Boolean(process.env.SUPABASE_URL?.trim());
-  const supabaseAnonKey = Boolean(process.env.SUPABASE_ANON_KEY?.trim());
-  const serviceRoleKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim());
-
+app.get('/api/health', (_req, res) =>
   res.json({
     status: 'ok',
-    configured: supabaseUrl && supabaseAnonKey,
-    env: {
-      SUPABASE_URL: supabaseUrl,
-      SUPABASE_ANON_KEY: supabaseAnonKey,
-      SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey
-    }
-  });
-});
+    configured: !!(
+      process.env.SUPABASE_URL &&
+      process.env.SUPABASE_ANON_KEY
+    )
+  })
+);
  app.get('/api/public/shop/:slug',async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
   const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);

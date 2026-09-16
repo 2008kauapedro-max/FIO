@@ -1,8 +1,11 @@
-import {useEffect,useRef,useState,type FormEvent} from 'react';
+import {useEffect,useRef,useState,type FormEvent,type ReactNode} from 'react';
 import {ArrowUp,Plus,Sparkles} from 'lucide-react';
 import {api} from '../lib/api';
 type Proposal={id:string;token:string;action:string;target:string;targetName:string;planId:string|null;planName?:string|null;expiresAt:string};
 type Answer={requestId:string;message:string;tools:string[];proposals:Proposal[]};
+function InlineMarkdown({text}:{text:string}){const parts:ReactNode[]=[];const re=/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g;let last=0,m:RegExpExecArray|null,i=0;while((m=re.exec(text))){if(m.index>last)parts.push(text.slice(last,m.index));const t=m[0];parts.push(t.startsWith('**')?<strong key={i++}>{t.slice(2,-2)}</strong>:<code key={i++}>{t.slice(1,-1)}</code>);last=m.index+t.length;}if(last<text.length)parts.push(text.slice(last));return <>{parts}</>;}
+function SafeMarkdown({text}:{text:string}){return <div className="pc-markdown">{text.split(/\n{2,}/).map((b,i)=><p key={i}>{b.split('\n').map((l,j,a)=><span key={j}><InlineMarkdown text={l}/>{j<a.length-1&&<br/>}</span>)}</p>)}</div>;}
+
 const actionLabels:Record<string,string>={suspend_shop:'Suspender barbearia',reactivate_shop:'Reativar barbearia',change_plan:'Alterar plano SaaS',resolve_alert:'Resolver alerta'};
 const toolLabels:Record<string,string>={get_platform_summary:'Resumo da plataforma',get_platform_alerts:'Alertas',list_barbershops:'Barbearias',get_barbershop_summary:'Resumo da barbearia',get_barbershop_health:'Estado operacional',get_saas_subscriptions:'Assinaturas',get_saas_revenue:'Receita confirmada',get_recent_activity:'Atividade recente',get_user_activity:'Atividade do usuário',get_ai_usage:'Uso da IA',propose_admin_action:'Proposta para revisão'};
 export function ProposalCard({proposal,done}:{proposal:Proposal;done?:()=>void}){
@@ -122,7 +125,7 @@ export function PlatformCopilot() {
               <div className="pc-assistant-row">
                 <span className="pc-avatar"><Sparkles size={18} /></span>
                 <div className="pc-assistant-message">
-                  <p>{answer.message}</p>
+                  <SafeMarkdown text={answer.message}/>
 
                   {answer.tools.length > 0 && (
                     <small>
