@@ -13,6 +13,11 @@ const labels:Record<string,string>={active:'Ativa',inactive:'Inativa',trial:'Tes
 const label=(s:string)=>labels[s]??s;
 const money=(n:number|null)=>n===null?'Não definido':new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n/100);
 const date=(s:string|null)=>s?new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(new Date(s)):'—';
+const eventLabels:Record<string,string>={
+ 'appointment.completed':'Atendimento concluído','appointment.cancelled':'Agendamento cancelado','appointment.created':'Agendamento criado','memberships.insert':'Acesso criado','platform.shop.updated':'Barbearia atualizada','platform.plan.updated':'Plano atualizado','payment.recorded':'Pagamento registrado','reviews.insert':'Avaliação recebida','onboarding.activated':'Barbearia publicada'
+};
+const eventLabel=(value:string)=>value.startsWith('platform.ai')||value.startsWith('platform_ai')?'Copiloto FIO':eventLabels[value]??'Atividade do FIO';
+const eventDescription=(value:string)=>/^Platform AI:\s*error$/i.test(value)?'Falha registrada no Copiloto FIO':/^Platform AI:/i.test(value)?value.replace(/^Platform AI:/i,'Copiloto FIO:'):value;
 type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:'accepted'|'dismissed'}>};
 function useResource<T>(path:string){
  const [state,setState]=useState<{data:T|null;error:string;code:string;loading:boolean}>({data:null,error:'',code:'',loading:true});
@@ -88,15 +93,15 @@ function Heading({title,note,children}:{title:string;note?:string;children?:Reac
 function Overview({admin}:{admin:PlatformAdmin}){
  const r=useResource<PlatformOverview>('/platform/overview');
  const metrics=r.data?[
-  {name:'Receita SaaS',value:'Indisponível',help:'Cobrança ainda não integrada',text:true},
-  {name:'Barbearias',value:r.data.activeShops,help:'Ativas'},
-  {name:'Assinaturas',value:r.data.activeSubscriptions,help:'Ativas, incluindo gratuitas'},
-  {name:'Pendências',value:r.data.alerts,help:'Suspensas ou inadimplentes'}
+  {name:'Receita SaaS',value:'Indisponível',help:'Cobrança ainda não integrada',text:true,href:''},
+  {name:'Barbearias',value:r.data.activeShops,help:'Ativas',href:'/platform/barbearias'},
+  {name:'Assinaturas',value:r.data.activeSubscriptions,help:'Ativas, incluindo gratuitas',href:'/platform/assinaturas'},
+  {name:'Pendências',value:r.data.alerts,help:'Suspensas ou inadimplentes',href:'/platform/alertas'}
  ]:[];
- return <><Heading title={`Olá, ${admin.display_name.split(' ')[0]}`} note="Seu FIO, em um olhar."/><State loading={r.loading} error={r.error} retry={r.reload}/>{r.data&&<><div className="pf-metrics">{metrics.map(metric=><div className="pf-metric-card" key={metric.name}><small>{metric.name}</small><strong className={metric.text?'pf-metric-value pf-metric-text':'pf-metric-value'}>{metric.value}</strong><span>{metric.help}</span></div>)}</div><section className="pf-panel pf-recent-panel"><div className="pf-panel-title"><h2>Atividade recente</h2><Link to="/platform/atividade">Ver tudo</Link></div><Events events={r.data.recent}/></section></>}</>;
+ return <><Heading title={`Olá, ${admin.display_name.split(' ')[0]}`} note="Seu FIO, em um olhar."/><State loading={r.loading} error={r.error} retry={r.reload}/>{r.data&&<><div className="pf-metrics">{metrics.map(metric=><div className="pf-metric-card" key={metric.name}><small>{metric.name}</small><strong className={metric.text?'pf-metric-value pf-metric-text':'pf-metric-value'}>{metric.value}</strong><span>{metric.help}</span>{metric.href&&<Link className="pf-metric-more" to={metric.href}>Ver detalhes</Link>}</div>)}</div><section className="pf-panel pf-recent-panel"><div className="pf-panel-title"><h2>Atividade recente</h2><Link to="/platform/atividade">Ver tudo</Link></div><Events events={r.data.recent}/></section></>}</>;
 }
 
-function Events({events}:{events:AuditEvent[]}){return <><State empty={!events.length}/><div className="pf-events">{events.map(e=><article key={e.id}><time>{date(e.created_at)}</time><div><strong>{e.description}</strong><span>{e.barbershops?.name??'Plataforma'} · {e.actor_name??e.actor_user_id}</span><small>{label(e.actor_role)} · {e.event_type}</small></div></article>)}</div></>;}
+function Events({events}:{events:AuditEvent[]}){return <><State empty={!events.length}/><div className="pf-events">{events.map(e=><article key={e.id}><time>{date(e.created_at)}</time><div><strong>{eventDescription(e.description)}</strong><span>{e.barbershops?.name??'Plataforma'} · {e.actor_name??'Sistema FIO'}</span><small>{label(e.actor_role)} · {eventLabel(e.event_type)}</small></div></article>)}</div></>;}
 function Shops(){
  const [search,setSearch]=useState(''),[term,setTerm]=useState(''),[status,setStatus]=useState('all'),[page,setPage]=useState(1);
  const r=useResource<Page<PlatformShop>>(`/platform/shops?${new URLSearchParams({search:term,status,page:String(page)})}`);

@@ -52,7 +52,7 @@ app.get('/api/health', (_req, res) =>
   const icon=shop.data.logo_url||(shop.data.logo_asset_path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${shop.data.logo_asset_path}`:null);
   if(!icon) throw new ApiError(409,'SHOP_LOGO_REQUIRED','A barbearia precisa de uma logo antes de disponibilizar o aplicativo.');
   const theme=shop.data.custom_accent||shop.data.accent_color||'#000000';
-  res.type('application/manifest+json').set('Cache-Control','public, max-age=300').send(JSON.stringify({id:`/barbearia/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/barbearia/${slug}`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
+  res.type('application/manifest+json').set('Cache-Control','public, max-age=300').send(JSON.stringify({id:`/barbearia/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/login?shop=${encodeURIComponent(slug)}&audience=client`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
  });
  app.use('/api',async(req,res,next)=>{res.locals.auth=await authenticator(req);next();});
  app.get('/api/memberships',async(_req,res)=>{
@@ -89,13 +89,26 @@ app.get('/api/health', (_req, res) =>
  });
  app.post('/api/onboarding/services',async(req,res)=>{
   const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const v=z.object({id:z.uuid().optional(),name:z.string().trim().min(2).max(100),durationMinutes:z.number().int().min(10).max(240),priceCents:z.number().int().min(0).max(1000000),active:z.boolean().default(true)}).strict().parse(req.body);
-  const q=v.id?a.db.from('services').update({name:v.name,duration_minutes:v.durationMinutes,price_cents:v.priceCents,active:v.active}).eq('id',v.id).eq('barbershop_id',c.shopId):a.db.from('services').insert({barbershop_id:c.shopId,name:v.name,duration_minutes:v.durationMinutes,price_cents:v.priceCents,active:v.active});
+  const q=v.id?a.db.from('services').update({name:v.name,duration_minutes:v.durationMinutes,price_cents:v.priceCents,active:v.active}).eq('id',v.id).eq('barbershop_id',c.shopId):a.db.from('services').insert({barbershop_id:c.shopId,name:v.name,duration_minutes:v.durationMinutes,price_cents:v.priceCents});
   const r=await q.select().single();dbError(r.error);res.status(v.id?200:201).json(r.data);
  });
  app.post('/api/onboarding/hours',async(req,res)=>{
-  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const v=z.object({weekdays:z.array(z.number().int().min(0).max(6)).min(1).max(7),opensAt:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),closesAt:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),breakStart:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),breakEnd:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional()}).strict().parse(req.body);
-  if(v.opensAt>=v.closesAt)throw new ApiError(400,'INVALID_DATA','O fechamento deve ser depois da abertura.');
-  const rows=v.weekdays.map(weekday=>({barbershop_id:c.shopId,weekday,opens_at:v.opensAt,closes_at:v.closesAt}));const del=await a.db.from('business_hours').delete().eq('barbershop_id',c.shopId);dbError(del.error);const r=await a.db.from('business_hours').insert(rows);dbError(r.error);res.json({ok:true});
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);
+  const clock=z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+  const legacy=z.object({weekdays:z.array(z.number().int().min(0).max(6)).min(1).max(7),opensAt:clock,closesAt:clock,breakStart:clock.nullable().optional(),breakEnd:clock.nullable().optional()}).strict();
+  const perDay=z.object({days:z.array(z.object({weekday:z.number().int().min(0).max(6),enabled:z.boolean(),opensAt:clock,closesAt:clock}).strict()).min(1).max(7)}).strict();
+  const v=z.union([legacy,perDay]).parse(req.body);
+  const rows='days' in v?v.days.filter(day=>day.enabled).map(day=>{
+   if(day.opensAt>=day.closesAt)throw new ApiError(400,'INVALID_DATA',`Confira o horário do dia ${day.weekday}.`);
+   return {barbershop_id:c.shopId,weekday:day.weekday,opens_at:day.opensAt,closes_at:day.closesAt};
+  }):v.weekdays.map(weekday=>{
+   if(v.opensAt>=v.closesAt)throw new ApiError(400,'INVALID_DATA','O fechamento deve ser depois da abertura.');
+   return {barbershop_id:c.shopId,weekday,opens_at:v.opensAt,closes_at:v.closesAt};
+  });
+  if(!rows.length)throw new ApiError(400,'INVALID_DATA','Escolha pelo menos um dia de funcionamento.');
+  if(new Set(rows.map(row=>row.weekday)).size!==rows.length)throw new ApiError(400,'INVALID_DATA','Cada dia deve aparecer apenas uma vez.');
+  const del=await a.db.from('business_hours').delete().eq('barbershop_id',c.shopId);dbError(del.error);
+  const r=await a.db.from('business_hours').insert(rows);dbError(r.error);res.json({ok:true});
  });
  app.post('/api/onboarding/activate',async(req,res)=>{const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const r=await a.db.rpc('activate_owner_onboarding',{p_shop:c.shopId});dbError(r.error);res.json({ok:true,shopId:c.shopId});});
  app.use('/api/platform',platformRouter());

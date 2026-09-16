@@ -2,7 +2,7 @@ import { useEffect,useState,type FormEvent } from 'react';
 import { Link,useLocation,useNavigate } from 'react-router-dom';
 import { supabase,api } from '../lib/api';
 import { Field } from '../components/ui';
-import { Eye,EyeOff } from 'lucide-react';
+import { CheckCircle2,Eye,EyeOff,LoaderCircle } from 'lucide-react';
 import { OwnerOnboarding } from './OwnerOnboarding';
 
 type AuthMode='login'|'signup'|'forgot';
@@ -16,7 +16,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  const initialMode:AuthMode=requestedMode==='forgot'?'forgot':requestedMode==='signup'?'signup':'login';
 
  const [mode,setMode]=useState<AuthMode>(initialMode);
- const [email,setEmail]=useState('');
+ const [email,setEmail]=useState(params.get('email')??'');
  const [password,setPassword]=useState('');
  const [confirmPassword,setConfirmPassword]=useState('');
  const [message,setMessage]=useState('');
@@ -62,6 +62,19 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    subscription.unsubscribe();
   };
  },[reset]);
+
+ useEffect(()=>{
+  if(reset||mode!=='login'||!supabase)return;
+  let active=true;
+  void supabase.auth.getSession().then(({data:{session}})=>{
+   if(!active||!session)return;
+   if(audience==='platform')navigate('/platform',{replace:true});
+   else if(audience==='owner')navigate('/owner',{replace:true});
+   else if(audience==='staff')navigate('/barber',{replace:true});
+   else if(audience==='client')navigate(shop?`/?shop=${encodeURIComponent(shop)}&audience=client`:'/client',{replace:true});
+  });
+  return()=>{active=false;};
+ },[reset,mode,audience,shop,navigate]);
 
  const destination=()=>{
   if(audience==='platform')return '/acesso/plataforma';
@@ -130,14 +143,13 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    }
 
    if(mode==='signup'){
+    const confirmationAudience=audience||'owner';
+    const query=new URLSearchParams({audience:confirmationAudience,email:email.trim()});
+    if(shop)query.set('shop',shop);
     const result=await supabase.auth.signUp({
      email,
      password,
-     options:{
-      emailRedirectTo:shop
-       ?`${window.location.origin}/login?shop=${encodeURIComponent(shop)}&audience=client`
-       :window.location.origin
-     }
+     options:{emailRedirectTo:`${window.location.origin}/confirm-email?${query.toString()}`}
     });
 
     if(result.error){
@@ -155,7 +167,11 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     return;
    }
 
-   navigate(shop?`/?shop=${encodeURIComponent(shop)}`:'/',{replace:true});
+   if(audience==='platform')navigate('/platform',{replace:true});
+   else if(audience==='owner')navigate('/owner',{replace:true});
+   else if(audience==='staff')navigate('/barber',{replace:true});
+   else if(audience==='client')navigate(shop?`/?shop=${encodeURIComponent(shop)}&audience=client`:'/client',{replace:true});
+   else navigate('/',{replace:true});
   }catch{
    setMessage('Sem conexão. Tente novamente.');
   }finally{
@@ -294,6 +310,33 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  </div>;
 }
 
+function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
+ const [displayName,setDisplayName]=useState(''),[phone,setPhone]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ async function submit(e:FormEvent){
+  e.preventDefault();setBusy(true);setError('');
+  try{
+   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'join',slug,displayName:displayName.trim()});
+   sessionStorage.setItem('fio-shop',r.barbershopId);
+   if(phone.trim())await api('/profile/contact',r.barbershopId,{phone:phone.trim()},'PATCH');
+   onDone();
+  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
+ return <div className="auth-page">
+  <span className="auth-logo"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></span>
+  <div className="auth-card">
+   <p className="eyebrow">SEU PERFIL</p><h1>Como podemos te chamar?</h1><p className="muted">Só precisamos do básico para conectar sua conta a esta barbearia.</p>
+   <form onSubmit={submit}>
+    <Field label="Seu nome"><input minLength={2} maxLength={100} autoComplete="name" required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></Field>
+    <Field label="WhatsApp / telefone (opcional)"><input type="tel" inputMode="tel" autoComplete="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)}/></Field>
+    {error&&<p className="notice" role="alert">{error}</p>}
+    <button className="primary full" disabled={busy}>{busy?'Entrando…':'Entrar na barbearia'}</button>
+   </form>
+   <button type="button" className="text-button" onClick={()=>supabase?.auth.signOut()}>Usar outra conta</button>
+  </div>
+  <p className="auth-footer">MENOS RUÍDO. MAIS FIO.</p>
+ </div>;
+}
+
 function LegacyOnboarding({onDone}:{onDone:()=>void}) {
  const params=new URLSearchParams(window.location.search),token=params.get('invite'),presetShop=params.get('shop')??'';
  const [mode,setMode]=useState<'create'|'join'|'invite'>(token?'invite':presetShop?'join':'create');
@@ -343,6 +386,68 @@ function LegacyOnboarding({onDone}:{onDone:()=>void}) {
  </div>;
 }
 
+
+export function EmailConfirmationPage(){
+ const location=useLocation(),navigate=useNavigate();
+ const params=new URLSearchParams(location.search);
+ const audience=params.get('audience')||'owner';
+ const shop=params.get('shop')??'';
+ const email=params.get('email')??'';
+ const [state,setState]=useState<'checking'|'confirmed'|'invalid'>('checking');
+
+ useEffect(()=>{
+  if(!supabase){setState('invalid');return;}
+  const authClient=supabase;
+  let active=true;
+  const finish=(ok:boolean)=>{if(active)setState(ok?'confirmed':'invalid');};
+  const check=async()=>{
+   const {data:{session}}=await authClient.auth.getSession();
+   if(session){finish(true);return;}
+   window.setTimeout(async()=>{
+    const {data:{session:late}}=await authClient.auth.getSession();
+    finish(Boolean(late));
+   },1200);
+  };
+  void check();
+  const {data:{subscription}}=authClient.auth.onAuthStateChange((_event,session)=>{if(session)finish(true);});
+  return()=>{active=false;subscription.unsubscribe();};
+ },[]);
+
+ const back=async()=>{
+  if(supabase)await supabase.auth.signOut({scope:'local'});
+  const q=new URLSearchParams({audience});
+  if(shop)q.set('shop',shop);
+  if(email)q.set('email',email);
+  navigate(`/login?${q.toString()}`,{replace:true});
+ };
+
+ return <div className="auth-page email-confirm-page">
+  <span className="auth-logo"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></span>
+  <div className="auth-card email-confirm-card">
+   {state==='checking'?<>
+    <span className="email-confirm-icon is-loading"><LoaderCircle size={28}/></span>
+    <p className="eyebrow">CONFIRMANDO SEU E-MAIL</p>
+    <h1>Só um instante.</h1>
+    <p className="muted">Estamos finalizando seu acesso ao FIO.</p>
+   </>:state==='confirmed'?<>
+    <span className="email-confirm-icon"><CheckCircle2 size={30}/></span>
+    <p className="eyebrow">E-MAIL CONFIRMADO</p>
+    <h1>Seu acesso está pronto.</h1>
+    <p className="muted">Agora você já pode entrar no FIO com o e-mail e a senha que criou.</p>
+    <button className="primary full" onClick={()=>void back()}>Voltar para entrar</button>
+   </>:<>
+    <p className="eyebrow">CONFIRMAÇÃO DE E-MAIL</p>
+    <h1>Não foi possível confirmar este link.</h1>
+    <p className="muted">Ele pode ter expirado ou já ter sido usado. Tente entrar normalmente; se necessário, crie a conta novamente.</p>
+    <button className="primary full" onClick={()=>void back()}>Voltar para entrar</button>
+   </>}
+  </div>
+  <p className="auth-footer">MENOS RUÍDO. MAIS FIO.</p>
+ </div>;
+}
+
 export function Onboarding({onDone,shopId}:{onDone:()=>void;shopId?:string}) {
+ const params=new URLSearchParams(window.location.search),audience=params.get('audience'),shop=params.get('shop')??'';
+ if(audience==='client'&&shop)return <ClientJoinOnboarding onDone={onDone} slug={shop}/>;
  return <OwnerOnboarding onDone={onDone} shopId={shopId}/>;
 }

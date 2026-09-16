@@ -1204,3 +1204,4 @@
  .pf-filter-grid{grid-template-columns:1fr;gap:10px}.pf-filter-sheet>footer{display:grid;grid-template-columns:1fr 1.35fr}.pf-filter-sheet>footer button{min-width:0;width:100%}
  .pf-metrics>div{min-height:106px}.pf-platform-install{align-items:stretch;flex-direction:column}.pf-platform-install button{width:100%}
 }
+.pf-metric-card{position:relative}.pf-metric-more{margin-top:auto;padding-top:4px;color:#d8d8d8!important;font-size:10px!important;text-decoration:none}.pf-metric-more:hover{color:#fff!important}

@@ -5,14 +5,18 @@ import type { Session } from '@supabase/supabase-js';
 import type { Bootstrap,Membership,Role } from '../shared/domain';
 import { roleHome } from '../shared/domain';
 import { api,supabase } from './lib/api';
-import { AuthPage,Onboarding } from './pages/Auth';
+import { AuthPage,EmailConfirmationPage,Onboarding } from './pages/Auth';
 import { Agenda,Customers,Dashboard,Reports,Services,Settings as SettingsPage,Subscriptions,Team,Communication,type WorkspaceProps } from './pages/Workspace';
 import { AssistantChat } from './components/AssistantChat';
 import { Feed } from './pages/Feed';
 import { PublicPortal } from './pages/PublicPortal';
 const PlatformApp=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformApp})));
 const PlatformLogin=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformLogin})));
-import { Spinner } from './components/ui';
+
+
+function AppLoading(){
+ return <div className="fio-loading-screen" role="status" aria-label="Abrindo FIO"><img src="/FIOlogo/FIObranco.png" alt=""/></div>;
+}
 
 type NavItem={path:string;label:string;icon:typeof LayoutDashboard;roles:Role[]};
 const navItems:NavItem[]=[
@@ -51,23 +55,29 @@ export default function App(){
  useEffect(()=>{
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
   if(!manifest||!data||isPlatform)return;
-  manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':'/manifest-client.webmanifest';
+  manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':`/api/public/manifest/${encodeURIComponent(data.shop.slug)}`;
  },[data?.membership.role,isPlatform]);
 
- if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<Spinner/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
- if(isPlatform)return <Suspense fallback={<Spinner/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
+ if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<AppLoading/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
+ if(isPlatform)return <Suspense fallback={<AppLoading/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
  if(location.pathname.startsWith('/b/')||location.pathname.startsWith('/barbearia/'))return <PublicPortal/>;
  if(location.pathname==='/acesso/gestao')return <Navigate replace to="/login?audience=owner"/>;
  if(location.pathname==='/acesso/equipe')return <Navigate replace to="/login?audience=staff"/>;
+ if(location.pathname==='/confirm-email')return <EmailConfirmationPage/>;
  if(location.pathname==='/login')return <AuthPage/>;
  if(location.pathname==='/reset-password')return <AuthPage reset/>;
- if(location.pathname==='/'&&!authReady)return <Spinner/>;
- if(location.pathname==='/')return <Navigate replace to={(!session?'/login':data?roleHome(data.membership.role):'/owner')+location.search}/>;
- if(!demo&&!authReady)return <Spinner/>;
- if(!demo&&!session)return <Navigate replace to="/login"/>;
+ if(location.pathname==='/'&&!authReady)return <AppLoading/>;
+ if(!demo&&!authReady)return <AppLoading/>;
+ if(!demo&&!session){
+  const audience=location.pathname.startsWith('/owner')?'owner':location.pathname.startsWith('/barber')?'staff':location.pathname.startsWith('/client')?'client':new URLSearchParams(location.search).get('audience')??'';
+  const params=new URLSearchParams();if(audience)params.set('audience',audience);const shop=new URLSearchParams(location.search).get('shop');if(shop)params.set('shop',shop);
+  return <Navigate replace to={`/login${params.toString()?`?${params.toString()}`:''}`}/>;
+ }
+ if(!demo&&memberships===null)return <AppLoading/>;
  if(!demo&&(memberships?.length===0||Boolean(onboardingShopId)))return <Onboarding shopId={onboardingShopId||undefined} onDone={()=>void loadMemberships()}/>;
  if(error)return <div className="full-error"><h1>Não foi possível abrir seu espaço.</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>Tentar novamente</button><Link to="/login">Voltar ao acesso</Link></div>;
- if(!data)return <Spinner/>;
+ if(!data)return <AppLoading/>;
+ if(location.pathname==='/')return <Navigate replace to={roleHome(data.membership.role)+location.search}/>;
 
  const role=data.membership.role,base=roleHome(role),page=location.pathname.slice(base.length),items=navItems.filter(n=>n.roles.includes(role));
  if(!location.pathname.startsWith(base+'/')&&location.pathname!==base)return <Navigate replace to={base}/>;

@@ -1,5 +1,5 @@
 import { useEffect,useMemo,useState,type CSSProperties } from 'react';
-import { useNavigate,useParams,useLocation } from 'react-router-dom';
+import { useParams,useLocation } from 'react-router-dom';
 import { CalendarDays,Download,Scissors,Users,ArrowRight,Clock3,X,Share2,SquarePlus } from 'lucide-react';
 import { money } from '../../shared/domain';
 import { whatsappUrl } from '../../shared/phone';
@@ -12,7 +12,7 @@ type PublicData={shop:PublicShop;palette?:PublicPalette|null;services:{id:string
 type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:'accepted'|'dismissed'}>};
 
 export function PublicPortal(){
- const params=useParams(),{pathname}=useLocation(),slug=params.slug??pathname.split('/')[2]??'',navigate=useNavigate();
+ const params=useParams(),{pathname}=useLocation(),slug=params.slug??pathname.split('/')[2]??'';
  const [data,setData]=useState<PublicData|null>(null),[error,setError]=useState(''),[installEvent,setInstallEvent]=useState<InstallPromptEvent|null>(null),[installGuide,setInstallGuide]=useState(false),[installDismissed,setInstallDismissed]=useState(false);
  useEffect(()=>{
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -27,7 +27,7 @@ export function PublicPortal(){
  const title=useMemo(()=>data?.shop.public_title||data?.shop.name||'FIO',[data]);
  const standalone=typeof window!=='undefined'&&(window.matchMedia?.('(display-mode: standalone)').matches||(navigator as Navigator&{standalone?:boolean}).standalone===true);
  const ios=typeof navigator!=='undefined'&&/iphone|ipad|ipod/i.test(navigator.userAgent);
- async function install(){if(installEvent){await installEvent.prompt();await installEvent.userChoice;setInstallEvent(null);return;}setInstallGuide(true);}
+ async function install(){localStorage.setItem(`fio-public-install:${slug}`,'1');setInstallDismissed(true);if(installEvent){await installEvent.prompt();await installEvent.userChoice;setInstallEvent(null);return;}setInstallGuide(true);}
  function dismissInstall(){localStorage.setItem(`fio-public-install:${slug}`,'1');setInstallDismissed(true);}
  if(error)return <div className="public-portal centered-state"><img src="/FIOlogo/FIObranco.png" alt="FIO"/><h1>Não foi possível abrir.</h1><p>{error}</p></div>;
  if(!data)return <div className="public-portal centered-state"><img className="pulse-mark" src="/FIOlogo/FIObranco.png" alt="FIO"/><p>Preparando seu espaço…</p></div>;
@@ -37,7 +37,7 @@ export function PublicPortal(){
   <InAppBrowserBanner/>
   <header className="public-hero" style={data.shop.cover_url?{backgroundImage:`linear-gradient(#0007,#000d),url(${data.shop.cover_url})`}:undefined}>
    <div className="public-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt={title}/>:<img src={dark?'/FIOlogo/FIObranco.png':'/FIOlogo/FIOpreto.png'} alt="FIO"/>}</div>
-   <div className="public-hero-copy"><span className="eyebrow">AGENDE SEU HORÁRIO</span><h1>{title}</h1><p>{data.shop.public_description||'Escolha o serviço, o profissional e o melhor horário.'}</p><button className="primary public-cta brand-button" onClick={()=>navigate(`/login?shop=${encodeURIComponent(slug)}&audience=client`)}><CalendarDays size={18}/> Agendar ou entrar <ArrowRight size={17}/></button></div>
+   <div className="public-hero-copy"><span className="eyebrow">AGENDE SEU HORÁRIO</span><h1>{title}</h1><p>{data.shop.public_description||'Escolha o serviço, o profissional e o melhor horário.'}</p><button className="primary public-cta brand-button" onClick={()=>window.location.assign(`/login?shop=${encodeURIComponent(slug)}&audience=client`)}><CalendarDays size={18}/> Agendar ou entrar <ArrowRight size={17}/></button></div>
   </header>
   <main className="public-content">
    {data.shop.logo_url&&mayOfferInstall(navigator.userAgent,standalone)&&!installDismissed&&<section className="public-install-nudge"><div className="install-nudge-icon"><Download size={18}/></div><div><strong>Instale o app de {title}</strong><span>Abra sua agenda direto pela tela inicial.</span></div><button className="install-nudge-action brand-button" onClick={()=>void install()}>{installEvent?'Instalar':ios?'Como instalar':'Instalar app'}</button><button className="install-nudge-close" aria-label="Fechar" onClick={dismissInstall}><X size={16}/></button></section>}
