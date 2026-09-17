@@ -16,6 +16,8 @@ const errors: Record<string, [number, string]> = {
  ,INVALID_SLUG: [400, 'Use apenas letras minúsculas, números e hífens no link.']
  ,INVALID_ACCENT_COLOR: [400, 'Escolha uma cor válida.']
  ,ONBOARDING_INCOMPLETE: [400, 'Complete os campos obrigatórios antes de ativar.']
+ ,TRIAL_ALREADY_USED: [409, 'Esta barbearia já utilizou o teste grátis do FIO PRO.']
+ ,TRIAL_NOT_AVAILABLE: [409, 'O teste grátis não está disponível para esta assinatura.']
 };
 export function dbError(error: { message: string; code?: string } | null) {
  if (!error) return;

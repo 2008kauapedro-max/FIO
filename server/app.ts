@@ -35,14 +35,15 @@ app.get('/api/health', (_req, res) =>
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
   const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
-  const [services,team,palette]=await Promise.all([
+  const [services,team,palette,plans]=await Promise.all([
    db.from('services').select('id,name,duration_minutes,price_cents').eq('barbershop_id',shop.data.id).eq('active',true).order('name'),
    db.from('memberships').select('user_id,display_name,role').eq('barbershop_id',shop.data.id).in('role',['OWNER','BARBER']).eq('active',true).order('display_name'),
-   db.from('shop_palettes').select('*').eq('palette_key',shop.data.palette_key??'fio-black').maybeSingle()
-  ]);dbError(services.error);dbError(team.error);dbError(palette.error);
+   db.from('shop_palettes').select('*').eq('palette_key',shop.data.palette_key??'fio-black').maybeSingle(),
+   db.from('subscription_plans').select('id,name,cuts,validity_days,price_cents,active').eq('barbershop_id',shop.data.id).eq('active',true).order('name')
+  ]);dbError(services.error);dbError(team.error);dbError(palette.error);dbError(plans.error);
   const asset=(path:string|null)=>path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:null;
   const instagram=shop.data.instagram?`@${String(shop.data.instagram).replace(/^@+/,'').trim()}`:null;
-  res.json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[]});
+  res.json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:plans.data??[]});
  });
  app.get('/api/public/manifest/:slug',async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
@@ -115,6 +116,10 @@ app.get('/api/health', (_req, res) =>
  app.use('/api',async(req,res,next)=>{res.locals.ctx=await tenant(res.locals.auth,req);next();});
  const ctx=(res:express.Response)=>res.locals.ctx as TenantContext;
  app.get('/api/bootstrap',async(_req,res)=>res.json(await bootstrap(ctx(res))));
+ app.post('/api/saas/trial',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  const r=await c.db.rpc('start_saas_pro_trial',{p_shop:c.shopId});dbError(r.error);res.status(201).json({trialEndsAt:r.data});
+ });
  app.post('/api/services',async(req,res)=>{
   const c=ctx(res);requireOwner(c);
   const v=z.object({name:z.string().trim().min(2).max(100),duration_minutes:z.number().int().min(10).max(240),price_cents:z.number().int().min(0).max(1000000)}).strict().parse(req.body);
@@ -130,8 +135,8 @@ app.get('/api/health', (_req, res) =>
   const r=await c.db.from('customers').insert({...v,phone:v.phone?cleanPhone(v.phone):null,barbershop_id:c.shopId}).select().single();dbError(r.error);res.status(201).json(r.data);
  });
  app.patch('/api/profile/contact',async(req,res)=>{
-  const c=ctx(res),v=z.object({phone:z.string().trim().max(24)}).strict().parse(req.body);
-  const r=await c.db.rpc('update_own_contact',{p_shop:c.shopId,p_phone:v.phone});dbError(r.error);res.json({ok:true});
+  const c=ctx(res),v=z.object({displayName:z.string().trim().min(2).max(100),phone:z.string().trim().max(24)}).strict().parse(req.body);
+  const r=await c.db.rpc('update_own_profile',{p_shop:c.shopId,p_display_name:v.displayName,p_phone:v.phone});dbError(r.error);res.json({ok:true});
  });
  app.patch('/api/shop/branding',async(req,res)=>{
   const c=ctx(res);requireOwner(c);const v=z.object({title:z.string().trim().max(100).default(''),description:z.string().trim().max(280).default(''),logoUrl:z.string().trim().max(500).default(''),coverUrl:z.string().trim().max(500).default(''),backgroundUrl:z.string().trim().max(500).default(''),accentColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#ffffff')}).strict().parse(req.body);

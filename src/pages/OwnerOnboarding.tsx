@@ -2,7 +2,7 @@ import { useEffect,useMemo,useState,type ChangeEvent } from 'react';
 import { Check,ChevronLeft,ChevronRight,Copy,ExternalLink,ImagePlus,Plus,Share2,Trash2 } from 'lucide-react';
 import { api,supabase } from '../lib/api';
 
-type Service={id?:string;_key:string;name:string;duration_minutes:number;price_cents:number;active:boolean};
+type Service={id?:string;_key:string;name:string;duration_minutes:number;price_cents:number;active:boolean;_durationInput?:string;_priceInput?:string};
 type DaySchedule={weekday:number;enabled:boolean;opensAt:string;closesAt:string};
 type Snapshot={
  progress:{current_step:number;completed_steps:number[];draft:Record<string,unknown>}|null;
@@ -74,6 +74,10 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  const previewStyle=useMemo(()=>{const p=selectedPalette;const dark=themeMode==='dark';return {'--ob-bg':customAccent&&paletteKey==='custom'?(dark?'#101010':'#f7f7f4'):(dark?p?.dark_background??'#080808':p?.light_background??'#f5f5f2'),'--ob-surface':dark?p?.dark_surface??'#111':p?.light_surface??'#fff','--ob-text':dark?p?.dark_text??'#fff':p?.light_text??'#111','--ob-muted':dark?p?.dark_text_muted??'#999':p?.light_text_muted??'#666','--ob-accent':paletteKey==='custom'?customAccent:(dark?p?.dark_accent??'#fff':p?.light_accent??'#111')} as React.CSSProperties;},[selectedPalette,paletteKey,themeMode,customAccent]);
  const logoPreview=assetUrl(logoPath);
  const validService=(s:Service)=>s.name.trim().length>=2&&s.duration_minutes>=10&&s.duration_minutes<=240&&s.price_cents>=0;
+ const serviceDuration=(s:Service)=>s._durationInput??String(s.duration_minutes);
+ const servicePrice=(s:Service)=>s._priceInput??(s.price_cents/100).toFixed(2);
+ const updateDuration=(key:string,raw:string)=>setServices(xs=>xs.map(x=>x._key===key?{...x,_durationInput:raw,duration_minutes:raw===''?0:Number(raw)}:x));
+ const updatePrice=(key:string,raw:string)=>setServices(xs=>xs.map(x=>x._key===key?{...x,_priceInput:raw,price_cents:raw===''?0:Math.round(Number(raw.replace(',','.'))*100)}:x));
  const validSchedules=schedules.filter(d=>d.enabled&&d.opensAt<d.closesAt);
  const savedActiveServices=services.filter(s=>s.id&&s.active&&validService(s));
  const missingRequirements=[!whatsapp.replace(/\D/g,'').match(/^\d{10,15}$/)?'WhatsApp válido':null,!savedActiveServices.length?'Pelo menos um serviço salvo':null,!hoursSaved||!validSchedules.length?'Pelo menos um dia com horário salvo':null,!logoPath?'Logo da barbearia':null].filter(Boolean) as string[];
@@ -182,7 +186,7 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
     <div className="ob-service-list">{services.map((s,index)=><article className="ob-service-card" key={s.id??s._key}>
      <div className="ob-service-card-head"><strong>Serviço {index+1}</strong><button type="button" className={s.active?'ob-service-status is-active':'ob-service-status'} onClick={()=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,active:!x.active}:x))}>{s.active?'Ativo':'Inativo'}</button></div>
      <label>Nome do serviço<input value={s.name} placeholder="Ex.: Corte" onChange={e=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,name:e.target.value}:x))}/></label>
-     <div className="ob-service-fields"><label>Duração <span className="ob-input-suffix"><input type="number" min="10" max="240" step="5" value={s.duration_minutes} onChange={e=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,duration_minutes:Number(e.target.value)}:x))}/><small>min</small></span></label><label>Preço <span className="ob-input-prefix"><small>R$</small><input type="number" min="0" step="0.01" value={(s.price_cents/100).toFixed(2)} onChange={e=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,price_cents:Math.round(Number(e.target.value||0)*100)}:x))}/></span></label></div>
+     <div className="ob-service-fields"><label>Duração <span className="ob-input-suffix"><input inputMode="numeric" min="10" max="240" step="5" value={serviceDuration(s)} onFocus={e=>e.currentTarget.select()} onChange={e=>updateDuration(s._key,e.target.value.replace(/\D/g,'').slice(0,3))} onBlur={()=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,_durationInput:undefined}:x))}/><small>min</small></span></label><label>Preço <span className="ob-input-prefix"><small>R$</small><input inputMode="decimal" value={servicePrice(s)} onFocus={e=>e.currentTarget.select()} onChange={e=>updatePrice(s._key,e.target.value.replace(/[^0-9,.]/g,'').replace(/([,.].*)[,.]/g,'$1').slice(0,9))} onBlur={()=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,_priceInput:undefined}:x))}/></span></label></div>
      {!s.id&&services.length>1&&<button type="button" className="ob-remove-service" onClick={()=>setServices(xs=>xs.filter(x=>x._key!==s._key))}><Trash2 size={15}/>Remover</button>}
     </article>)}</div>
     <button type="button" className="ob-add" onClick={()=>setServices(xs=>[...xs,{_key:newKey(),name:'',duration_minutes:30,price_cents:0,active:true}])}><Plus size={16}/>Adicionar outro serviço</button>

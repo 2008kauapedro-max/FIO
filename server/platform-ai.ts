@@ -401,6 +401,146 @@ async function readProviderMessage(response:Response,signal:AbortSignal){
 
 
 
+function humanStatus(value:unknown){
+ const status=typeof value==='string'?value:'';
+ return status==='active'?'ativa':
+  status==='trial'||status==='trialing'?'em teste':
+  status==='suspended'?'suspensa':
+  status==='past_due'?'em atraso':
+  status==='inactive'?'inativa':
+  status==='cancelled'?'cancelada':
+  status||'não informado';
+}
+
+function formatPlatformDate(value:unknown){
+ if(typeof value!=='string'||!value)return null;
+ const date=new Date(value);
+ if(Number.isNaN(date.getTime()))return null;
+ return new Intl.DateTimeFormat('pt-BR',{
+  timeZone:'America/Sao_Paulo',
+  day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'
+ }).format(date);
+}
+
+function safeText(value:unknown,max=180){
+ return typeof value==='string'&&value.trim()?redact(value.trim()).slice(0,max):null;
+}
+
+type ToolExecution={name:ToolName;data:unknown;proposal?:Proposal};
+
+function deterministicToolAnswer(executions:ToolExecution[]){
+ const parts:string[]=[];
+
+ for(const execution of executions){
+  const record=asRecord(execution.data);
+  const items=arrayItems(execution.data);
+
+  if(execution.name==='get_platform_summary'){
+   const shops=safeCount(record.shops),active=safeCount(record.activeShops),suspended=safeCount(record.suspendedShops),customers=safeCount(record.customerRecords);
+   parts.push(`Hoje o FIO tem ${shops} barbearia${shops===1?'':'s'} cadastrada${shops===1?'':'s'}, ${active} ativa${active===1?'':'s'}, ${suspended} suspensa${suspended===1?'':'s'} e ${customers} registro${customers===1?'':'s'} de cliente.`);
+   continue;
+  }
+
+  if(execution.name==='get_platform_alerts'){
+   const total=safeCount(record.total);
+   if(total===0){parts.push('Não há alertas abertos dentro dos filtros consultados.');continue;}
+   const top=items.slice(0,3).map((item,index)=>{
+    const title=safeText(item.title)??'Alerta da plataforma';
+    const description=safeText(item.description,260);
+    const severity=humanSeverity(item.severity);
+    return `${index+1}. ${severity}: ${title}${description?` — ${description}`:''}`;
+   });
+   parts.push(`Encontrei ${total} alerta${total===1?'':'s'} dentro dos filtros consultados.${top.length?`\n${top.join('\n')}`:''}`);
+   continue;
+  }
+
+  if(execution.name==='list_barbershops'){
+   const total=safeCount(record.total);
+   if(total===0){parts.push('Não encontrei nenhuma barbearia com esses filtros.');continue;}
+   const top=items.slice(0,5).map(item=>{
+    const name=safeText(item.name)??'Barbearia sem nome';
+    const status=humanStatus(item.status??item.platform_status);
+    const plan=safeText(item.plan);
+    return `• ${name} — ${status}${plan?` — plano ${plan}`:''}`;
+   });
+   parts.push(`Encontrei ${total} barbearia${total===1?'':'s'} com esses filtros.${top.length?`\n${top.join('\n')}`:''}`);
+   continue;
+  }
+
+  if(execution.name==='get_barbershop_summary'||execution.name==='get_barbershop_health'){
+   const shop=items[0];
+   if(!shop){parts.push('Não encontrei essa barbearia nos dados administrativos disponíveis.');continue;}
+   const name=safeText(shop.name)??'Barbearia';
+   const status=humanStatus(shop.status??shop.platform_status);
+   const plan=safeText(shop.plan);
+   const billing=humanStatus(shop.billing_status);
+   const end=formatPlatformDate(shop.current_period_end);
+   const lastActivity=formatPlatformDate(shop.last_activity);
+   let text=`${name} está ${status}.`;
+   if(plan)text+=` Plano administrativo: ${plan}.`;
+   if(shop.billing_status)text+=` Situação administrativa da assinatura: ${billing}.`;
+   if(end)text+=` Fim do período atual: ${end}.`;
+   if(lastActivity)text+=` Última atividade registrada: ${lastActivity}.`;
+   if(execution.name==='get_barbershop_health')text+=' Isso descreve apenas o estado administrativo disponível e não comprova fraude nem pagamento.';
+   parts.push(text);
+   continue;
+  }
+
+  if(execution.name==='get_saas_subscriptions'){
+   const total=safeCount(record.total);
+   if(total===0){parts.push('Não encontrei assinaturas administrativas com esses filtros.');continue;}
+   const top=items.slice(0,5).map(item=>{
+    const plan=safeText(item.plan)??'plano não informado';
+    const status=humanStatus(item.status);
+    const end=formatPlatformDate(item.current_period_end);
+    return `• ${plan} — ${status}${end?` — período até ${end}`:''}`;
+   });
+   parts.push(`Encontrei ${total} assinatura${total===1?'':'s'} administrativa${total===1?'':'s'} com esses filtros.${top.length?`\n${top.join('\n')}`:''} Esses estados não comprovam pagamento ou receita.`);
+   continue;
+  }
+
+  if(execution.name==='get_saas_revenue'){
+   parts.push('A receita SaaS confirmada ainda está indisponível porque o FIO não possui uma fonte confiável de pagamentos reais integrada. Os status administrativos das assinaturas não são tratados como receita.');
+   continue;
+  }
+
+  if(execution.name==='get_recent_activity'||execution.name==='get_user_activity'){
+   if(record.resolution==='ambiguous_or_missing'){
+    const candidates=Array.isArray(record.candidates)?record.candidates:[];
+    const names=candidates.map(candidate=>safeText(asRecord(candidate).name)).filter(Boolean).slice(0,3);
+    parts.push(names.length?`Encontrei mais de um usuário possível: ${names.join(', ')}. Escolha qual deles você quer consultar.`:'Não consegui identificar um único usuário com esse nome. Informe um usuário mais específico.');
+    continue;
+   }
+   const total=safeCount(record.total);
+   if(total===0){parts.push('Não encontrei atividade registrada dentro desses filtros.');continue;}
+   const top=items.slice(0,5).map(item=>{
+    const actor=safeText(item.actor_name)??'Usuário';
+    const date=formatPlatformDate(item.created_at);
+    return `• ${actor}${date?` — ${date}`:''}`;
+   });
+   parts.push(`Há ${total} registro${total===1?'':'s'} de atividade dentro do período consultado.${top.length?`\nMais recentes:\n${top.join('\n')}`:''}`);
+   continue;
+  }
+
+  if(execution.name==='get_ai_usage'){
+   const total=safeCount(record.total);
+   const requests=items.reduce((sum,item)=>sum+safeCount(item.requests),0);
+   parts.push(total===0?'Não há uso do Copiloto registrado dentro desse período.':`Há ${requests} requisição${requests===1?'':'s'} do Copiloto nas ${total} linha${total===1?'':'s'} de uso retornada${total===1?'':'s'} para esse período.`);
+   continue;
+  }
+
+  if(execution.name==='propose_admin_action'){
+   const proposal=execution.proposal;
+   const action=proposal?.action==='suspend_shop'?'suspender a barbearia':proposal?.action==='reactivate_shop'?'reativar a barbearia':proposal?.action==='change_plan'?'alterar o plano':proposal?.action==='resolve_alert'?'resolver o alerta':'ação administrativa';
+   const target=proposal?.targetName?safeText(proposal.targetName):null;
+   parts.push(`Preparei a proposta para ${action}${target?` de ${target}`:''}. Nada foi executado ainda; revise e confirme pelo botão da interface.`);
+   continue;
+  }
+ }
+
+ return sanitizePlatformAnswer(parts.filter(Boolean).join('\n\n')||'Consulta concluída, mas não há dados suficientes para montar uma resposta útil.');
+}
+
 type Message={role:string;content:string|null;tool_calls?:{id:string;type:'function';function:{name:string;arguments:string}}[];tool_call_id?:string;name?:string};
 export async function askPlatformAI(ctx:AuthContext,body:unknown,fetcher:typeof fetch=fetch){
  await requirePlatformAdmin(ctx);const input=aiInput.parse(body),id=randomUUID();
@@ -465,34 +605,39 @@ export async function askPlatformAI(ctx:AuthContext,body:unknown,fetcher:typeof 
 
   if(!url||!key||!model||new URL(url).protocol!=='https:')throw Error('configuration');
   const messages:Message[]=[
-    {role:'system',content:SYSTEM_PROMPT+`\nHorário confiável do servidor: ${new Date().toISOString()}. Fuso de referência para hoje: America/Sao_Paulo; converta os limites para UTC.`},
-    ...input.history.map(item=>({role:item.role,content:redact(item.content)})),
-    {role:'user',content:redact(input.message)}
-   ];
-   let calls=0;
-  for(let round=0;round<4;round++){
-   signal.throwIfAborted();await requirePlatformAdmin(ctx);
-   const providerBody=JSON.stringify({model,max_tokens:1000,messages,tools:modelTools,tool_choice:'auto',parallel_tool_calls:false});
-    const response=await callProvider(fetcher,url,key,providerBody,signal,ctx,id);
-   const m=await readProviderMessage(response,signal);
-   if(m.tool_calls?.length){
-    const parsed=z.array(z.object({id:z.string().min(1).max(100),type:z.literal('function'),function:z.object({name:z.string().max(80),arguments:z.string().max(4000)}).strict()}).strict()).max(6).parse(m.tool_calls);
-    if(calls+parsed.length>6)throw new ApiError(422,'TOOL_CALL_LIMIT','Limite de consultas atingido. Faça uma pergunta mais específica.');
-    messages.push({role:'assistant',content:null,tool_calls:parsed});
-    for(const call of parsed){
-     calls++;
-     const r=await executeTool(ctx,call.function.name,JSON.parse(call.function.arguments),id,signal);
-     used.push(call.function.name);
-     if(r.proposal)proposals.push(r.proposal);
+   {role:'system',content:SYSTEM_PROMPT+`\nHorário confiável do servidor: ${new Date().toISOString()}. Fuso de referência para hoje: America/Sao_Paulo; converta os limites para UTC. Quando a solicitação depender de dados atuais do FIO, escolha a consulta autorizada adequada. O servidor executará a consulta e encerrará a resposta sem reenviar o resultado ao provedor.`},
+   ...input.history.map(item=>({role:item.role,content:redact(item.content)})),
+   {role:'user',content:redact(input.message)}
+  ];
 
-     messages.push({role:'tool',tool_call_id:call.id,name:call.function.name,content:JSON.stringify({trust:'UNTRUSTED_DATA',data:r.data})});
-    }
-   }else{
-    if(typeof m.content!=='string'||!m.content.trim()||m.content.length>8000)throw Error('invalid_response');
-    await requirePlatformAdmin(ctx);await aiAudit(ctx,'answer',id,'completed');
-    return {requestId:id,message:sanitizePlatformAnswer(m.content),tools:used,proposals};
+  signal.throwIfAborted();
+  await requirePlatformAdmin(ctx);
+  const providerBody=JSON.stringify({model,max_tokens:1000,messages,tools:modelTools,tool_choice:'auto',parallel_tool_calls:false});
+  const response=await callProvider(fetcher,url,key,providerBody,signal,ctx,id);
+  const m=await readProviderMessage(response,signal);
+
+  if(m.tool_calls?.length){
+   if(m.tool_calls.length>3)throw new ApiError(422,'TOOL_CALL_LIMIT','Limite de consultas atingido. Faça uma pergunta mais específica.');
+   const parsed=z.array(z.object({id:z.string().min(1).max(100),type:z.literal('function'),function:z.object({name:z.string().max(80),arguments:z.string().max(4000)}).strict()}).strict()).max(3).parse(m.tool_calls);
+   const executions:ToolExecution[]=[];
+
+   for(const call of parsed){
+    signal.throwIfAborted();
+    const r=await executeTool(ctx,call.function.name,JSON.parse(call.function.arguments),id,signal);
+    used.push(call.function.name);
+    if(r.proposal)proposals.push(r.proposal);
+    executions.push({name:call.function.name as ToolName,data:r.data,proposal:r.proposal});
    }
-  }throw new ApiError(422,'TOOL_CALL_LIMIT','Limite de consultas atingido. Faça uma pergunta mais específica.');
+
+   await requirePlatformAdmin(ctx);
+   await aiAudit(ctx,'answer',id,'deterministic_tool_result');
+   return {requestId:id,message:deterministicToolAnswer(executions),tools:used,proposals};
+  }
+
+  if(typeof m.content!=='string'||!m.content.trim()||m.content.length>8000)throw Error('invalid_response');
+  await requirePlatformAdmin(ctx);
+  await aiAudit(ctx,'answer',id,'completed_without_tool');
+  return {requestId:id,message:sanitizePlatformAnswer(m.content),tools:used,proposals};
  }catch(e){
   const detail=signal.aborted?'timeout':e instanceof ProviderHttpError?`provider_status=${e.status};kind=${e.kind}`:'request_failed';
    await aiAudit(ctx,'error',id,detail);

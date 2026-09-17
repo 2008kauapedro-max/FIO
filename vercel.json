@@ -34,6 +34,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/barbearia/:path*",
+      "destination": "/index.html"
+    },
+    {
       "source": "/platform/:path*",
       "destination": "/index.html"
     }

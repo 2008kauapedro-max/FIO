@@ -46,9 +46,11 @@ export async function bootstrap(ctx: TenantContext): Promise<Bootstrap> {
  ]);
  results.forEach(r=>dbError(r.error));
  const [shop,services,appointments,customers,team,subscriptions,billing,memberships,revenue,features,posts,subscriptionPlans,payments,campaigns,notifications,reviews]=results.map(r=>r.data);
- const plan=billing.status==='active'&&(!billing.expires_at||new Date(billing.expires_at)>new Date())?billing.plan:'FREE';
- const aiEnabled=billing.status==='active'&&(!billing.expires_at||new Date(billing.expires_at)>new Date())&&(features as {plan:string;ai_enabled:boolean}[]).some(f=>f.plan===billing.plan&&f.ai_enabled);
- return {shop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans,payments,campaigns,notifications,posts,reviews,plan,aiEnabled,revenue} as Bootstrap;
+ const entitlementActive=['active','trialing'].includes(billing.status)&&(!billing.expires_at||new Date(billing.expires_at)>new Date());
+ const plan=entitlementActive?billing.plan:'FREE';
+ const aiEnabled=entitlementActive&&(features as {plan:string;ai_enabled:boolean}[]).some(f=>f.plan===billing.plan&&f.ai_enabled);
+ const fioSubscription={plan:billing.plan,status:billing.status,starts_at:billing.starts_at,current_period_end:billing.current_period_end,trial_ends_at:billing.trial_ends_at,cancelled_at:billing.cancelled_at};
+ return {shop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans,payments,campaigns,notifications,posts,reviews,fioSubscription,plan,aiEnabled,revenue} as Bootstrap;
 }
 // The provider receives a deliberately small, role-scoped data projection, never a frontend snapshot.
 export function assistantContext(data: Bootstrap) {

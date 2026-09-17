@@ -13,7 +13,7 @@ export const suggestions: Record<Role, string[]> = {
  CLIENT: ['Quando é meu próximo corte?', 'Quantos cortes tenho no plano?', 'Quais serviços estão disponíveis?']
 };
 export interface Membership { barbershop_id: string; user_id: string; role: Role; display_name: string; phone?: string|null; active: boolean }
-export interface Shop { id: string; name: string; slug: string; timezone: string; public_title?:string|null; public_description?:string|null; logo_url?:string|null; cover_url?:string|null; background_url?:string|null; accent_color?:string|null }
+export interface Shop { id: string; name: string; slug: string; timezone: string; public_title?:string|null; public_description?:string|null; logo_url?:string|null; cover_url?:string|null; background_url?:string|null; accent_color?:string|null; whatsapp?:string|null; instagram?:string|null; address?:string|null; logo_asset_path?:string|null; cover_asset_path?:string|null; background_asset_path?:string|null }
 export interface Service { id: string; name: string; duration_minutes: number; price_cents: number; active: boolean }
 export type AppointmentStatus = 'scheduled'|'confirmed'|'in_service'|'completed'|'cancelled'|'no_show';
 export interface Appointment { id: string; client_id: string; barber_id: string; service_id: string; starts_at: string; ends_at: string; status: AppointmentStatus; price_cents: number; subscription_id?:string|null; payment_method?:'pending'|'cash'|'pix'|'card'|'subscription'|'other' }
@@ -25,4 +25,5 @@ export interface Campaign { id:string; title:string; body:string; audience:'CLIE
 export interface Notification { id:string; title:string; body:string; read_at?:string|null; created_at:string }
 export interface FeedPost { id: string; author_id: string; author_name: string; caption: string; image_path: string; created_at: string }
 export interface Review { id:string; appointment_id:string; client_id:string; barber_id:string; rating:number; comment?:string|null; created_at:string }
-export interface Bootstrap { shop: Shop; membership: Membership; memberships: Membership[]; services: Service[]; appointments: Appointment[]; customers: Customer[]; team: Membership[]; subscriptions: Subscription[]; subscriptionPlans: SubscriptionPlan[]; payments: Payment[]; campaigns: Campaign[]; notifications: Notification[]; posts: FeedPost[]; reviews: Review[]; plan: Plan; aiEnabled:boolean; revenue: number|null }
+export interface FioSubscription { plan:Plan; status:'active'|'inactive'|'trialing'|'past_due'|'cancelled'; starts_at?:string|null; current_period_end?:string|null; trial_ends_at?:string|null; cancelled_at?:string|null }
+export interface Bootstrap { shop: Shop; membership: Membership; memberships: Membership[]; services: Service[]; appointments: Appointment[]; customers: Customer[]; team: Membership[]; subscriptions: Subscription[]; subscriptionPlans: SubscriptionPlan[]; payments: Payment[]; campaigns: Campaign[]; notifications: Notification[]; posts: FeedPost[]; reviews: Review[]; fioSubscription:FioSubscription; plan: Plan; aiEnabled:boolean; revenue: number|null }

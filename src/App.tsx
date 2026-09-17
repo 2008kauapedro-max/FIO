@@ -1,6 +1,6 @@
 import { useCallback,useEffect,useState,lazy,Suspense } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
-import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,ArrowUpRight,Images,Megaphone,Sun,Moon } from 'lucide-react';
+import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,ArrowUpRight,Images,Megaphone,Sun,Moon,Crown } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { Bootstrap,Membership,Role } from '../shared/domain';
 import { roleHome } from '../shared/domain';
@@ -10,6 +10,7 @@ import { Agenda,Customers,Dashboard,Reports,Services,Settings as SettingsPage,Su
 import { AssistantChat } from './components/AssistantChat';
 import { Feed } from './pages/Feed';
 import { PublicPortal } from './pages/PublicPortal';
+import { FioPlans } from './pages/FioPlans';
 const PlatformApp=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformApp})));
 const PlatformLogin=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformLogin})));
 
@@ -29,7 +30,8 @@ const navItems:NavItem[]=[
  {path:'/servicos',label:'Serviços',icon:Scissors,roles:['OWNER','BARBER','CLIENT']},
  {path:'/assinaturas',label:'Assinaturas',icon:Wallet,roles:['OWNER','CLIENT']},
  {path:'/financeiro',label:'Financeiro',icon:Wallet,roles:['OWNER']},
- {path:'/comunicacao',label:'Comunicação',icon:Megaphone,roles:['OWNER']}
+ {path:'/comunicacao',label:'Comunicação',icon:Megaphone,roles:['OWNER']},
+ {path:'/plano-fio',label:'Plano FIO',icon:Crown,roles:['OWNER']}
 ];
 
 type Theme='dark'|'light';
@@ -50,6 +52,8 @@ export default function App(){
  useEffect(()=>{if(session&&!demo&&!isPlatform)void loadMemberships();},[session?.user.id,demo,isPlatform,loadMemberships]);
  const refresh=useCallback(async()=>{if(demo||!shopId)return;const next=await api<Bootstrap>('/bootstrap',shopId);setData(next);setError('');},[demo,shopId]);
  useEffect(()=>{if(session&&shopId&&!isPlatform&&!onboardingShopId){setData(null);void refresh().catch(e=>setError(e.message));}},[shopId,session?.user.id,refresh,isPlatform,onboardingShopId]);
+ useEffect(()=>{if(!session||!shopId||isPlatform||onboardingShopId)return;void refresh().catch(()=>undefined);},[location.pathname,session?.user.id,shopId,isPlatform,onboardingShopId,refresh]);
+ useEffect(()=>{if(!session||!shopId||isPlatform||onboardingShopId)return;const sync=()=>void refresh().catch(()=>undefined);const visible=()=>{if(document.visibilityState==='visible')sync();};window.addEventListener('focus',sync);document.addEventListener('visibilitychange',visible);const timer=window.setInterval(sync,30000);return()=>{window.removeEventListener('focus',sync);document.removeEventListener('visibilitychange',visible);window.clearInterval(timer);};},[session?.user.id,shopId,isPlatform,onboardingShopId,refresh]);
  useEffect(()=>{setMenu(false);},[location.pathname]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),5000);return()=>clearTimeout(timer);},[toast]);
  useEffect(()=>{
@@ -92,6 +96,7 @@ export default function App(){
   case '/assinaturas':content=<Subscriptions {...props}/>;break;
   case '/financeiro':content=<Reports {...props}/>;break;
   case '/comunicacao':content=<Communication {...props}/>;break;
+  case '/plano-fio':content=<FioPlans {...props}/>;break;
   case '/configuracoes':content=<SettingsPage {...props}/>;break;
   case '/feed':content=<Feed {...props}/>;break;
   case '/assistente':content=<AssistantChat role={role} plan={data.plan} aiEnabled={data.aiEnabled} shopId={data.shop.id} demo={demo} base={base}/>;break;
@@ -128,7 +133,7 @@ export default function App(){
    </div>
   </aside>
   <div className="workspace">
-   <header className="topbar"><div className="mobile-brand"><Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link></div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'Configurações':items.find(n=>n.path===page)?.label??'Visão geral'}</strong></div><div className="header-right"><span className="plan-badge">FIO {data.plan}</span><button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
+   <header className="topbar"><div className="mobile-brand"><Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link></div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'Configurações':items.find(n=>n.path===page)?.label??'Visão geral'}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:<span className="plan-badge">FIO {data.plan}</span>}<button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
    <main key={`${base}:${shopId}:${page}`} className={page==='/assistente'?'chat-main':'main-content'}>{content}</main>
    <nav className="bottom-nav" aria-label="Navegação mobile">{role==='CLIENT'?<><NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink><NavLink to={`${base}/agenda`}><CalendarDays size={21}/><span>Agenda</span></NavLink><NavLink to={`${base}/assinaturas`}><Wallet size={21}/><span>Assinatura</span></NavLink><NavLink to={`${base}/feed`}><Images size={21}/><span>Feed</span></NavLink><button onClick={()=>setMenu(true)}><Menu size={21}/><span>Mais</span></button></>:role==='BARBER'?<><NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink><NavLink to={`${base}/agenda`}><CalendarDays size={21}/><span>Agenda</span></NavLink><NavLink to={`${base}/clientes`}><Users size={21}/><span>Clientes</span></NavLink><NavLink to={`${base}/feed`}><Images size={21}/><span>Feed</span></NavLink><button onClick={()=>setMenu(true)}><Menu size={21}/><span>Mais</span></button></>:<><NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink><NavLink to={`${base}/agenda`}><CalendarDays size={21}/><span>Agenda</span></NavLink><NavLink to={`${base}/clientes`}><Users size={21}/><span>Clientes</span></NavLink><NavLink to={`${base}/equipe`}><UserRound size={21}/><span>Equipe</span></NavLink><button onClick={()=>setMenu(true)}><Menu size={21}/><span>Mais</span></button></>}</nav>
   </div>
