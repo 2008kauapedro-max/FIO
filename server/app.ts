@@ -8,6 +8,7 @@ import { authenticate, tenant, requireOwner, bootstrap, type AuthContext, type T
 import { ApiError,dbError } from './errors.js';
 import { askAssistant } from './assistant.js';
 import { bookingSchema } from '../shared/domain.js';
+import { createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook } from './syncpay.js';
 type Authenticator = typeof authenticate;
 
 function serviceDb(){
@@ -21,6 +22,8 @@ export function createApp(authenticator: Authenticator=authenticate) {
  const app=express();
  app.disable('x-powered-by');
  app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'",'https://*.supabase.co','wss://*.supabase.co'],imgSrc:["'self'",'data:','blob:','https://*.supabase.co'],objectSrc:["'none'"],frameAncestors:["'none'"]}}}));
+ // O webhook precisa do corpo bruto para validar a assinatura antes do JSON parser global.
+ app.post('/api/webhooks/syncpay',express.raw({type:'application/json',limit:'64kb'}),async(req,res)=>handleSyncpayWebhook(req,res));
  app.use(express.json({limit:'12kb'}));
 app.get('/api/health', (_req, res) =>
   res.json({
@@ -119,6 +122,12 @@ app.get('/api/health', (_req, res) =>
  app.post('/api/saas/trial',async(req,res)=>{
   const c=ctx(res);requireOwner(c);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('start_saas_pro_trial',{p_shop:c.shopId});dbError(r.error);res.status(201).json({trialEndsAt:r.data});
+ });
+ app.post('/api/saas/subscribe',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
+ });
+ app.get('/api/saas/billing',async(_req,res)=>{
+  const c=ctx(res);requireOwner(c);res.json(await getSyncpayBilling(c));
  });
  app.post('/api/services',async(req,res)=>{
   const c=ctx(res);requireOwner(c);
