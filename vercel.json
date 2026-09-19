@@ -41,8 +41,9 @@
       "destination": "/index.html"
     },
     {
-      "source": "^/(?<slug>[a-z0-9-]{3,60})$",
+      "source": "/:slug([a-z0-9-]{3,60})",
       "destination": "/index.html"
     }
   ]
 }
+
