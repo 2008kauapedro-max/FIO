@@ -295,6 +295,12 @@ export async function getSyncpayBilling(ctx:TenantContext,fetcher:Fetcher=fetch)
  return {configured:true,subscription:billingResponse(link,detail)};
 }
 
+function isSyncpayDashboardTest(rawBody:Buffer){
+ const body=rawBody.toString('utf8').trim();
+ if(body==='This is a test webhook payload.')return true;
+ try{return JSON.parse(body)==='This is a test webhook payload.';}catch{return false;}
+}
+
 export function verifySyncpayWebhook(rawBody:Buffer,headers:Request['headers'],nowSeconds=Math.floor(Date.now()/1000)){
  const secrets=webhookSecrets();
  if(!secrets.length)return false;
@@ -314,6 +320,10 @@ export function verifySyncpayWebhook(rawBody:Buffer,headers:Request['headers'],n
 export async function handleSyncpayWebhook(req:Request,res:ExpressResponse,fetcher:Fetcher=fetch){
  const raw=Buffer.isBuffer(req.body)?req.body:Buffer.from('');
  if(!raw.length)throw new ApiError(400,'INVALID_WEBHOOK','Webhook vazio.');
+ // The SyncPay dashboard's manual "send test" action uses a fixed synthetic payload.
+ // It is only a reachability check, so acknowledge that exact payload without mutating state.
+ // Real events still fail closed unless their HMAC/Bearer authentication is valid.
+ if(isSyncpayDashboardTest(raw)){res.status(200).json({received:true,test:true});return;}
  if(!verifySyncpayWebhook(raw,req.headers))throw new ApiError(401,'INVALID_WEBHOOK_SIGNATURE','Assinatura do webhook inválida.');
  let parsed:unknown;try{parsed=JSON.parse(raw.toString('utf8'));}catch{throw new ApiError(400,'INVALID_WEBHOOK','Webhook inválido.');}
  const base=z.object({event:z.string().min(1).max(80)}).passthrough().parse(parsed);
@@ -330,4 +340,4 @@ export async function handleSyncpayWebhook(req:Request,res:ExpressResponse,fetch
  res.status(200).json({received:true});
 }
 
-export const syncpayInternals={planConfig,validDocument,accessUntil,stateEventKey};
+export const syncpayInternals={planConfig,validDocument,accessUntil,stateEventKey,isSyncpayDashboardTest};
