@@ -37,4 +37,12 @@ describe('SyncPay billing boundary',()=>{
   expect(verifySyncpayWebhook(raw,{authorization:'Bearer whsec_test_123456'} as never,1)).toBe(true);
   expect(verifySyncpayWebhook(raw,{authorization:'Bearer wrong'} as never,1)).toBe(false);
  });
+
+ it('accepts event-specific webhook secrets without exposing them to the client',()=>{
+  vi.stubEnv('SYNCPAY_WEBHOOK_SECRET_ACTIVATED','whsec_activated_123456');
+  vi.stubEnv('SYNCPAY_WEBHOOK_SECRET_RENEWED','whsec_renewed_123456');
+  const raw=Buffer.from('{}');
+  expect(verifySyncpayWebhook(raw,{authorization:'Bearer whsec_activated_123456'} as never,1)).toBe(true);
+  expect(verifySyncpayWebhook(raw,{authorization:'Bearer whsec_renewed_123456'} as never,1)).toBe(true);
+ });
 });

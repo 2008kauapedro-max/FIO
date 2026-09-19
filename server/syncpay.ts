@@ -71,7 +71,20 @@ function adminDb(){
 }
 
 function configured(){return Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);}
-function webhookSecrets(){return [process.env.SYNCPAY_WEBHOOK_SECRET,process.env.SYNCPAY_WEBHOOK_SECRET_PREVIOUS].filter((x):x is string=>Boolean(x&&x.length>=8));}
+function webhookSecrets(){
+ const named=[
+  process.env.SYNCPAY_WEBHOOK_SECRET,
+  process.env.SYNCPAY_WEBHOOK_SECRET_PREVIOUS,
+  process.env.SYNCPAY_WEBHOOK_SECRET_ACTIVATED,
+  process.env.SYNCPAY_WEBHOOK_SECRET_OVERDUE,
+  process.env.SYNCPAY_WEBHOOK_SECRET_SUSPENDED,
+  process.env.SYNCPAY_WEBHOOK_SECRET_CANCELLED,
+  process.env.SYNCPAY_WEBHOOK_SECRET_REACTIVATED,
+  process.env.SYNCPAY_WEBHOOK_SECRET_RENEWED
+ ];
+ const packed=(process.env.SYNCPAY_WEBHOOK_SECRETS??'').split(/[\n,;]/);
+ return [...new Set([...named,...packed].map(x=>x?.trim()).filter((x):x is string=>Boolean(x&&x.length>=8)))].slice(0,20);
+}
 function digits(value:string){return value.replace(/\D/g,'');}
 function safeEqual(a:string,b:string){const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length&&timingSafeEqual(aa,bb);}
 function cents(value:string|number){const n=typeof value==='number'?value:Number(value);return Number.isFinite(n)?Math.round(n*100):-1;}
