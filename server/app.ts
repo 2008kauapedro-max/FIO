@@ -23,7 +23,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.disable('x-powered-by');
  app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'",'https://*.supabase.co','wss://*.supabase.co'],imgSrc:["'self'",'data:','blob:','https://*.supabase.co'],objectSrc:["'none'"],frameAncestors:["'none'"]}}}));
  // O webhook precisa do corpo bruto para validar a assinatura antes do JSON parser global.
- app.post('/api/webhooks/syncpay',express.raw({type:'application/json',limit:'64kb'}),async(req,res)=>handleSyncpayWebhook(req,res));
+ app.post('/api/webhooks/syncpay',express.raw({type:'*/*',limit:'64kb'}),async(req,res)=>handleSyncpayWebhook(req,res));
  app.use(express.json({limit:'12kb'}));
 app.get('/api/health', (_req, res) =>
   res.json({

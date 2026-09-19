@@ -298,8 +298,11 @@ export async function getSyncpayBilling(ctx:TenantContext,fetcher:Fetcher=fetch)
 function isSyncpayDashboardTest(rawBody:Buffer){
  const expected='This is a test webhook payload.';
  if(rawBody.length===0||rawBody.length>2048)return false;
- const body=rawBody.toString('utf8').trim();
- if(body===expected)return true;
+ const body=rawBody.toString('utf8').replace(/\u0000/g,'').trim();
+ // O teste manual da SyncPay pode enviar a frase pura, dentro de JSON/form-data
+ // ou acompanhada de metadados. Como esse ping nunca altera estado, basta
+ // reconhecer a frase fixa em qualquer ponto do corpo bruto.
+ if(body.includes(expected))return true;
  const containsExpected=(value:unknown,depth=0):boolean=>{
   if(typeof value==='string')return value.trim()===expected;
   if(!value||typeof value!=='object'||depth>3)return false;

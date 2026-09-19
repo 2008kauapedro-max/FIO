@@ -51,6 +51,7 @@ describe('SyncPay billing boundary',()=>{
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('\"This is a test webhook payload.\"'))).toBe(true);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"message\":\"This is a test webhook payload.\"}'))).toBe(true);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('message=This+is+a+test+webhook+payload.'))).toBe(true);
+  expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('--fio-boundary\r\nContent-Disposition: form-data; name="message"\r\n\r\nThis is a test webhook payload.\r\n--fio-boundary--'))).toBe(true);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"event\":\"assinatura_ativada\"}'))).toBe(false);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"message\":\"This is a test webhook payload.\",\"event\":\"assinatura_ativada\"}'))).toBe(true);
  });
