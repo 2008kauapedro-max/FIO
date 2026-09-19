@@ -32,14 +32,16 @@ const listPlansResponse=z.object({data:z.array(planResource)}).passthrough();
 const createPlanResponse=z.object({data:planResource}).passthrough();
 
 const chargeSchema=z.object({
- cycle_number:z.number().int().optional(),amount:z.union([z.string(),z.number()]).optional(),status:z.string(),due_date:z.string().optional().nullable(),
- expires_at:z.string().optional().nullable(),paid_at:z.string().optional().nullable(),payment:z.object({pix_code:z.string().optional().nullable(),qr_code:z.string().optional().nullable()}).passthrough().optional().nullable()
+ cycle_number:z.number().int().optional(),amount:z.union([z.string(),z.number()]).optional(),status:z.string().default('pending'),due_date:z.string().optional().nullable(),
+ expires_at:z.string().optional().nullable(),paid_at:z.string().optional().nullable(),payment:z.object({pix_code:z.string().optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable()}).passthrough().optional().nullable()
 }).passthrough();
-const subscriptionDetailResponse=z.object({data:z.object({
- token:z.string().min(8).max(200),status:z.enum(['pending_first_payment','active','overdue','suspended','cancelled']),
- subscriber_name:z.string().optional(),subscriber_email:z.string().email().optional(),started_at:z.string().optional().nullable(),next_charge_at:z.string().optional().nullable(),
- cancelled_at:z.string().optional().nullable(),plan:planResource,charges:z.array(chargeSchema).default([])
-}).passthrough()}).passthrough();
+const loosePayment=z.object({pix_code:z.string().optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable(),expires_at:z.string().optional().nullable(),status:z.string().optional().nullable()}).passthrough();
+const looseSubscription=z.object({
+ token:z.string().optional(),subscription_token:z.string().optional(),status:z.string().optional(),subscriber_name:z.string().optional(),subscriber_email:z.string().optional(),
+ started_at:z.string().optional().nullable(),next_charge_at:z.string().optional().nullable(),next_billing_at:z.string().optional().nullable(),next_charge_date:z.string().optional().nullable(),
+ cancelled_at:z.string().optional().nullable(),plan:z.union([z.string(),z.object({token:z.string().optional(),grace_period_days:z.number().int().nonnegative().optional()}).passthrough()]).optional(),
+ plan_token:z.string().optional(),charges:z.array(chargeSchema).optional(),payment:loosePayment.optional().nullable()
+}).passthrough();
 const enrollResponse=z.object({
  subscription_token:z.string().min(8).max(200),status:z.string(),billing_method:z.string(),payment:z.object({
   pix_code:z.string().min(1).optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable(),expires_at:z.string().optional().nullable()
@@ -53,6 +55,7 @@ const webhookEnvelope=z.object({
 type Fetcher=typeof fetch;
 type PaidPlan=typeof PAID_PLANS[number];
 type ProviderStatus='pending_first_payment'|'active'|'overdue'|'suspended'|'cancelled';
+type ProviderDetail={token:string;status:ProviderStatus;started_at:string|null;next_charge_at:string|null;cancelled_at:string|null;plan:{token:string;grace_period_days:number};charges:z.infer<typeof chargeSchema>[];payment:z.infer<typeof loosePayment>|null};
 type PlanMapping={plan_code:PaidPlan;billing_cycle:BillingCycle;amount_cents:number;periodicity_days:number;billing_method:string;provider_plan_token:string;checkout_url:string|null};
 type ProviderLink={id:string;barbershop_id:string;provider_subscription_token:string;provider_plan_token:string;plan_code:PaidPlan;billing_cycle:BillingCycle;amount_cents:number;provider_status:ProviderStatus;is_current:boolean;last_event_at:string|null};
 type EnrollmentIntent={id:string;state:'creating'|'uncertain';provider_subscription_token:string|null;same_offer:boolean;created:boolean};
@@ -120,16 +123,42 @@ async function parseJson(response:globalThis.Response){
 
 function providerParse<T>(schema:z.ZodType<T>,value:unknown):T{
  const parsed=schema.safeParse(value);
- if(!parsed.success)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','A SyncPay respondeu em um formato inesperado. Tente novamente.');
+ if(!parsed.success)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível atualizar a cobrança agora. Tente novamente em instantes.');
  return parsed.data;
+}
+
+function normalizeProviderStatus(value:unknown):ProviderStatus{
+ const raw=String(value??'').toLowerCase().trim();
+ if(raw==='pending'||raw==='pending_payment'||raw==='pending_first_payment')return 'pending_first_payment';
+ if(raw==='active'||raw==='approved'||raw==='paid')return 'active';
+ if(raw==='overdue'||raw==='past_due'||raw==='late')return 'overdue';
+ if(raw==='suspended'||raw==='paused')return 'suspended';
+ if(raw==='cancelled'||raw==='canceled'||raw==='expired')return 'cancelled';
+ throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível atualizar a cobrança agora. Tente novamente em instantes.');
+}
+
+function normalizeProviderDetail(value:unknown,fallback:{token:string;planToken:string;gracePeriodDays:number}):ProviderDetail{
+ const root=value&&typeof value==='object'?value as Record<string,unknown>:{};
+ let raw:unknown=root.data??root;
+ if(raw&&typeof raw==='object'&&'subscription' in (raw as Record<string,unknown>))raw=(raw as Record<string,unknown>).subscription;
+ const detail=providerParse(looseSubscription,raw);
+ const plan=typeof detail.plan==='string'?{token:detail.plan}:detail.plan;
+ const token=(detail.token??detail.subscription_token??fallback.token).trim();
+ const planToken=(plan?.token??detail.plan_token??fallback.planToken).trim();
+ if(token.length<8||planToken.length<8)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível atualizar a cobrança agora. Tente novamente em instantes.');
+ return {
+  token,status:normalizeProviderStatus(detail.status),started_at:iso(detail.started_at),next_charge_at:iso(detail.next_charge_at??detail.next_billing_at??detail.next_charge_date),cancelled_at:iso(detail.cancelled_at),
+  plan:{token:planToken,grace_period_days:plan&&typeof plan==='object'&&typeof plan.grace_period_days==='number'?plan.grace_period_days:fallback.gracePeriodDays},
+  charges:detail.charges??[],payment:detail.payment??null
+ };
 }
 
 async function getAccessToken(fetcher:Fetcher,force=false){
  if(!force&&tokenCache&&tokenCache.expiresAt-Date.now()>60_000)return tokenCache.value;
  const clientId=process.env.SYNCPAY_CLIENT_ID,clientSecret=process.env.SYNCPAY_CLIENT_SECRET;
- if(!clientId||!clientSecret)throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','A SyncPay ainda não foi configurada no servidor.');
+ if(!clientId||!clientSecret)throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','A cobrança recorrente ainda não está disponível. Tente novamente mais tarde.');
  let response:globalThis.Response;
- try{response=await fetcher(`${BASE}/auth-token`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({client_id:clientId,client_secret:clientSecret}),signal:AbortSignal.timeout(15000)});}catch{throw new ApiError(503,'SYNCPAY_UNAVAILABLE','A SyncPay está temporariamente indisponível. Tente novamente.');}
+ try{response=await fetcher(`${BASE}/auth-token`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({client_id:clientId,client_secret:clientSecret}),signal:AbortSignal.timeout(15000)});}catch{throw new ApiError(503,'SYNCPAY_UNAVAILABLE','Não foi possível acessar a cobrança agora. Tente novamente em instantes.');}
  const payload=await parseJson(response);
  if(!response.ok)throw new SyncpayHttpError(response.status,payload);
  const parsed=providerParse(z.object({access_token:z.string().min(10),expires_in:z.number().positive().default(3600),expires_at:z.string().optional()}),payload);
@@ -142,7 +171,7 @@ async function providerRequest(fetcher:Fetcher,path:string,init:RequestInit={},r
  let token:string;
  try{token=await getAccessToken(fetcher);}catch(e){throw providerApiError(e);}
  let response:globalThis.Response;
- try{response=await fetcher(`${BASE}${path}`,{...init,headers:{Accept:'application/json',Authorization:`Bearer ${token}`,...(init.body?{'Content-Type':'application/json'}:{}),...(init.headers??{})},signal:init.signal??AbortSignal.timeout(15000)});}catch{throw new ApiError(503,'SYNCPAY_UNAVAILABLE','A SyncPay está temporariamente indisponível. Tente novamente.');}
+ try{response=await fetcher(`${BASE}${path}`,{...init,headers:{Accept:'application/json',Authorization:`Bearer ${token}`,...(init.body?{'Content-Type':'application/json'}:{}),...(init.headers??{})},signal:init.signal??AbortSignal.timeout(15000)});}catch{throw new ApiError(503,'SYNCPAY_UNAVAILABLE','Não foi possível acessar a cobrança agora. Tente novamente em instantes.');}
  if(response.status===401&&retry401){tokenCache=null;try{await getAccessToken(fetcher,true);}catch(e){throw providerApiError(e);}return providerRequest(fetcher,path,init,false);}
  const payload=await parseJson(response);
  if(!response.ok)throw providerApiError(new SyncpayHttpError(response.status,payload));
@@ -153,13 +182,13 @@ function providerApiError(error:unknown):ApiError{
  if(error instanceof ApiError)return error;
  if(error instanceof SyncpayHttpError){
   const p=error.payload&&typeof error.payload==='object'?error.payload as Record<string,unknown>:{};
-  if(error.status===422&&p.action==='wait_for_approval')return new ApiError(503,'SYNCPAY_ACCOUNT_PENDING','A conta SyncPay ainda está aguardando aprovação.');
-  if(error.status===401||error.status===403)return new ApiError(503,'SYNCPAY_AUTH_ERROR','As credenciais da SyncPay precisam ser revisadas no servidor.');
-  if(error.status===429)return new ApiError(429,'SYNCPAY_RATE_LIMIT','A SyncPay recebeu muitas solicitações. Aguarde um pouco e tente novamente.');
-  if(error.status===404)return new ApiError(409,'SYNCPAY_RESOURCE_NOT_FOUND','A assinatura ou o plano de cobrança não foi encontrado na SyncPay.');
-  if(error.status===422)return new ApiError(422,'SYNCPAY_INVALID_REQUEST','A SyncPay recusou os dados da assinatura. Confira os dados e tente novamente.');
+  if(error.status===422&&p.action==='wait_for_approval')return new ApiError(503,'SYNCPAY_ACCOUNT_PENDING','A cobrança recorrente ainda não está disponível para esta conta.');
+  if(error.status===401||error.status===403)return new ApiError(503,'SYNCPAY_AUTH_ERROR','A cobrança recorrente está temporariamente indisponível. Tente novamente mais tarde.');
+  if(error.status===429)return new ApiError(429,'SYNCPAY_RATE_LIMIT','Muitas tentativas em pouco tempo. Aguarde um pouco e tente novamente.');
+  if(error.status===404)return new ApiError(409,'SYNCPAY_RESOURCE_NOT_FOUND','Não foi possível localizar esta cobrança. Atualize a página e tente novamente.');
+  if(error.status===422)return new ApiError(422,'SYNCPAY_INVALID_REQUEST','Não foi possível criar a cobrança com esses dados. Confira as informações e tente novamente.');
  }
- return new ApiError(503,'SYNCPAY_UNAVAILABLE','A SyncPay está temporariamente indisponível. Tente novamente.');
+ return new ApiError(503,'SYNCPAY_UNAVAILABLE','Não foi possível acessar a cobrança agora. Tente novamente em instantes.');
 }
 
 async function ensureProviderPlan(db:SupabaseClient,plan:PaidPlan,cycle:BillingCycle,fetcher:Fetcher):Promise<PlanMapping>{
@@ -183,15 +212,16 @@ async function ensureProviderPlan(db:SupabaseClient,plan:PaidPlan,cycle:BillingC
  dbError(saved.error);return saved.data as PlanMapping;
 }
 
-async function getProviderDetail(token:string,fetcher:Fetcher){return providerParse(subscriptionDetailResponse,await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(token)}`)).data;}
+async function getProviderDetail(token:string,fetcher:Fetcher,fallback:{planToken:string;gracePeriodDays:number}){return normalizeProviderDetail(await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(token)}`),{token,...fallback});}
 
-function paymentFromDetail(detail:z.infer<typeof subscriptionDetailResponse>['data']){
- const charge=detail.charges.find(item=>item.status==='pending'&&item.payment?.pix_code);
- if(!charge)return null;
- return {pixCode:charge.payment?.pix_code??null,qrCode:charge.payment?.qr_code??null,identifier:null,expiresAt:iso(charge.expires_at)};
+function paymentFromDetail(detail:ProviderDetail){
+ const charge=detail.charges.find(item=>['pending','created','waiting_payment'].includes(String(item.status).toLowerCase())&&item.payment?.pix_code);
+ if(charge)return {pixCode:charge.payment?.pix_code??null,qrCode:charge.payment?.qr_code??null,identifier:charge.payment?.identifier??null,expiresAt:iso(charge.expires_at)};
+ if(detail.payment?.pix_code)return {pixCode:detail.payment.pix_code??null,qrCode:detail.payment.qr_code??null,identifier:detail.payment.identifier??null,expiresAt:iso(detail.payment.expires_at)};
+ return null;
 }
 
-function accessUntil(detail:z.infer<typeof subscriptionDetailResponse>['data']){
+function accessUntil(detail:ProviderDetail){
  const next=iso(detail.next_charge_at);
  if(detail.status==='active'||detail.status==='overdue'){
   if(!next)return null;
@@ -200,13 +230,13 @@ function accessUntil(detail:z.infer<typeof subscriptionDetailResponse>['data']){
  return null;
 }
 
-function stateEventKey(prefix:string,detail:z.infer<typeof subscriptionDetailResponse>['data']){
+function stateEventKey(prefix:string,detail:ProviderDetail){
  return createHash('sha256').update([prefix,detail.token,detail.status,detail.plan.token,detail.next_charge_at??'',detail.cancelled_at??''].join('|')).digest('hex');
 }
 
-async function applyProviderTruth(db:SupabaseClient,detail:z.infer<typeof subscriptionDetailResponse>['data'],event:{key:string;name:string;occurredAt:string;bodyHash:string}){
+async function applyProviderTruth(db:SupabaseClient,detail:ProviderDetail,event:{key:string;name:string;occurredAt:string;bodyHash:string}){
  const until=accessUntil(detail);
- if((detail.status==='active'||detail.status==='overdue')&&!until)throw new ApiError(503,'SYNCPAY_INCOMPLETE_STATE','A SyncPay não informou a validade da assinatura. Tente novamente.');
+ if((detail.status==='active'||detail.status==='overdue')&&!until)throw new ApiError(503,'SYNCPAY_INCOMPLETE_STATE','Não foi possível confirmar a validade da assinatura agora. Tente novamente em instantes.');
  const result=await db.rpc('apply_syncpay_subscription_state',{
   p_event_key:event.key,p_event_name:event.name,p_occurred_at:event.occurredAt,p_body_sha256:event.bodyHash,
   p_subscription_token:detail.token,p_provider_status:detail.status,p_plan_token:detail.plan.token,p_started_at:iso(detail.started_at),p_access_until:until
@@ -214,7 +244,7 @@ async function applyProviderTruth(db:SupabaseClient,detail:z.infer<typeof subscr
  dbError(result.error);return result.data;
 }
 
-function billingResponse(link:ProviderLink,detail:z.infer<typeof subscriptionDetailResponse>['data'],paymentOverride?:{pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null}|null){
+function billingResponse(link:ProviderLink,detail:ProviderDetail,paymentOverride?:{pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null}|null){
  return {provider:'syncpay' as const,providerStatus:detail.status,plan:link.plan_code,cycle:link.billing_cycle,amountCents:link.amount_cents,nextChargeAt:iso(detail.next_charge_at),payment:paymentOverride??paymentFromDetail(detail)};
 }
 
@@ -237,11 +267,11 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Esta ação é exclusiva do responsável pela barbearia.');
  const input=subscribeInput.parse(raw),document=digits(input.document);
  if(!validDocument(document))throw new ApiError(400,'INVALID_DOCUMENT','Informe um CPF ou CNPJ válido.');
- if(!configured())throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','A SyncPay ainda não foi configurada no servidor.');
+ if(!configured())throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','A cobrança recorrente ainda não está disponível. Tente novamente mais tarde.');
  const db=adminDb(),mapping=await ensureProviderPlan(db,input.plan,input.cycle,fetcher);
  const existing=await currentLink(db,ctx.shopId);
  if(existing){
-  const detail=await getProviderDetail(existing.provider_subscription_token,fetcher);
+  const detail=await getProviderDetail(existing.provider_subscription_token,fetcher,{planToken:existing.provider_plan_token,gracePeriodDays:GRACE_DAYS[existing.billing_cycle]});
   await applyProviderTruth(db,detail,{key:stateEventKey('pre-enroll-reconcile',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify({status:detail.status,token:detail.token,plan:detail.plan.token,next:detail.next_charge_at})).digest('hex')});
   if(['active','overdue','pending_first_payment'].includes(detail.status)){
    if(existing.plan_code===input.plan&&existing.billing_cycle===input.cycle)return billingResponse(existing,detail);
@@ -255,7 +285,7 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
  if(!intent.same_offer)throw new ApiError(409,'SYNCPAY_ENROLLMENT_IN_PROGRESS','Já existe uma tentativa de assinatura em verificação. Para evitar cobrança duplicada, aguarde a confirmação antes de escolher outro plano.');
  if(!intent.created){
   if(!intent.provider_subscription_token)throw new ApiError(409,'SYNCPAY_ENROLLMENT_UNCERTAIN','Uma tentativa anterior ainda está sendo verificada. Para evitar uma cobrança duplicada, não gere outro Pix agora.');
-  const detail=await getProviderDetail(intent.provider_subscription_token,fetcher);
+  const detail=await getProviderDetail(intent.provider_subscription_token,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
   try{
    const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:detail.token,p_provider_plan_token:mapping.provider_plan_token,p_actor:ctx.userId,p_terms_version:'fio-subscription-v1'});dbError(bound.error);
    await setEnrollmentIntent(db,intent.id,'linked',detail.token,null);
@@ -290,7 +320,7 @@ export async function getSyncpayBilling(ctx:TenantContext,fetcher:Fetcher=fetch)
  if(!configured())return {configured:false,subscription:null};
  const db=adminDb(),link=await currentLink(db,ctx.shopId);
  if(!link)return {configured:true,subscription:null};
- const detail=await getProviderDetail(link.provider_subscription_token,fetcher);
+ const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
  await applyProviderTruth(db,detail,{key:stateEventKey('owner-reconcile',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify({status:detail.status,token:detail.token,plan:detail.plan.token,next:detail.next_charge_at})).digest('hex')});
  return {configured:true,subscription:billingResponse(link,detail)};
 }
@@ -346,14 +376,15 @@ export async function handleSyncpayWebhook(req:Request,res:ExpressResponse,fetch
  if(!SUBSCRIPTION_EVENTS.has(base.event)){res.status(200).json({received:true,ignored:true});return;}
  const event=webhookEnvelope.parse(parsed);
  const db=adminDb();
- const known=await db.from('saas_provider_subscriptions').select('id').eq('provider','syncpay').eq('provider_subscription_token',event.subscription_token).maybeSingle();
+ const known=await db.from('saas_provider_subscriptions').select('id,provider_plan_token,billing_cycle').eq('provider','syncpay').eq('provider_subscription_token',event.subscription_token).maybeSingle();
  dbError(known.error);
  if(!known.data){res.status(200).json({received:true,ignored:true});return;}
- const detail=await getProviderDetail(event.subscription_token,fetcher);
+ const knownLink=known.data as {id:string;provider_plan_token:string;billing_cycle:BillingCycle};
+ const detail=await getProviderDetail(event.subscription_token,fetcher,{planToken:event.plan_token??knownLink.provider_plan_token,gracePeriodDays:GRACE_DAYS[knownLink.billing_cycle]});
  const bodyHash=createHash('sha256').update(raw).digest('hex');
  const key=createHash('sha256').update([event.event,event.subscription_token,event.occurred_at,event.plan_token??'',event.status??'',event.next_charge_at??''].join('|')).digest('hex');
  await applyProviderTruth(db,detail,{key,name:event.event,occurredAt:new Date(event.occurred_at).toISOString(),bodyHash});
  res.status(200).json({received:true});
 }
 
-export const syncpayInternals={planConfig,validDocument,accessUntil,stateEventKey,isSyncpayDashboardTest};
+export const syncpayInternals={planConfig,validDocument,accessUntil,stateEventKey,isSyncpayDashboardTest,normalizeProviderDetail};

@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Camera,ImagePlus,Plus,Trash2,X } from 'lucide-react';
 import type { FeedPost } from '../../shared/domain';
 import { api,supabase } from '../lib/api';
+import { optimizeImage } from '../lib/images';
 import { Empty,Modal,PageTitle } from '../components/ui';
 import type { WorkspaceProps } from './Workspace';
 
-const MAX_IMAGE_BYTES=8*1024*1024;
+const MAX_IMAGE_BYTES=15*1024*1024;
 const ALLOWED_TYPES=new Set(['image/jpeg','image/png','image/webp']);
 const relative=(iso:string)=>{
  const diff=Math.max(0,Date.now()-new Date(iso).getTime());
@@ -53,7 +54,7 @@ export function Feed(p:WorkspaceProps){
  }
  return <>
   <PageTitle eyebrow="INSPIRAÇÃO DA CASA" title="Feed" description="Cortes, detalhes e trabalhos da equipe em um só lugar." action={canPost?<button className="primary" onClick={()=>setComposer(true)}><Plus size={18}/>Nova publicação</button>:undefined}/>
-  {featured.length>0&&<section className="feed-team" aria-label="Profissionais"><div className="section-title"><h2>Profissionais</h2><span className="muted">Trabalhos recentes da equipe</span></div><div className="feed-team-scroll">{featured.map(member=><button className="feed-team-person feed-team-button" key={member.user_id} onClick={()=>navigate(`${p.base}/equipe`)}><span className="feed-team-avatar">{member.display_name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><strong>{member.display_name.split(' ')[0]}</strong><small>Contato</small></button>)}</div></section>}
+  {featured.length>0&&<section className="feed-team" aria-label="Profissionais"><div className="section-title"><h2>Profissionais</h2><span className="muted">Trabalhos recentes da equipe</span></div><div className="feed-team-scroll">{featured.map(member=><button className="feed-team-person feed-team-button" key={member.user_id} onClick={()=>navigate(`${p.base}/equipe`)}><span className="feed-team-avatar">{member.avatar_url?<img src={member.avatar_url} alt=""/>:member.display_name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><strong>{member.display_name.split(' ')[0]}</strong><small>Contato</small></button>)}</div></section>}
   {data.posts.length?<section className="feed-grid">{data.posts.map(post=>{
    const canDelete=canPost&&(data.membership.role==='OWNER'||post.author_id===data.membership.user_id);
    return <article className="feed-card" key={post.id}>
@@ -61,7 +62,7 @@ export function Feed(p:WorkspaceProps){
     <div className="feed-card-body"><div className="feed-author"><span className="avatar small">{post.author_name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><div><strong>{post.author_name}</strong><small>{relative(post.created_at)}</small></div></div>{post.caption&&<p>{post.caption}</p>}</div>
    </article>;
   })}</section>:<Empty title="O primeiro corte ainda vai aparecer aqui">{canPost?'Publique uma foto do trabalho da equipe para inaugurar o feed.':'Quando a equipe publicar novos trabalhos, eles aparecem aqui.'}</Empty>}
-  {composer&&<PostComposer {...p} onClose={()=>setComposer(false)}/>} 
+  {composer&&<PostComposer {...p} onClose={()=>setComposer(false)}/>}
  </>;
 }
 
@@ -72,7 +73,7 @@ function PostComposer(p:WorkspaceProps&{onClose:()=>void}){
   const next=e.target.files?.[0]??null;setError('');
   if(!next)return;
   if(!ALLOWED_TYPES.has(next.type)){setError('Use uma imagem JPG, PNG ou WEBP.');return;}
-  if(next.size>MAX_IMAGE_BYTES){setError('A imagem pode ter no máximo 8 MB.');return;}
+  if(next.size>MAX_IMAGE_BYTES){setError('A imagem original pode ter no máximo 15 MB.');return;}
   if(preview.startsWith('blob:'))URL.revokeObjectURL(preview);
   setFile(next);setPreview(URL.createObjectURL(next));
  }
@@ -84,9 +85,9 @@ function PostComposer(p:WorkspaceProps&{onClose:()=>void}){
     p.updateDemo(d=>({...d,posts:[{id:crypto.randomUUID(),author_id:d.membership.user_id,author_name:d.membership.display_name,caption:caption.trim(),image_path:preview,created_at:new Date().toISOString()},...d.posts]}));
    }else{
     if(!supabase)throw new Error('Supabase ainda não foi configurado.');
-    const ext=file.type==='image/png'?'png':file.type==='image/webp'?'webp':'jpg';
-    uploadedPath=`${p.data.shop.id}/${p.data.membership.user_id}/${crypto.randomUUID()}.${ext}`;
-    const upload=await supabase.storage.from('feed-posts').upload(uploadedPath,file,{cacheControl:'3600',contentType:file.type,upsert:false});
+    const optimized=await optimizeImage(file,'feed');
+    uploadedPath=`${p.data.shop.id}/${p.data.membership.user_id}/${crypto.randomUUID()}.webp`;
+    const upload=await supabase.storage.from('feed-posts').upload(uploadedPath,optimized,{cacheControl:'31536000',contentType:'image/webp',upsert:false});
     if(upload.error)throw new Error('Não foi possível enviar a imagem.');
     try{await api('/posts',p.data.shop.id,{caption:caption.trim(),imagePath:uploadedPath});}
     catch(error){await supabase.storage.from('feed-posts').remove([uploadedPath]);throw error;}
@@ -97,7 +98,7 @@ function PostComposer(p:WorkspaceProps&{onClose:()=>void}){
  }
  return <Modal title="Nova publicação" onClose={p.onClose}><form className="post-composer" onSubmit={submit}>
   <input ref={input} hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={choose}/>
-  <button type="button" className={`post-picker ${preview?'has-preview':'fio-pattern-dark'}`} onClick={()=>input.current?.click()}>{preview?<><img src={preview} alt="Prévia da publicação"/><span><ImagePlus size={18}/>Trocar foto</span></>:<><ImagePlus size={28}/><strong>Escolher foto do corte</strong><small>JPG, PNG ou WEBP · até 8 MB</small></>}</button>
+  <button type="button" className={`post-picker ${preview?'has-preview':'fio-pattern-dark'}`} onClick={()=>input.current?.click()}>{preview?<><img src={preview} alt="Prévia da publicação"/><span><ImagePlus size={18}/>Trocar foto</span></>:<><ImagePlus size={28}/><strong>Escolher foto do corte</strong><small>JPG, PNG ou WEBP · até 15 MB · otimizada antes do envio</small></>}</button>
   <label className="field">Legenda<textarea value={caption} maxLength={500} rows={4} onChange={e=>setCaption(e.target.value)} placeholder="Conte um pouco sobre o corte, técnica ou acabamento..."/><span className="field-counter">{caption.length}/500</span></label>
   {error&&<p className="form-error" role="alert">{error}</p>}
   <div className="modal-actions"><button type="button" className="ghost" onClick={p.onClose} disabled={busy}><X size={17}/>Cancelar</button><button className="primary" disabled={busy||!file}>{busy?'Publicando...':'Publicar no feed'}</button></div>

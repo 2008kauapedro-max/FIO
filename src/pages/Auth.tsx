@@ -1,6 +1,6 @@
 import { useEffect,useState,type FormEvent } from 'react';
 import { Link,useLocation,useNavigate } from 'react-router-dom';
-import { supabase,api } from '../lib/api';
+import { supabase,api,getRememberSession,setRememberSession } from '../lib/api';
 import { Field } from '../components/ui';
 import { CheckCircle2,Eye,EyeOff,LoaderCircle } from 'lucide-react';
 import { OwnerOnboarding } from './OwnerOnboarding';
@@ -25,6 +25,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  const [resetInvalid,setResetInvalid]=useState(false);
  const [showPassword,setShowPassword]=useState(false);
  const [showConfirmPassword,setShowConfirmPassword]=useState(false);
+ const [remember,setRemember]=useState(()=>getRememberSession());
 
  useEffect(()=>{
   if(!reset||!supabase)return;
@@ -83,6 +84,20 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   if(audience==='client'&&shop)return `/login?shop=${encodeURIComponent(shop)}&audience=client`;
   return '/login';
  };
+
+ async function signInWithGoogle(){
+  setMessage('');
+  if(!supabase){setMessage('Não foi possível abrir o login agora. Tente novamente.');return;}
+  setRememberSession(remember);setBusy(true);
+  try{
+   const query=new URLSearchParams();
+   if(audience)query.set('audience',audience);
+   if(shop)query.set('shop',shop);
+   const redirectTo=`${window.location.origin}/login${query.toString()?`?${query.toString()}`:''}`;
+   const result=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo,queryParams:{prompt:'select_account'}}});
+   if(result.error)throw result.error;
+  }catch{setMessage('Não foi possível abrir o Google agora. Tente novamente.');setBusy(false);}
+ }
 
  async function submit(e:FormEvent<HTMLFormElement>){
   e.preventDefault();
@@ -143,6 +158,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    }
 
    if(mode==='signup'){
+    setRememberSession(remember);
     const confirmationAudience=audience||'owner';
     const query=new URLSearchParams({audience:confirmationAudience,email:email.trim()});
     if(shop)query.set('shop',shop);
@@ -161,6 +177,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     return;
    }
 
+   setRememberSession(remember);
    const result=await supabase.auth.signInWithPassword({email,password:submittedPassword});
    if(result.error){
     setMessage('Não foi possível entrar. Confira seu e-mail e senha.');
@@ -240,6 +257,11 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    <h1>{heading}</h1>
    <p className="muted">{description}</p>
 
+   {!reset&&mode!=='forgot'&&<>
+    <button type="button" className="oauth-button" disabled={busy} onClick={()=>void signInWithGoogle()}><span className="google-mark">G</span>Continuar com Google</button>
+    <div className="auth-divider"><span>ou continue com e-mail</span></div>
+   </>}
+
    <form onSubmit={submit}>
     {!reset&&<Field label="E-mail">
      <input
@@ -279,6 +301,8 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
       </div>
      </Field>}
 
+    {!reset&&mode==='login'&&<label className="remember-session"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/><span>Manter conectado neste dispositivo</span></label>}
+
     {message&&<p role="status" className="notice">{message}</p>}
 
     <button className="primary full" disabled={busy}>
@@ -317,7 +341,7 @@ function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
   try{
    const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'join',slug,displayName:displayName.trim()});
    sessionStorage.setItem('fio-shop',r.barbershopId);
-   if(phone.trim())await api('/profile/contact',r.barbershopId,{phone:phone.trim()},'PATCH');
+   if(phone.trim())await api('/profile/contact',r.barbershopId,{displayName:displayName.trim(),phone:phone.trim()},'PATCH');
    onDone();
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
@@ -349,7 +373,7 @@ function LegacyOnboarding({onDone}:{onDone:()=>void}) {
   try{
    const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode,displayName,...(mode==='create'?{name,slug}:mode==='join'?{slug}:{token:invite})});
    sessionStorage.setItem('fio-shop',r.barbershopId);
-   if(phone.trim())await api('/profile/contact',r.barbershopId,{phone:phone.trim()},'PATCH');
+   if(phone.trim())await api('/profile/contact',r.barbershopId,{displayName:displayName.trim(),phone:phone.trim()},'PATCH');
    onDone();
   }catch(e){
    setError((e as Error).message);

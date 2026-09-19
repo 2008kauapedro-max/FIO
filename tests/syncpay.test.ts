@@ -46,6 +46,11 @@ describe('SyncPay billing boundary',()=>{
   expect(verifySyncpayWebhook(raw,{authorization:'Bearer whsec_renewed_123456'} as never,1)).toBe(true);
  });
 
+ it('accepts compact subscription detail responses without leaking provider internals',()=>{
+  const detail=syncpayInternals.normalizeProviderDetail({data:{subscription:{status:'active',next_charge_at:'2026-09-30T12:00:00Z',payment:{pix_code:'000201'}}}},{token:'sub_12345678',planToken:'plan_12345678',gracePeriodDays:5});
+  expect(detail).toMatchObject({token:'sub_12345678',status:'active',plan:{token:'plan_12345678',grace_period_days:5},payment:{pix_code:'000201'}});
+ });
+
  it('recognizes SyncPay dashboard test payload wrappers as no-op pings',()=>{
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('This is a test webhook payload.'))).toBe(true);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('\"This is a test webhook payload.\"'))).toBe(true);

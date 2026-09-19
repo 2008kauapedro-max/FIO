@@ -26,7 +26,7 @@ export function platformRouter(){
   if(!r.data?.ok)throw new ApiError(409,r.data?.code??'INVALID_PROPOSAL','Proposta inválida, expirada ou estado alterado. Solicite uma nova proposta.');res.json(r.data);
  });
  router.get('/alerts',async(req,res)=>{
-  const v=platformPage.extend({severity:z.enum(['info','warning','critical']).optional(),status:z.enum(['open','resolved']).default('open')}).strict().parse(req.query);
+  const v=platformPage.extend({severity:z.enum(['info','warning','critical']).optional(),status:z.enum(['open','resolved']).default('open')}).parse(req.query);
   const r=await executeTool(auth(res),'get_platform_alerts',{...v,limit:Math.min(v.limit,25)},randomUUID());res.json(r.data);
  });
  router.post('/alerts/:id/resolve-proposal',async(req,res)=>{
@@ -43,7 +43,7 @@ export function platformRouter(){
   const v=pushDelete.parse(req.body),a=auth(res),r=await a.db.from('push_subscriptions').delete().eq('user_id',a.userId).eq('endpoint',v.endpoint);dbError(r.error);res.json({ok:true});
  });
  router.get('/actors',async(req,res)=>{
-  const v=z.object({search:z.string().trim().max(100).default('')}).strict().parse(req.query);
+  const v=z.object({search:z.string().trim().max(100).default('')}).parse(req.query);
   let q=auth(res).db.from('platform_actor_directory').select('id,name').order('name').order('id').limit(25);
   if(v.search)q=q.ilike('name',`%${v.search.replace(/[\\%_]/g,'\\$&')}%`);
   const r=await q;dbError(r.error);res.json(r.data??[]);
@@ -60,7 +60,7 @@ export function platformRouter(){
   res.json({activeShops:results[0].count??0,activeSubscriptions:results[1].count??0,alerts:results[2].count??0,revenueCents:null,recent:results[3].data??[]});
  });
  router.get('/shops',async(req,res)=>{
-  const v=platformPage.extend({search:z.string().trim().max(100).default(''),status:z.enum(['all','active','trial','suspended','past_due']).default('all')}).strict().parse(req.query);
+  const v=platformPage.extend({search:z.string().trim().max(100).default(''),status:z.enum(['all','active','trial','suspended','past_due']).default('all')}).parse(req.query);
   let q=auth(res).db.from('platform_shop_directory').select('*',{count:'exact'}).order('name').order('id');
   if(v.search)q=q.ilike('name',`%${v.search.replace(/[\\%_]/g,'\\$&')}%`);
   if(v.status!=='all')q=q.eq('status',v.status);
@@ -71,7 +71,7 @@ export function platformRouter(){
   if(!r.data)throw new ApiError(404,'SHOP_NOT_FOUND','Barbearia não encontrada.');res.json(r.data);
  });
  router.get('/shops/:id/:section',async(req,res)=>{
-  const id=z.uuid().parse(req.params.id),section=z.enum(Object.keys(platformSections) as [PlatformSection,...PlatformSection[]]).parse(req.params.section),v=platformPage.strict().parse(req.query),s=platformSections[section];
+  const id=z.uuid().parse(req.params.id),section=z.enum(Object.keys(platformSections) as [PlatformSection,...PlatformSection[]]).parse(req.params.section),v=platformPage.parse(req.query),s=platformSections[section];
   let q=auth(res).db.from(s.table).select(s.columns,{count:'exact'}).eq('barbershop_id',id);
   if(section==='team')q=q.in('role',['OWNER','BARBER']);
   const r=await q.order(s.order,{ascending:false}).order(section==='team'?'user_id':'id').range((v.page-1)*v.limit,v.page*v.limit-1);dbError(r.error);
@@ -84,13 +84,13 @@ export function platformRouter(){
  router.get('/plans',async(_req,res)=>{const r=await auth(res).db.from('saas_plans').select('id,code,name,price_cents,active,features,limits').order('code');dbError(r.error);res.json(r.data??[]);});
  router.patch('/plans/:id',async(req,res)=>{const id=z.uuid().parse(req.params.id),v=platformPlanUpdate.parse(req.body),r=await auth(res).db.rpc('platform_update_plan',{p_id:id,p_name:v.name,p_price:v.priceCents,p_active:v.active,p_confirmed:v.confirmed});dbError(r.error);res.json({ok:true});});
  router.get('/subscriptions',async(req,res)=>{
-  const v=platformPage.extend({status:z.enum(['all','active','inactive','trialing','past_due','cancelled']).default('all')}).strict().parse(req.query);
+  const v=platformPage.extend({status:z.enum(['all','active','inactive','trialing','past_due','cancelled']).default('all')}).parse(req.query);
   let q=auth(res).db.from('saas_subscriptions').select('id,barbershop_id,plan,status,starts_at,current_period_end,trial_ends_at,cancelled_at,barbershops(name)',{count:'exact'});
   if(v.status!=='all')q=q.eq('status',v.status);
   const r=await q.order('created_at',{ascending:false}).order('id').range((v.page-1)*v.limit,v.page*v.limit-1);dbError(r.error);res.json({items:r.data??[],total:r.count??0,page:v.page,limit:v.limit});
  });
  router.get('/activity',async(req,res)=>{
-  const v=platformPage.extend({shop:z.uuid().optional(),user:z.uuid().optional(),role:z.enum(['OWNER','BARBER','CLIENT','PLATFORM_ADMIN','UNKNOWN']).optional(),type:z.string().regex(/^[a-z_.]+$/).max(80).optional(),from:z.iso.datetime().optional(),to:z.iso.datetime().optional()}).strict().refine(v=>!v.from||!v.to||v.from<=v.to,{message:'Período inválido'}).parse(req.query);
+  const v=platformPage.extend({shop:z.uuid().optional(),user:z.uuid().optional(),role:z.enum(['OWNER','BARBER','CLIENT','PLATFORM_ADMIN','UNKNOWN']).optional(),type:z.string().regex(/^[a-z_.]+$/).max(80).optional(),from:z.iso.datetime().optional(),to:z.iso.datetime().optional()}).refine(v=>!v.from||!v.to||v.from<=v.to,{message:'Período inválido'}).parse(req.query);
   let q=auth(res).db.from('audit_events').select(auditColumns,{count:'exact'});
   if(v.shop)q=q.eq('barbershop_id',v.shop);if(v.user)q=q.eq('actor_user_id',v.user);if(v.role)q=q.eq('actor_role',v.role);if(v.type)q=q.eq('event_type',v.type);if(v.from)q=q.gte('created_at',v.from);if(v.to)q=q.lte('created_at',v.to);
   const r=await q.order('created_at',{ascending:false}).order('id',{ascending:false}).range((v.page-1)*v.limit,v.page*v.limit-1);dbError(r.error);res.json({items:r.data??[],total:r.count??0,page:v.page,limit:v.limit});

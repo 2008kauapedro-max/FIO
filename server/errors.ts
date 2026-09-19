@@ -3,7 +3,7 @@ export class ApiError extends Error {
 }
 const errors: Record<string, [number, string]> = {
  FORBIDDEN: [403, 'Você não tem permissão para esta ação.'], AUTH_REQUIRED: [401, 'Entre novamente para continuar.'],
- PLAN_REQUIRED: [403, 'O Assistente está disponível a partir do plano PRO.'],
+ PLAN_REQUIRED: [403, 'Este recurso não está disponível no plano atual da barbearia.'],
  DAILY_LIMIT: [429, 'Você atingiu o limite diário do Assistente. Tente amanhã.'], RATE_LIMIT: [429, 'Muitas mensagens. Aguarde um minuto.'],
  SLOT_UNAVAILABLE: [409, 'Este horário acabou de ser ocupado. Escolha outro.'], INVALID_TIME: [400, 'Escolha um horário futuro dentro dos próximos 60 dias.'],
  OUTSIDE_BUSINESS_HOURS: [400, 'Horário fora do expediente.'], INVALID_TRANSITION: [409, 'Este atendimento já foi atualizado.'],

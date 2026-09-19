@@ -1,8 +1,9 @@
 import { useEffect,useMemo,useState,type ChangeEvent } from 'react';
 import { Check,ChevronLeft,ChevronRight,Copy,ExternalLink,ImagePlus,Plus,Share2,Trash2 } from 'lucide-react';
 import { api,supabase } from '../lib/api';
+import { optimizeImage } from '../lib/images';
 
-type Service={id?:string;_key:string;name:string;duration_minutes:number;price_cents:number;active:boolean;_durationInput?:string;_priceInput?:string};
+type Service={id?:string;_key:string;name:string;description?:string|null;duration_minutes:number;price_cents:number;active:boolean;_durationInput?:string;_priceInput?:string};
 type DaySchedule={weekday:number;enabled:boolean;opensAt:string;closesAt:string};
 type Snapshot={
  progress:{current_step:number;completed_steps:number[];draft:Record<string,unknown>}|null;
@@ -24,7 +25,7 @@ const money=(c:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency
 const cleanInstagram=(value:string)=>value.trim().replace(/^@+/,'').replace(/\s+/g,'');
 const host=()=>typeof window==='undefined'?'usefio.vercel.app':window.location.host;
 const newKey=()=>typeof crypto!=='undefined'&&'randomUUID' in crypto?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
-const serviceDefaults=():Service[]=>suggestedServices.map(([name,duration,price])=>({_key:newKey(),name,duration_minutes:duration,price_cents:price,active:true}));
+const serviceDefaults=():Service[]=>suggestedServices.map(([name,duration,price])=>({_key:newKey(),name,description:'',duration_minutes:duration,price_cents:price,active:true}));
 const scheduleDefaults=():DaySchedule[]=>weekdays.map(([value])=>({weekday:Number(value),enabled:Number(value)!==0,opensAt:'09:00',closesAt:'19:00'}));
 const assetUrl=(path:string|null)=>path&&import.meta.env.VITE_SUPABASE_URL?`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:'';
 
@@ -43,7 +44,7 @@ function scheduleSummary(days:DaySchedule[]){
 export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  const [shopId,setShopId]=useState(initialShopId??''),[step,setStep]=useState(1),[completed,setCompleted]=useState<number[]>([]),[draft,setDraft]=useState<Record<string,unknown>>({}),[snapshot,setSnapshot]=useState<Snapshot|null>(null),[loading,setLoading]=useState(Boolean(initialShopId)),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[success,setSuccess]=useState(false);
  const [name,setName]=useState(''),[slug,setSlug]=useState(''),[slugTouched,setSlugTouched]=useState(false),[displayName,setDisplayName]=useState(''),[whatsapp,setWhatsapp]=useState(''),[instagram,setInstagram]=useState(''),[address,setAddress]=useState(''),[amenities,setAmenities]=useState<string[]>([]),[services,setServices]=useState<Service[]>(serviceDefaults),[schedules,setSchedules]=useState<DaySchedule[]>(scheduleDefaults),[hoursSaved,setHoursSaved]=useState(false),[paletteKey,setPaletteKey]=useState('fio-black'),[themeMode,setThemeMode]=useState<'light'|'dark'>('dark'),[customAccent,setCustomAccent]=useState('#ffffff'),[logoPath,setLogoPath]=useState<string|null>(null),[coverPath,setCoverPath]=useState<string|null>(null),[backgroundPath,setBackgroundPath]=useState<string|null>(null);
- const publicLink=shopId&&slug?`${window.location.origin}/barbearia/${slug}`:'';
+ const publicLink=shopId&&slug?`${window.location.origin}/${slug}`:'';
 
  useEffect(()=>{window.scrollTo({top:0,behavior:'auto'});},[step]);
 
@@ -115,7 +116,7 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
    const next:Service[]=[];
    for(const s of services){
     if(!validService(s)||(!s.id&&!s.active))continue;
-    const r=await api<Omit<Service,'_key'>>('/onboarding/services',shopId,{id:s.id,name:s.name.trim(),durationMinutes:s.duration_minutes,priceCents:s.price_cents,active:s.active});
+    const r=await api<Omit<Service,'_key'>>('/onboarding/services',shopId,{id:s.id,name:s.name.trim(),description:s.description?.trim()??'',durationMinutes:s.duration_minutes,priceCents:s.price_cents,active:s.active});
     next.push({...r,_key:s._key});
    }
    setServices(next);return true;
@@ -146,9 +147,14 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
 
  async function upload(e:ChangeEvent<HTMLInputElement>,kind:'logo'|'cover'|'background'){
   const file=e.target.files?.[0];if(!file||!shopId||!supabase)return;
-  if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>5*1024*1024){setError('Use JPG, PNG ou WebP de até 5 MB.');return;}
   setBusy(true);setError('');
-  try{const user=(await supabase.auth.getUser()).data.user;if(!user)throw Error('Entre novamente para enviar a imagem.');const ext=file.type==='image/jpeg'?'jpg':file.type.split('/')[1];const path=`${shopId}/${user.id}/${kind}-${Date.now()}.${ext}`;const r=await supabase.storage.from('branding-assets').upload(path,file,{upsert:true,contentType:file.type});if(r.error)throw r.error;kind==='logo'?setLogoPath(path):kind==='cover'?setCoverPath(path):setBackgroundPath(path);}catch(e){setError((e as Error).message||'Não foi possível enviar a imagem.');}finally{setBusy(false);}
+  try{
+   const optimized=await optimizeImage(file,kind);
+   const user=(await supabase.auth.getUser()).data.user;if(!user)throw Error('Entre novamente para enviar a imagem.');
+   const path=`${shopId}/${user.id}/${kind}-${Date.now()}.webp`;
+   const r=await supabase.storage.from('branding-assets').upload(path,optimized,{upsert:false,contentType:'image/webp',cacheControl:'31536000'});if(r.error)throw r.error;
+   kind==='logo'?setLogoPath(path):kind==='cover'?setCoverPath(path):setBackgroundPath(path);
+  }catch(e){setError((e as Error).message||'Não foi possível preparar esta imagem. Tente outra foto.');}finally{setBusy(false);}
  }
 
  async function activate(){
@@ -163,7 +169,7 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  const canContinue=step===1?Boolean(name.trim().length>=2&&/^[a-z0-9-]{3,60}$/.test(slug)&&whatsapp.replace(/\D/g,'').length>=10):step===2?services.some(s=>s.active&&validService(s)):step===3?validSchedules.length>0:step===4?Boolean(paletteKey&&logoPath):true;
 
  if(loading)return <div className="owner-onboarding ob-loading">Carregando seu progresso…</div>;
- if(success)return <div className="owner-onboarding ob-success"><span className="ob-success-mark"><Check/></span><p className="eyebrow">TUDO PRONTO</p><h1>Sua barbearia está pronta.</h1><p className="ob-muted">O espaço já está disponível para seus clientes.</p><div className="ob-success-actions"><a href={`/barbearia/${slug}`} target="_blank" rel="noreferrer"><ExternalLink size={16}/>Ver página do cliente</a><button onClick={()=>void copy()}><Copy size={16}/>Copiar link</button><button onClick={()=>void share()}><Share2 size={16}/>Compartilhar</button><button onClick={onDone}>Entrar no FIO Gestão</button></div><div className="ob-qr"><img src={`https://quickchart.io/qr?size=180&text=${encodeURIComponent(publicLink)}`} alt="QR Code da página pública"/><a download="fio-link.png" href={`https://quickchart.io/qr?size=800&text=${encodeURIComponent(publicLink)}`}>Baixar QR Code</a></div></div>;
+ if(success)return <div className="owner-onboarding ob-success"><span className="ob-success-mark"><Check/></span><p className="eyebrow">TUDO PRONTO</p><h1>Sua barbearia está pronta.</h1><p className="ob-muted">O espaço já está disponível para seus clientes.</p><div className="ob-success-actions"><a href={`/${slug}`} target="_blank" rel="noreferrer"><ExternalLink size={16}/>Ver página do cliente</a><button onClick={()=>void copy()}><Copy size={16}/>Copiar link</button><button onClick={()=>void share()}><Share2 size={16}/>Compartilhar</button><button onClick={onDone}>Entrar no FIO Gestão</button></div><div className="ob-qr"><img src={`https://quickchart.io/qr?size=180&text=${encodeURIComponent(publicLink)}`} alt="QR Code da página pública"/><a download="fio-link.png" href={`https://quickchart.io/qr?size=800&text=${encodeURIComponent(publicLink)}`}>Baixar QR Code</a></div></div>;
  if(!shopId&&step!==1)return null;
 
  return <main className="owner-onboarding" style={previewStyle}>
@@ -177,7 +183,7 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
     <label>WhatsApp<input value={whatsapp} inputMode="tel" type="tel" placeholder="(11) 99999-9999" onChange={e=>setWhatsapp(e.target.value)}/></label>
     <label>Instagram <small>opcional · pode digitar sem @</small><div className="ob-instagram-field"><span>@</span><input value={instagram} autoCapitalize="none" autoCorrect="off" placeholder="sua_barbearia" onChange={e=>setInstagram(cleanInstagram(e.target.value))}/></div></label>
     <label>Endereço <small>opcional</small><input value={address} placeholder="Rua, número e bairro" onChange={e=>setAddress(e.target.value)}/></label>
-    <label>Link do seu site<div className="ob-public-link-field"><span>{host()}/barbearia/</span><input className="ob-slug" value={slug} maxLength={60} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="nome-da-barbearia" onChange={e=>{setSlugTouched(true);setSlug(slugify(e.target.value));}}/></div><small className="ob-link-preview">Seu link: <b>{host()}/barbearia/{slug||'nome-da-barbearia'}</b></small></label>
+    <label>Link do seu site<div className="ob-public-link-field"><span>{host()}/</span><input className="ob-slug" value={slug} maxLength={60} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="nome-da-barbearia" onChange={e=>{setSlugTouched(true);setSlug(slugify(e.target.value));}}/></div><small className="ob-link-preview">Seu link: <b>{host()}/{slug||'nome-da-barbearia'}</b></small></label>
     <div className="ob-amenities"><span>Comodidades <small>opcional · marque apenas o que sua barbearia oferece</small></span><div>{amenityOptions.map(([key,label])=><button type="button" className={amenities.includes(key)?'selected':''} key={key} onClick={()=>setAmenities(a=>a.includes(key)?a.filter(x=>x!==key):[...a,key])}>{amenities.includes(key)?<Check size={14}/>:null}{label}</button>)}</div></div>
    </>}
 
@@ -186,10 +192,11 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
     <div className="ob-service-list">{services.map((s,index)=><article className="ob-service-card" key={s.id??s._key}>
      <div className="ob-service-card-head"><strong>Serviço {index+1}</strong><button type="button" className={s.active?'ob-service-status is-active':'ob-service-status'} onClick={()=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,active:!x.active}:x))}>{s.active?'Ativo':'Inativo'}</button></div>
      <label>Nome do serviço<input value={s.name} placeholder="Ex.: Corte" onChange={e=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,name:e.target.value}:x))}/></label>
+     <label>Descrição <small>opcional</small><textarea value={s.description??''} maxLength={500} rows={2} placeholder="Ex.: Corte social com acabamento e finalização." onChange={e=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,description:e.target.value}:x))}/></label>
      <div className="ob-service-fields"><label>Duração <span className="ob-input-suffix"><input inputMode="numeric" min="10" max="240" step="5" value={serviceDuration(s)} onFocus={e=>e.currentTarget.select()} onChange={e=>updateDuration(s._key,e.target.value.replace(/\D/g,'').slice(0,3))} onBlur={()=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,_durationInput:undefined}:x))}/><small>min</small></span></label><label>Preço <span className="ob-input-prefix"><small>R$</small><input inputMode="decimal" value={servicePrice(s)} onFocus={e=>e.currentTarget.select()} onChange={e=>updatePrice(s._key,e.target.value.replace(/[^0-9,.]/g,'').replace(/([,.].*)[,.]/g,'$1').slice(0,9))} onBlur={()=>setServices(xs=>xs.map(x=>x._key===s._key?{...x,_priceInput:undefined}:x))}/></span></label></div>
      {!s.id&&services.length>1&&<button type="button" className="ob-remove-service" onClick={()=>setServices(xs=>xs.filter(x=>x._key!==s._key))}><Trash2 size={15}/>Remover</button>}
     </article>)}</div>
-    <button type="button" className="ob-add" onClick={()=>setServices(xs=>[...xs,{_key:newKey(),name:'',duration_minutes:30,price_cents:0,active:true}])}><Plus size={16}/>Adicionar outro serviço</button>
+    <button type="button" className="ob-add" onClick={()=>setServices(xs=>[...xs,{_key:newKey(),name:'',description:'',duration_minutes:30,price_cents:0,active:true}])}><Plus size={16}/>Adicionar outro serviço</button>
    </>}
 
    {step===3&&<>

@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import helmet from 'helmet';
 import { resolve } from 'node:path';
 import { z, ZodError } from 'zod';
-import { authenticate, tenant, requireOwner, bootstrap, type AuthContext, type TenantContext } from './context.js';
+import { authenticate, tenant, requireOwner, requireFioFeature, bootstrap, type AuthContext, type TenantContext } from './context.js';
 import { ApiError,dbError } from './errors.js';
 import { askAssistant } from './assistant.js';
 import { bookingSchema } from '../shared/domain.js';
@@ -38,15 +38,20 @@ app.get('/api/health', (_req, res) =>
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
   const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
-  const [services,team,palette,plans]=await Promise.all([
-   db.from('services').select('id,name,duration_minutes,price_cents').eq('barbershop_id',shop.data.id).eq('active',true).order('name'),
-   db.from('memberships').select('user_id,display_name,role').eq('barbershop_id',shop.data.id).in('role',['OWNER','BARBER']).eq('active',true).order('display_name'),
+  const [services,team,palette,billing]=await Promise.all([
+   db.from('services').select('id,name,description,duration_minutes,price_cents').eq('barbershop_id',shop.data.id).eq('active',true).order('name'),
+   db.from('memberships').select('user_id,display_name,role,avatar_url').eq('barbershop_id',shop.data.id).in('role',['OWNER','BARBER']).eq('active',true).order('display_name'),
    db.from('shop_palettes').select('*').eq('palette_key',shop.data.palette_key??'fio-black').maybeSingle(),
-   db.from('subscription_plans').select('id,name,cuts,validity_days,price_cents,active').eq('barbershop_id',shop.data.id).eq('active',true).order('name')
-  ]);dbError(services.error);dbError(team.error);dbError(palette.error);dbError(plans.error);
+   db.from('saas_subscriptions').select('plan,status,expires_at').eq('barbershop_id',shop.data.id).maybeSingle()
+  ]);dbError(services.error);dbError(team.error);dbError(palette.error);dbError(billing.error);
+  const entitlement=billing.data&&['active','trialing','past_due'].includes(billing.data.status)&&(!billing.data.expires_at||new Date(billing.data.expires_at)>new Date());
+  const publicPlans=entitlement&&['PRO','PREMIUM'].includes(billing.data?.plan??'')
+   ?await db.from('subscription_plans').select('id,name,description,cuts,validity_days,price_cents,active').eq('barbershop_id',shop.data.id).eq('active',true).order('name')
+   :{data:[],error:null};
+  dbError(publicPlans.error);
   const asset=(path:string|null)=>path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:null;
   const instagram=shop.data.instagram?`@${String(shop.data.instagram).replace(/^@+/,'').trim()}`:null;
-  res.json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:plans.data??[]});
+  res.json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:publicPlans.data??[]});
  });
  app.get('/api/public/manifest/:slug',async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
@@ -56,7 +61,7 @@ app.get('/api/health', (_req, res) =>
   const icon=shop.data.logo_url||(shop.data.logo_asset_path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${shop.data.logo_asset_path}`:null);
   if(!icon) throw new ApiError(409,'SHOP_LOGO_REQUIRED','A barbearia precisa de uma logo antes de disponibilizar o aplicativo.');
   const theme=shop.data.custom_accent||shop.data.accent_color||'#000000';
-  res.type('application/manifest+json').set('Cache-Control','public, max-age=300').send(JSON.stringify({id:`/barbearia/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/login?shop=${encodeURIComponent(slug)}&audience=client`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
+  res.type('application/manifest+json').set('Cache-Control','public, max-age=300').send(JSON.stringify({id:`/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/login?shop=${encodeURIComponent(slug)}&audience=client`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
  });
  app.use('/api',async(req,res,next)=>{res.locals.auth=await authenticator(req);next();});
  app.get('/api/memberships',async(_req,res)=>{
@@ -78,7 +83,7 @@ app.get('/api/health', (_req, res) =>
   const [progress,shop,services,hours,amenities,palettes]=await Promise.all([
    a.db.from('onboarding_progress').select('*').eq('barbershop_id',c.shopId).maybeSingle(),
    a.db.from('barbershops').select('id,name,slug,timezone,public_title,public_description,logo_url,cover_url,background_url,accent_color,onboarding_step,onboarding_completed,whatsapp,instagram,address,theme_mode,palette_key,custom_accent,logo_asset_path,cover_asset_path,background_asset_path').eq('id',c.shopId).single(),
-   a.db.from('services').select('id,name,duration_minutes,price_cents,active').eq('barbershop_id',c.shopId).order('name'),
+   a.db.from('services').select('id,name,description,duration_minutes,price_cents,active').eq('barbershop_id',c.shopId).order('name'),
    a.db.from('business_hours').select('weekday,opens_at,closes_at').eq('barbershop_id',c.shopId).order('weekday'),
    a.db.from('shop_amenities').select('amenity_key,enabled').eq('barbershop_id',c.shopId).eq('enabled',true),
    a.db.from('shop_palettes').select('*').order('palette_key')
@@ -92,8 +97,8 @@ app.get('/api/health', (_req, res) =>
   const progress=await a.db.rpc('save_onboarding_progress',{p_shop:c.shopId,p_step:v.step,p_completed:v.completedSteps,p_draft:v.draft});dbError(progress.error);res.json({ok:true});
  });
  app.post('/api/onboarding/services',async(req,res)=>{
-  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const v=z.object({id:z.uuid().optional(),name:z.string().trim().min(2).max(100),durationMinutes:z.number().int().min(10).max(240),priceCents:z.number().int().min(0).max(1000000),active:z.boolean().default(true)}).strict().parse(req.body);
-  const q=v.id?a.db.from('services').update({name:v.name,duration_minutes:v.durationMinutes,price_cents:v.priceCents,active:v.active}).eq('id',v.id).eq('barbershop_id',c.shopId):a.db.from('services').insert({barbershop_id:c.shopId,name:v.name,duration_minutes:v.durationMinutes,price_cents:v.priceCents});
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const v=z.object({id:z.uuid().optional(),name:z.string().trim().min(2).max(100),description:z.string().trim().max(500).default(''),durationMinutes:z.number().int().min(10).max(240),priceCents:z.number().int().min(0).max(1000000),active:z.boolean().default(true)}).strict().parse(req.body);
+  const q=v.id?a.db.from('services').update({name:v.name,description:v.description||null,duration_minutes:v.durationMinutes,price_cents:v.priceCents,active:v.active}).eq('id',v.id).eq('barbershop_id',c.shopId):a.db.from('services').insert({barbershop_id:c.shopId,name:v.name,description:v.description||null,duration_minutes:v.durationMinutes,price_cents:v.priceCents});
   const r=await q.select().single();dbError(r.error);res.status(v.id?200:201).json(r.data);
  });
  app.post('/api/onboarding/hours',async(req,res)=>{
@@ -131,12 +136,12 @@ app.get('/api/health', (_req, res) =>
  });
  app.post('/api/services',async(req,res)=>{
   const c=ctx(res);requireOwner(c);
-  const v=z.object({name:z.string().trim().min(2).max(100),duration_minutes:z.number().int().min(10).max(240),price_cents:z.number().int().min(0).max(1000000)}).strict().parse(req.body);
+  const v=z.object({name:z.string().trim().min(2).max(100),description:z.string().trim().max(500).default(''),duration_minutes:z.number().int().min(10).max(240),price_cents:z.number().int().min(0).max(1000000)}).strict().parse(req.body);
   const r=await c.db.from('services').insert({...v,barbershop_id:c.shopId}).select().single();dbError(r.error);res.status(201).json(r.data);
  });
  app.patch('/api/services/:id',async(req,res)=>{
   const c=ctx(res);requireOwner(c);const id=z.uuid().parse(req.params.id);
-  const v=z.object({name:z.string().trim().min(2).max(100).optional(),duration_minutes:z.number().int().min(10).max(240).optional(),price_cents:z.number().int().min(0).max(1000000).optional(),active:z.boolean().optional()}).strict().parse(req.body);
+  const v=z.object({name:z.string().trim().min(2).max(100).optional(),description:z.string().trim().max(500).optional(),duration_minutes:z.number().int().min(10).max(240).optional(),price_cents:z.number().int().min(0).max(1000000).optional(),active:z.boolean().optional()}).strict().parse(req.body);
   const r=await c.db.from('services').update(v).eq('id',id).eq('barbershop_id',c.shopId).select().single();dbError(r.error);res.json(r.data);
  });
  app.post('/api/customers',async(req,res)=>{
@@ -146,6 +151,12 @@ app.get('/api/health', (_req, res) =>
  app.patch('/api/profile/contact',async(req,res)=>{
   const c=ctx(res),v=z.object({displayName:z.string().trim().min(2).max(100),phone:z.string().trim().max(24)}).strict().parse(req.body);
   const r=await c.db.rpc('update_own_profile',{p_shop:c.shopId,p_display_name:v.displayName,p_phone:v.phone});dbError(r.error);res.json({ok:true});
+ });
+ app.patch('/api/profile/avatar',async(req,res)=>{
+  const c=ctx(res),v=z.object({avatarUrl:z.string().trim().max(700),avatarPath:z.string().trim().max(500)}).strict().parse(req.body);
+  const expected=`${c.shopId}/${c.userId}/`;
+  if(!v.avatarPath.startsWith(expected)||!v.avatarPath.endsWith('.webp'))throw new ApiError(400,'INVALID_IMAGE','Não foi possível usar esta imagem.');
+  const r=await c.db.rpc('update_own_avatar',{p_shop:c.shopId,p_avatar_url:v.avatarUrl,p_avatar_path:v.avatarPath});dbError(r.error);res.json({ok:true});
  });
  app.patch('/api/shop/branding',async(req,res)=>{
   const c=ctx(res);requireOwner(c);const v=z.object({title:z.string().trim().max(100).default(''),description:z.string().trim().max(280).default(''),logoUrl:z.string().trim().max(500).default(''),coverUrl:z.string().trim().max(500).default(''),backgroundUrl:z.string().trim().max(500).default(''),accentColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#ffffff')}).strict().parse(req.body);
@@ -191,11 +202,11 @@ app.get('/api/health', (_req, res) =>
   const r=await c.db.rpc('issue_subscription',{p_shop:c.shopId,p_client:v.clientId,p_name:v.name,p_cuts:v.cuts,p_expires:v.expiresAt});dbError(r.error);res.status(201).json({id:r.data});
  });
  app.post('/api/subscription-plans',async(req,res)=>{
-  const c=ctx(res);requireOwner(c);const v=z.object({name:z.string().trim().min(2).max(100),cuts:z.number().int().min(1).max(1000),validityDays:z.number().int().min(1).max(730),priceCents:z.number().int().min(0).max(10000000)}).strict().parse(req.body);
-  const r=await c.db.from('subscription_plans').insert({barbershop_id:c.shopId,name:v.name,cuts:v.cuts,validity_days:v.validityDays,price_cents:v.priceCents}).select().single();dbError(r.error);res.status(201).json(r.data);
+  const c=ctx(res);requireOwner(c);requireFioFeature(c,'client_plans');const v=z.object({name:z.string().trim().min(2).max(100),description:z.string().trim().max(700).default(''),cuts:z.number().int().min(1).max(1000),validityDays:z.number().int().min(1).max(730),priceCents:z.number().int().min(0).max(10000000)}).strict().parse(req.body);
+  const r=await c.db.from('subscription_plans').insert({barbershop_id:c.shopId,name:v.name,description:v.description||null,cuts:v.cuts,validity_days:v.validityDays,price_cents:v.priceCents}).select().single();dbError(r.error);res.status(201).json(r.data);
  });
  app.post('/api/subscriptions/from-plan',async(req,res)=>{
-  const c=ctx(res);requireOwner(c);const v=z.object({clientId:z.uuid(),planId:z.uuid(),confirmed:z.literal(true)}).strict().parse(req.body);
+  const c=ctx(res);requireOwner(c);requireFioFeature(c,'client_plans');const v=z.object({clientId:z.uuid(),planId:z.uuid(),confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('issue_subscription_from_plan',{p_shop:c.shopId,p_client:v.clientId,p_plan:v.planId});dbError(r.error);res.status(201).json({id:r.data});
  });
  app.patch('/api/subscriptions/:id/cancel',async(req,res)=>{
@@ -203,11 +214,11 @@ app.get('/api/health', (_req, res) =>
   const r=await c.db.rpc('cancel_subscription',{p_shop:c.shopId,p_subscription:id});dbError(r.error);res.json({ok:true});
  });
  app.post('/api/campaigns',async(req,res)=>{
-  const c=ctx(res);requireOwner(c);const v=z.object({title:z.string().trim().min(2).max(120),body:z.string().trim().min(1).max(1000),audience:z.enum(['CLIENT','BARBER','ALL']).default('CLIENT')}).strict().parse(req.body);
+  const c=ctx(res);requireOwner(c);await requireFioFeature(c,'communication');const v=z.object({title:z.string().trim().min(2).max(120),body:z.string().trim().min(1).max(1000),audience:z.enum(['CLIENT','BARBER','ALL']).default('CLIENT')}).strict().parse(req.body);
   const r=await c.db.from('campaigns').insert({barbershop_id:c.shopId,created_by:c.userId,title:v.title,body:v.body,audience:v.audience,status:'draft'}).select().single();dbError(r.error);res.status(201).json(r.data);
  });
  app.post('/api/campaigns/:id/publish',async(req,res)=>{
-  const c=ctx(res);requireOwner(c);const id=z.uuid().parse(req.params.id);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  const c=ctx(res);requireOwner(c);await requireFioFeature(c,'communication');const id=z.uuid().parse(req.params.id);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('publish_campaign',{p_shop:c.shopId,p_campaign:id});dbError(r.error);res.json({ok:true});
  });
  app.patch('/api/notifications/:id/read',async(req,res)=>{
@@ -215,30 +226,34 @@ app.get('/api/health', (_req, res) =>
   const r=await c.db.from('notifications').update({read_at:new Date().toISOString()}).eq('id',id).eq('barbershop_id',c.shopId).eq('user_id',c.userId);dbError(r.error);res.json({ok:true});
  });
  app.post('/api/posts',async(req,res)=>{
-  const c=ctx(res);
+  const c=ctx(res);requireFioFeature(c,'feed');
   if(!['OWNER','BARBER'].includes(c.member.role)) throw new ApiError(403,'FORBIDDEN','Somente a equipe pode publicar no feed.');
   const v=z.object({caption:z.string().trim().max(500).default(''),imagePath:z.string().min(5).max(500)}).strict().parse(req.body);
   const expected=`${c.shopId}/${c.userId}/`;
-  if(!v.imagePath.startsWith(expected)||! /^[0-9a-f-]{36}\.(jpg|png|webp)$/i.test(v.imagePath.slice(expected.length))) throw new ApiError(400,'INVALID_IMAGE','O arquivo enviado não pertence a este perfil.');
+  if(!v.imagePath.startsWith(expected)||! /^[0-9a-f-]{36}\.webp$/i.test(v.imagePath.slice(expected.length))) throw new ApiError(400,'INVALID_IMAGE','O arquivo enviado não pertence a este perfil.');
   const r=await c.db.from('feed_posts').insert({barbershop_id:c.shopId,author_id:c.userId,author_name:c.member.display_name,caption:v.caption,image_path:v.imagePath}).select('id,author_id,author_name,caption,image_path,created_at').single();
   dbError(r.error);res.status(201).json(r.data);
  });
  app.delete('/api/posts/:id',async(req,res)=>{
-  const c=ctx(res),id=z.uuid().parse(req.params.id);
+  const c=ctx(res),id=z.uuid().parse(req.params.id);requireFioFeature(c,'feed');
   if(!['OWNER','BARBER'].includes(c.member.role)) throw new ApiError(403,'FORBIDDEN','Somente a equipe pode remover publicações.');
   const existing=await c.db.from('feed_posts').select('id,author_id,image_path').eq('id',id).eq('barbershop_id',c.shopId).maybeSingle();dbError(existing.error);
   if(!existing.data) throw new ApiError(404,'NOT_FOUND','Publicação não encontrada.');
   if(c.member.role!=='OWNER'&&existing.data.author_id!==c.userId) throw new ApiError(403,'FORBIDDEN','Você só pode remover suas próprias publicações.');
   const r=await c.db.from('feed_posts').delete().eq('id',id).eq('barbershop_id',c.shopId);dbError(r.error);res.json({ok:true,imagePath:existing.data.image_path});
  });
+ app.post('/api/support/feedback',async(req,res)=>{
+  const c=ctx(res),v=z.object({category:z.enum(['feedback','problem','question']),message:z.string().trim().min(3).max(1500)}).strict().parse(req.body);
+  const r=await c.db.from('support_feedback').insert({barbershop_id:c.shopId,user_id:c.userId,role:c.member.role,category:v.category,message:v.message});dbError(r.error);res.status(201).json({ok:true});
+ });
  app.get('/api/conversations',async(_req,res)=>{
-  const c=ctx(res);const r=await c.db.from('assistant_conversations').select('id,title,created_at').eq('barbershop_id',c.shopId).eq('user_id',c.userId).order('created_at',{ascending:false}).limit(50);dbError(r.error);res.json(r.data);
+  const c=ctx(res);requireFioFeature(c,'assistant');const r=await c.db.from('assistant_conversations').select('id,title,created_at').eq('barbershop_id',c.shopId).eq('user_id',c.userId).order('created_at',{ascending:false}).limit(50);dbError(r.error);res.json(r.data);
  });
  app.get('/api/conversations/:id',async(req,res)=>{
-  const c=ctx(res),id=z.uuid().parse(req.params.id);
+  const c=ctx(res),id=z.uuid().parse(req.params.id);requireFioFeature(c,'assistant');
   const r=await c.db.from('assistant_messages').select('id,role,content').eq('conversation_id',id).eq('barbershop_id',c.shopId).eq('user_id',c.userId).order('created_at').limit(200);dbError(r.error);res.json(r.data);
  });
- app.post('/api/assistant',async(req,res)=>res.json(await askAssistant(ctx(res),req.body)));
+ app.post('/api/assistant',async(req,res)=>{const c=ctx(res);requireFioFeature(c,'assistant');res.json(await askAssistant(c,req.body));});
  app.use('/api',(_req,res)=>res.status(404).json({code:'NOT_FOUND',message:'Recurso não encontrado.'}));
  if(process.env.NODE_ENV==='production') {
   app.use(express.static(resolve('dist')));

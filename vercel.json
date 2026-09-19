@@ -1,5 +1,4 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
       "source": "/api/:path*",
@@ -39,6 +38,10 @@
     },
     {
       "source": "/platform/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "^/(?<slug>[a-z0-9-]{3,60})$",
       "destination": "/index.html"
     }
   ]
