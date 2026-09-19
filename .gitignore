@@ -8,5 +8,5 @@ dist-server/
 *.log
 .DS_Store
 
-.vercel
-.env.local
+
+.npm-cache/
