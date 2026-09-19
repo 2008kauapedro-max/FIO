@@ -46,9 +46,12 @@ describe('SyncPay billing boundary',()=>{
   expect(verifySyncpayWebhook(raw,{authorization:'Bearer whsec_renewed_123456'} as never,1)).toBe(true);
  });
 
- it('recognizes only the fixed SyncPay dashboard test payload as a no-op ping',()=>{
+ it('recognizes SyncPay dashboard test payload wrappers as no-op pings',()=>{
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('This is a test webhook payload.'))).toBe(true);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('\"This is a test webhook payload.\"'))).toBe(true);
+  expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"message\":\"This is a test webhook payload.\"}'))).toBe(true);
+  expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('message=This+is+a+test+webhook+payload.'))).toBe(true);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"event\":\"assinatura_ativada\"}'))).toBe(false);
+  expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"message\":\"This is a test webhook payload.\",\"event\":\"assinatura_ativada\"}'))).toBe(true);
  });
 });

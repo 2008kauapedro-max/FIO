@@ -296,9 +296,22 @@ export async function getSyncpayBilling(ctx:TenantContext,fetcher:Fetcher=fetch)
 }
 
 function isSyncpayDashboardTest(rawBody:Buffer){
+ const expected='This is a test webhook payload.';
+ if(rawBody.length===0||rawBody.length>2048)return false;
  const body=rawBody.toString('utf8').trim();
- if(body==='This is a test webhook payload.')return true;
- try{return JSON.parse(body)==='This is a test webhook payload.';}catch{return false;}
+ if(body===expected)return true;
+ const containsExpected=(value:unknown,depth=0):boolean=>{
+  if(typeof value==='string')return value.trim()===expected;
+  if(!value||typeof value!=='object'||depth>3)return false;
+  if(Array.isArray(value))return value.some(item=>containsExpected(item,depth+1));
+  return Object.values(value as Record<string,unknown>).some(item=>containsExpected(item,depth+1));
+ };
+ try{if(containsExpected(JSON.parse(body)))return true;}catch{}
+ try{
+  const params=new URLSearchParams(body);
+  if([...params.values()].some(value=>value.trim()===expected))return true;
+ }catch{}
+ return false;
 }
 
 export function verifySyncpayWebhook(rawBody:Buffer,headers:Request['headers'],nowSeconds=Math.floor(Date.now()/1000)){
