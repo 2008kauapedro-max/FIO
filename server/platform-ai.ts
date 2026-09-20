@@ -57,7 +57,7 @@ function sanitizePlatformAnswer(value:string){
   .replace(/\bpast_due\b/gi,'em atraso')
   .replace(/\bcritical\b/gi,'crítico');
 }
-export function redact(value:string){return value.replace(/Bearer\s+\S+/gi,'[REDACTED]').replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,'[REDACTED]').replace(/(?:sk-|sb_secret_)[A-Za-z0-9_-]+/g,'[REDACTED]').replace(/(?:password|senha|token|secret|api[_ -]?key)\s*[:=]\s*[^\s,;]+/gi,'[REDACTED]');}
+export function redact(value:string){return value.replace(/Bearer\s+\S+/gi,'[REDACTED]').replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,'[REDACTED]').replace(/\b[a-z]{2,}[-_][A-Za-z0-9_-]{16,}\b/gi,'[REDACTED]').replace(/(?:password|senha|token|secret|api[_ -]?key)\s*[:=]\s*[^\s,;]+/gi,'[REDACTED]');}
 export function boundedData(data:unknown){
  const content=JSON.stringify(data,(_key,v)=>typeof v==='string'?redact(v).slice(0,500):v);
  if(Buffer.byteLength(content)>20000)throw new ApiError(422,'TOOL_RESULT_LIMIT','Reduza o limite de resultados.');
@@ -455,7 +455,9 @@ function deterministicToolAnswer(executions:ToolExecution[]){
    const top=items.slice(0,3).map((item,index)=>{
     const title=safeText(item.title)??'Alerta da plataforma';
     const rawDescription=safeText(item.description,260);
-    const description=rawDescription&&INTERNAL_TECH_HINT.test(rawDescription)?'Há uma ocorrência operacional que precisa ser revisada no painel administrativo.':rawDescription;
+    const normalizedDescription=rawDescription?.toLocaleLowerCase('pt-BR')??'';
+    const hasInternalDetail=['supabase','syncpay','vercel','groq','postgres','service role','rls','webhook','endpoint','rpc','sql','api key','credencial','token','secret','variável de ambiente','process.env','provedor de ia'].some(term=>normalizedDescription.includes(term));
+    const description=rawDescription&&hasInternalDetail?'Há uma ocorrência operacional que precisa ser revisada no painel administrativo.':rawDescription;
     const severity=humanSeverity(item.severity);
     return `${index+1}. ${severity}: ${title}${description?` — ${description}`:''}`;
    });

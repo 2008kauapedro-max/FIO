@@ -24,7 +24,7 @@ const slugify=(s:string)=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLo
 const money=(c:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(c/100);
 const cleanInstagram=(value:string)=>value.trim().replace(/^@+/,'').replace(/\s+/g,'');
 const host=()=>typeof window==='undefined'?'usefio.vercel.app':window.location.host;
-const newKey=()=>typeof crypto!=='undefined'&&'randomUUID' in crypto?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
+const newKey=()=>crypto.randomUUID();
 const serviceDefaults=():Service[]=>suggestedServices.map(([name,duration,price])=>({_key:newKey(),name,description:'',duration_minutes:duration,price_cents:price,active:true}));
 const scheduleDefaults=():DaySchedule[]=>weekdays.map(([value])=>({weekday:Number(value),enabled:Number(value)!==0,opensAt:'09:00',closesAt:'19:00'}));
 const assetUrl=(path:string|null)=>path&&import.meta.env.VITE_SUPABASE_URL?`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:'';

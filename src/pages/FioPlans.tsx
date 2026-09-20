@@ -2,12 +2,17 @@ import { useMemo,useState } from 'react';
 import { ArrowRight,Check,Copy,Crown,Gift,Info,RefreshCw,ShieldCheck,Sparkles,WalletCards } from 'lucide-react';
 import { BILLING_LABELS,FIO_PLAN_CATALOG,billingSuffix,type BillingCycle } from '../../shared/fio-plans';
 import { money } from '../../shared/domain';
-import { api } from '../lib/api';
+import { api,RequestError } from '../lib/api';
 import type { WorkspaceProps } from './Workspace';
 import { Modal,PageTitle } from '../components/ui';
 
 const date=(value?:string|null)=>value?new Date(value).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}):'';
 type PaidPlan='PRO'|'PREMIUM';
+const checkoutMessage=(error:unknown)=>{
+ if(!(error instanceof RequestError))return 'Não foi possível criar a cobrança agora. Tente novamente em instantes.';
+ const messages:Record<string,string>={SYNCPAY_NOT_CONFIGURED:'A cobrança ainda não foi configurada no servidor. Revise as variáveis da SyncPay.',SYNCPAY_AUTH_ERROR:'A SyncPay recusou as credenciais do servidor. Revise o Client ID e o Client Secret.',SYNCPAY_ACCOUNT_PENDING:'A conta SyncPay ainda aguarda aprovação para cobrança recorrente.',SYNCPAY_INVALID_REQUEST:'A SyncPay recusou os dados desta cobrança. Confira CPF/CNPJ e tente novamente.',SYNCPAY_RATE_LIMIT:'Muitas tentativas seguidas. Aguarde alguns minutos antes de gerar outro Pix.',SYNCPAY_ENROLLMENT_UNCERTAIN:'Não foi possível confirmar se a cobrança foi criada. Não gere outro Pix agora; atualize a página em alguns minutos.',SYNCPAY_SUBSCRIPTION_EXISTS:'Já há uma cobrança ou assinatura em andamento para esta barbearia.'};
+ return messages[error.code]??error.message;
+};
 type BillingState={
  provider:'syncpay';providerStatus:'pending_first_payment'|'active'|'overdue'|'suspended'|'cancelled'|string;
  plan:PaidPlan;cycle:BillingCycle;amountCents:number;nextChargeAt:string|null;
@@ -50,7 +55,7 @@ export function FioPlans(p:WorkspaceProps){
    setBilling(result);
    if(result.providerStatus==='active'||result.providerStatus==='overdue')await p.refresh();
    p.notify(result.providerStatus==='active'?'Assinatura confirmada com sucesso.':'Cobrança criada. Finalize o pagamento para liberar o plano.');
-  }catch{setCheckoutError('Não foi possível criar a cobrança agora. Tente novamente em instantes.');}
+  }catch(error){setCheckoutError(checkoutMessage(error));}
   finally{setBusy(false);}
  }
  async function refreshBilling(){
@@ -62,7 +67,7 @@ export function FioPlans(p:WorkspaceProps){
    if(result.subscription?.providerStatus==='active')p.notify('Pagamento confirmado. Seu plano FIO já está ativo.');
    else if(result.subscription?.providerStatus==='overdue')p.notify('Pagamento pendente. Regularize a cobrança para manter o acesso.');
    else p.notify('Pagamento ainda não confirmado. Tente atualizar novamente em alguns instantes.');
-  }catch{setCheckoutError('Não foi possível atualizar agora. Tente novamente em instantes.');}
+  }catch(error){setCheckoutError(checkoutMessage(error));}
   finally{setBusy(false);}
  }
  async function copyPix(){

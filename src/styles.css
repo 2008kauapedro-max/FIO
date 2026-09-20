@@ -731,3 +731,14 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
  .oauth-button{min-height:46px}.remember-session{font-size:.72rem}.plan-description,.service-name p{font-size:.72rem}
 }
 @media(max-width:390px){.fio-cycle-picker>button{grid-template-columns:1fr;justify-items:start}.fio-cycle-check{position:absolute;right:7px;top:7px}.fio-cycle-picker small{padding-right:10px}.public-enter{max-width:135px;text-align:center}.public-hero-copy h1{font-size:2.15rem}}
+ .notice-retry{margin-left:auto;flex-shrink:0;border:1px solid #695a5a;border-radius:6px;background:transparent;color:#f0d8d8;padding:6px 9px;font-size:.75rem}.notice-retry:hover{background:#342727}
+/* Mobile workspace: keep navigation and chat clear of the browser and PWA chrome. */
+@media(max-width:760px){
+ .topbar{position:sticky;top:0;z-index:40;background:var(--bg)}
+ .workspace{min-height:100dvh;background:var(--bg)}
+ .chat-main{height:calc(100dvh - 58px - env(safe-area-inset-bottom));min-height:0}
+ .assistant-page{min-height:0}
+ .message-scroll{padding-bottom:8px}
+ .assistant-empty{padding-bottom:170px}
+ .overview-primary.is-action{cursor:pointer;text-align:left;width:100%;border:0}
+}

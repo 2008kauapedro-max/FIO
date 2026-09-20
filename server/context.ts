@@ -77,11 +77,11 @@ export function assistantContext(data: Bootstrap) {
  const role=data.membership.role;
  return {
   role, barbershop:{name:data.shop.name,timezone:data.shop.timezone}, current_time:new Date().toISOString(),
-  coverage:'Agenda: últimos 30 dias e próximos 60 dias, até 500 registros. Clientes e assinaturas: até 500 registros. Não inferir totais fora deste recorte.',
-  services:data.services.filter(s=>s.active).map(s=>({name:s.name,description:s.description??undefined,duration_minutes:s.duration_minutes,price_cents:s.price_cents})),
-  appointments:data.appointments.map(a=>({start:a.starts_at,end:a.ends_at,status:a.status,service:data.services.find(s=>s.id===a.service_id)?.name,client:data.customers.find(c=>c.id===a.client_id)?.name})),
-  ...(role==='OWNER'?{received_this_week_cents:data.revenue,customers:data.customers.map(c=>({name:c.name})),subscriptions:data.subscriptions.map(s=>({name:s.name,remaining_cuts:s.remaining_cuts,expires_at:s.expires_at,status:s.status}))}:{}),
-  ...(role==='CLIENT'?{subscriptions:data.subscriptions.map(s=>({name:s.name,remaining_cuts:s.remaining_cuts,expires_at:s.expires_at,status:s.status}))}:{}),
+  coverage:'Agenda: últimos 30 dias e próximos 60 dias, até 80 registros. Clientes e assinaturas: até 100 registros. Não inferir totais fora deste recorte.',
+  services:data.services.filter(s=>s.active).slice(0,80).map(s=>({name:s.name,description:s.description??undefined,duration_minutes:s.duration_minutes,price_cents:s.price_cents})),
+  appointments:data.appointments.slice(0,80).map(a=>({start:a.starts_at,end:a.ends_at,status:a.status,service:data.services.find(s=>s.id===a.service_id)?.name,client:data.customers.find(c=>c.id===a.client_id)?.name})),
+  ...(role==='OWNER'?{received_this_week_cents:data.revenue,customers:data.customers.slice(0,100).map(c=>({name:c.name})),subscriptions:data.subscriptions.slice(0,100).map(s=>({name:s.name,remaining_cuts:s.remaining_cuts,expires_at:s.expires_at,status:s.status}))}:{}),
+  ...(role==='CLIENT'?{subscriptions:data.subscriptions.slice(0,100).map(s=>({name:s.name,remaining_cuts:s.remaining_cuts,expires_at:s.expires_at,status:s.status}))}:{}),
   cancellation_policy:'Cliente pode cancelar até 2 horas antes. Nenhuma ação é executada pelo chat.'
  };
 }
