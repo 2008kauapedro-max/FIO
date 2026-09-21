@@ -28,8 +28,10 @@ export function PublicPortal(){
   const listener=(event:Event)=>{event.preventDefault();setInstallEvent(event as InstallPromptEvent);};
   window.addEventListener('beforeinstallprompt',listener);
   setInstallDismissed(localStorage.getItem(`fio-public-install:${slug}`)==='1');
-  fetch(`/api/public/shop/${encodeURIComponent(slug)}`).then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.message||'Não foi possível abrir esta barbearia.');return body as PublicData;}).then(setData).catch(()=>setError('Não foi possível abrir esta barbearia agora.'));
-  return()=>{window.removeEventListener('beforeinstallprompt',listener);if(manifest&&previous)manifest.href=previous;};
+  let active=true;const controller=new AbortController();
+  setData(null);setError('');
+  fetch(`/api/public/shop/${encodeURIComponent(slug)}`,{signal:controller.signal}).then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.message||'Não foi possível abrir esta barbearia.');return body as PublicData;}).then(result=>{if(active)setData(result);}).catch(()=>{if(active)setError('Não foi possível abrir esta barbearia agora.');});
+  return()=>{active=false;controller.abort();window.removeEventListener('beforeinstallprompt',listener);if(manifest&&previous)manifest.href=previous;};
  },[slug]);
  const title=useMemo(()=>data?.shop.public_title||data?.shop.name||'FIO',[data]);
  const standalone=typeof window!=='undefined'&&(window.matchMedia?.('(display-mode: standalone)').matches||(navigator as Navigator&{standalone?:boolean}).standalone===true);

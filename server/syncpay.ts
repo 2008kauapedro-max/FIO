@@ -146,9 +146,10 @@ function normalizeProviderDetail(value:unknown,fallback:{token:string;planToken:
  const token=(detail.token??detail.subscription_token??fallback.token).trim();
  const planToken=(plan?.token??detail.plan_token??fallback.planToken).trim();
  if(token.length<8||planToken.length<8)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível atualizar a cobrança agora. Tente novamente em instantes.');
+ if(token!==fallback.token)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível confirmar a cobrança solicitada.');
  return {
   token,status:normalizeProviderStatus(detail.status),started_at:iso(detail.started_at),next_charge_at:iso(detail.next_charge_at??detail.next_billing_at??detail.next_charge_date),cancelled_at:iso(detail.cancelled_at),
-  plan:{token:planToken,grace_period_days:plan&&typeof plan==='object'&&typeof plan.grace_period_days==='number'?plan.grace_period_days:fallback.gracePeriodDays},
+   plan:{token:planToken,grace_period_days:fallback.gracePeriodDays},
   charges:detail.charges??[],payment:detail.payment??null
  };
 }
@@ -291,6 +292,7 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
    await setEnrollmentIntent(db,intent.id,'linked',detail.token,null);
    const link=await currentLink(db,ctx.shopId);
    if(!link)throw new ApiError(503,'BILLING_STATE_ERROR','A assinatura existe, mas o FIO não conseguiu recuperar o vínculo. Entre em contato com o suporte.');
+   await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-recovery',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
    return billingResponse(link,detail);
   }catch(e){await setEnrollmentIntent(db,intent.id,'uncertain',detail.token,e instanceof ApiError?e.code:'BILLING_STATE_ERROR');throw e;}
  }
@@ -306,7 +308,15 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
   await setEnrollmentIntent(db,intent.id,'linked',subscriptionToken,null);
   const link=await currentLink(db,ctx.shopId);
   if(!link)throw new ApiError(503,'BILLING_STATE_ERROR','A cobrança foi criada, mas o FIO não conseguiu vincular a assinatura. Não gere outra cobrança e entre em contato com o suporte.');
-  return {provider:'syncpay' as const,providerStatus:enrolled.status,plan:input.plan,cycle:input.cycle,amountCents:mapping.amount_cents,nextChargeAt:null,payment:enrolled.payment?{pixCode:enrolled.payment.pix_code??null,qrCode:enrolled.payment.qr_code??null,identifier:enrolled.payment.identifier??null,expiresAt:iso(enrolled.payment.expires_at)}:null};
+  const status=normalizeProviderStatus(enrolled.status);
+  // Enrolment alone is not proof of payment. Reconcile provider truth before
+  // telling the UI that an active/overdue subscription has been confirmed.
+  if(status==='active'||status==='overdue'){
+   const detail=await getProviderDetail(subscriptionToken,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
+   await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-confirmation',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
+   return billingResponse(link,detail);
+  }
+  return {provider:'syncpay' as const,providerStatus:status,plan:input.plan,cycle:input.cycle,amountCents:mapping.amount_cents,nextChargeAt:null,payment:enrolled.payment?{pixCode:enrolled.payment.pix_code??null,qrCode:enrolled.payment.qr_code??null,identifier:enrolled.payment.identifier??null,expiresAt:iso(enrolled.payment.expires_at)}:null};
  }catch(e){
   const known=!subscriptionToken&&enrollmentFailureIsKnown(e);
   await setEnrollmentIntent(db,intent.id,known?'failed':'uncertain',subscriptionToken,e instanceof ApiError?e.code:'SYNCPAY_UNKNOWN_RESULT');
@@ -322,28 +332,35 @@ export async function getSyncpayBilling(ctx:TenantContext,fetcher:Fetcher=fetch)
  if(!link)return {configured:true,subscription:null};
  const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
  await applyProviderTruth(db,detail,{key:stateEventKey('owner-reconcile',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify({status:detail.status,token:detail.token,plan:detail.plan.token,next:detail.next_charge_at})).digest('hex')});
- return {configured:true,subscription:billingResponse(link,detail)};
+ const reconciled=await currentLink(db,ctx.shopId);
+ return {configured:true,subscription:billingResponse(reconciled??link,detail)};
 }
 
 function isSyncpayDashboardTest(rawBody:Buffer){
  const expected='This is a test webhook payload.';
  if(rawBody.length===0||rawBody.length>2048)return false;
  const body=rawBody.toString('utf8').replace(/\u0000/g,'').trim();
- // O teste manual da SyncPay pode enviar a frase pura, dentro de JSON/form-data
- // ou acompanhada de metadados. Como esse ping nunca altera estado, basta
- // reconhecer a frase fixa em qualquer ponto do corpo bruto.
- if(body.includes(expected))return true;
+ // Never swallow a real event merely because a field includes the test phrase.
+ if(/"(?:event|subscription_token)"\s*:/.test(body))return false;
+ if(body===expected)return true;
  const containsExpected=(value:unknown,depth=0):boolean=>{
   if(typeof value==='string')return value.trim()===expected;
   if(!value||typeof value!=='object'||depth>3)return false;
   if(Array.isArray(value))return value.some(item=>containsExpected(item,depth+1));
   return Object.values(value as Record<string,unknown>).some(item=>containsExpected(item,depth+1));
  };
- try{if(containsExpected(JSON.parse(body)))return true;}catch{}
+ try{
+  const parsed:unknown=JSON.parse(body);
+  if(parsed&&typeof parsed==='object'&&('event' in parsed||'subscription_token' in parsed))return false;
+  return containsExpected(parsed);
+ }catch{}
  try{
   const params=new URLSearchParams(body);
+  if(params.has('event')||params.has('subscription_token'))return false;
   if([...params.values()].some(value=>value.trim()===expected))return true;
  }catch{}
+ // Dashboard form-data reachability checks contain a dedicated message field.
+ if(body.startsWith('--')&&!/name="(?:event|subscription_token)"/.test(body))return body.split(/\r?\n/).some(line=>line===expected);
  return false;
 }
 

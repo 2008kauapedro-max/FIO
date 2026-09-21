@@ -2,6 +2,8 @@ export class ApiError extends Error {
  constructor(public status: number, public code: string, message: string) { super(message); }
 }
 const errors: Record<string, [number, string]> = {
+ PLAN_CAPACITY: [409, 'O limite deste plano foi atingido. Desative um item existente ou escolha um plano com mais capacidade.'],
+ INVALID_PHONE: [400, 'Informe um telefone válido.'],
  FORBIDDEN: [403, 'Você não tem permissão para esta ação.'], AUTH_REQUIRED: [401, 'Entre novamente para continuar.'],
  PLAN_REQUIRED: [403, 'Este recurso não está disponível no plano atual da barbearia.'],
  DAILY_LIMIT: [429, 'Você atingiu o limite diário do Assistente. Tente amanhã.'], RATE_LIMIT: [429, 'Muitas mensagens. Aguarde um minuto.'],

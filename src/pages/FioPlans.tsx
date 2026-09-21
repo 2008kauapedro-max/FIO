@@ -1,22 +1,15 @@
-import { useMemo,useState } from 'react';
+import { useEffect,useMemo,useState } from 'react';
 import { ArrowRight,Check,Copy,Crown,Gift,Info,RefreshCw,ShieldCheck,Sparkles,WalletCards } from 'lucide-react';
 import { BILLING_LABELS,FIO_PLAN_CATALOG,billingSuffix,type BillingCycle } from '../../shared/fio-plans';
 import { money } from '../../shared/domain';
 import { api,RequestError } from '../lib/api';
+import { billingErrorMessage,billingLocksNewSubscription,billingStatusLabel,usablePix,type BillingState,type PaidPlan } from '../../shared/billing-state';
 import type { WorkspaceProps } from './Workspace';
 import { Modal,PageTitle } from '../components/ui';
 
 const date=(value?:string|null)=>value?new Date(value).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}):'';
-type PaidPlan='PRO'|'PREMIUM';
 const checkoutMessage=(error:unknown)=>{
- if(!(error instanceof RequestError))return 'Não foi possível criar a cobrança agora. Tente novamente em instantes.';
- const messages:Record<string,string>={SYNCPAY_NOT_CONFIGURED:'A cobrança ainda não foi configurada no servidor. Revise as variáveis da SyncPay.',SYNCPAY_AUTH_ERROR:'A SyncPay recusou as credenciais do servidor. Revise o Client ID e o Client Secret.',SYNCPAY_ACCOUNT_PENDING:'A conta SyncPay ainda aguarda aprovação para cobrança recorrente.',SYNCPAY_INVALID_REQUEST:'A SyncPay recusou os dados desta cobrança. Confira CPF/CNPJ e tente novamente.',SYNCPAY_RATE_LIMIT:'Muitas tentativas seguidas. Aguarde alguns minutos antes de gerar outro Pix.',SYNCPAY_ENROLLMENT_UNCERTAIN:'Não foi possível confirmar se a cobrança foi criada. Não gere outro Pix agora; atualize a página em alguns minutos.',SYNCPAY_SUBSCRIPTION_EXISTS:'Já há uma cobrança ou assinatura em andamento para esta barbearia.'};
- return messages[error.code]??error.message;
-};
-type BillingState={
- provider:'syncpay';providerStatus:'pending_first_payment'|'active'|'overdue'|'suspended'|'cancelled'|string;
- plan:PaidPlan;cycle:BillingCycle;amountCents:number;nextChargeAt:string|null;
- payment:{pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null}|null;
+ return billingErrorMessage(error instanceof RequestError?error.code:undefined);
 };
 
 export function FioPlans(p:WorkspaceProps){
@@ -27,12 +20,23 @@ export function FioPlans(p:WorkspaceProps){
  const [document,setDocument]=useState('');
  const [acceptedTerms,setAcceptedTerms]=useState(false);
  const [billing,setBilling]=useState<BillingState|null>(null);
+ const [billingLoaded,setBillingLoaded]=useState(false);
+ const [billingConfigured,setBillingConfigured]=useState(false);
  const [checkoutError,setCheckoutError]=useState('');
  const sub=p.data.fioSubscription;
  const trialUsed=Boolean(sub.trial_ends_at);
  const trialActive=sub.status==='trialing'&&Boolean(sub.trial_ends_at)&&new Date(sub.trial_ends_at!)>new Date();
  const activeDefinition=useMemo(()=>FIO_PLAN_CATALOG.find(x=>x.code===p.data.plan)??FIO_PLAN_CATALOG[0],[p.data.plan]);
  const paidActive=['active','past_due'].includes(sub.status)&&p.data.plan!=='FREE';
+ const billingLocked=billingLocksNewSubscription(billing);
+ useEffect(()=>{
+  let active=true;
+  void api<{configured:boolean;subscription:BillingState|null}>('/saas/billing',p.data.shop.id).then(result=>{
+   if(!active)return;
+   setBilling(result.subscription);setBillingConfigured(result.configured);setBillingLoaded(true);
+  }).catch(error=>{if(active)setCheckoutError(checkoutMessage(error));});
+  return()=>{active=false;};
+ },[p.data.shop.id]);
 
  async function startTrial(){
   setBusy(true);setCheckoutError('');
@@ -44,11 +48,12 @@ export function FioPlans(p:WorkspaceProps){
   finally{setBusy(false);}
  }
  function selectPaid(code:PaidPlan){
+  if(!billingLoaded||!billingConfigured||billingLocked){setCheckoutError('Consulte a cobrança atual antes de iniciar outra assinatura.');return;}
   setChoiceOpen(false);setCheckoutPlan(code);setDocument('');setAcceptedTerms(false);setBilling(null);setCheckoutError('');
  }
- function closeCheckout(){if(busy)return;setCheckoutPlan(null);setBilling(null);setCheckoutError('');}
+ function closeCheckout(){if(busy)return;setCheckoutPlan(null);setCheckoutError('');}
  async function subscribe(){
-  if(!checkoutPlan||!acceptedTerms)return;
+  if(!checkoutPlan||!acceptedTerms||busy||billingLocked)return;
   setBusy(true);setCheckoutError('');
   try{
    const result=await api<BillingState>('/saas/subscribe',p.data.shop.id,{plan:checkoutPlan,cycle,document,acceptedTerms:true});
@@ -62,17 +67,18 @@ export function FioPlans(p:WorkspaceProps){
   setBusy(true);setCheckoutError('');
   try{
    const result=await api<{configured:boolean;subscription:BillingState|null}>('/saas/billing',p.data.shop.id);
-   if(result.subscription)setBilling(result.subscription);
+   setBilling(result.subscription);setBillingConfigured(result.configured);setBillingLoaded(true);
    await p.refresh();
    if(result.subscription?.providerStatus==='active')p.notify('Pagamento confirmado. Seu plano FIO já está ativo.');
    else if(result.subscription?.providerStatus==='overdue')p.notify('Pagamento pendente. Regularize a cobrança para manter o acesso.');
-   else p.notify('Pagamento ainda não confirmado. Tente atualizar novamente em alguns instantes.');
+   else if(result.subscription)p.notify(billingStatusLabel(result.subscription.providerStatus));
+   else p.notify(result.configured?'Nenhuma cobrança em andamento.':'Assinaturas temporariamente indisponíveis. Fale com o suporte.');
   }catch(error){setCheckoutError(checkoutMessage(error));}
   finally{setBusy(false);}
  }
  async function copyPix(){
-  if(!billing?.payment?.pixCode)return;
-  try{await navigator.clipboard?.writeText(billing.payment.pixCode);p.notify('Código Pix copiado.');}
+  if(!usablePix(billing)||!billing?.payment?.pixCode){p.notify('Este código Pix não está mais disponível. Atualize a cobrança.');return;}
+  try{if(!navigator.clipboard)throw new Error('Clipboard unavailable');await navigator.clipboard.writeText(billing.payment.pixCode);p.notify('Código Pix copiado.');}
   catch{p.notify('Não foi possível copiar automaticamente. Selecione o código manualmente.');}
  }
 
@@ -84,6 +90,13 @@ export function FioPlans(p:WorkspaceProps){
    <div className="fio-plan-current-copy"><span>PLANO ATUAL</span><strong>{activeDefinition.name}</strong><small>{trialActive?`Teste grátis até ${date(sub.trial_ends_at)}`:sub.current_period_end?`Período atual até ${date(sub.current_period_end)}`:'Sem vencimento definido'}</small></div>
    <span className={`fio-billing-status ${trialActive?'is-trial':''}`}>{trialActive?'TESTE ATIVO':sub.status==='past_due'?'PAGAMENTO PENDENTE':p.data.plan==='FREE'?'GRÁTIS':sub.status==='cancelled'||sub.status==='inactive'?'INATIVO':'ATIVO'}</span>
   </section>
+
+  <section className="fio-billing-resume" aria-label="Cobrança atual">
+   <div><strong>{billing?billingStatusLabel(billing.providerStatus):billingLoaded?(billingConfigured?'Nenhuma cobrança em andamento':'Assinaturas temporariamente indisponíveis'):checkoutError?'Não foi possível consultar a cobrança':'Consultando sua cobrança…'}</strong>
+   <p className="muted">{billing?`FIO ${billing.plan} · ${BILLING_LABELS[billing.cycle]} · ${money(billing.amountCents)}`:'Consulte a situação antes de iniciar uma nova assinatura.'}</p></div>
+   <div className="page-actions">{billing&&<button className="primary" disabled={busy} onClick={()=>{setCheckoutPlan(billing.plan);setCheckoutError('');}}>Ver cobrança</button>}<button className="secondary" disabled={busy} onClick={()=>void refreshBilling()}><RefreshCw size={16}/>{busy?'Consultando…':'Atualizar cobrança'}</button></div>
+  </section>
+  {checkoutError&&!checkoutPlan&&<p className="fio-checkout-error" role="alert">{checkoutError}</p>}
 
   <section className="fio-cycle-section">
    <div className="fio-cycle-heading"><div><span className="eyebrow">PERÍODO DE COBRANÇA</span><h2>Como você prefere pagar?</h2></div><small>Você pode revisar tudo antes de gerar a cobrança.</small></div>
@@ -105,7 +118,7 @@ export function FioPlans(p:WorkspaceProps){
      {annualSaving>0&&<div className="fio-saving">Você economiza {money(annualSaving)} no ano</div>}
      {plan.code==='PRO'&&!trialUsed&&<div className="fio-trial-note"><Gift size={17}/><span><strong>14 dias grátis disponíveis</strong><small>Você decide entre testar primeiro ou assinar agora.</small></span></div>}
      <div className="fio-plan-highlights">{plan.highlights.map(item=><div key={item}><span className="fio-highlight-check"><Check size={14}/></span><span>{item}</span></div>)}</div>
-     <div className="fio-card-action">{current?<button className="secondary full" disabled><ShieldCheck size={16}/>Plano atual</button>:unavailable?<button className="secondary full" disabled>Plano gratuito</button>:paidActive?<button className="secondary full" disabled>Troca de plano em breve</button>:plan.code==='PRO'&&!trialUsed&&p.data.plan==='FREE'?<button className="primary full" disabled={busy} onClick={()=>setChoiceOpen(true)}>Escolher FIO PRO<ArrowRight size={17}/></button>:<button className="primary full" disabled={busy} onClick={()=>selectPaid(plan.code as PaidPlan)}>Assinar {plan.code}<ArrowRight size={17}/></button>}</div>
+     <div className="fio-card-action">{current&&!trialActive?<button className="secondary full" disabled><ShieldCheck size={16}/>Plano atual</button>:plan.code==='FREE'||unavailable?<button className="secondary full" disabled>Plano gratuito</button>:paidActive||billingLocked?<button className="secondary full" disabled>Consulte a assinatura atual</button>:plan.code==='PRO'&&!trialUsed&&p.data.plan==='FREE'?<button className="primary full" disabled={busy} onClick={()=>setChoiceOpen(true)}>Escolher FIO PRO<ArrowRight size={17}/></button>:<button className="primary full" disabled={busy||!billingLoaded||!billingConfigured} onClick={()=>selectPaid(plan.code as PaidPlan)}>Assinar {plan.code}<ArrowRight size={17}/></button>}</div>
     </article>;
    })}
   </div>
@@ -126,9 +139,9 @@ export function FioPlans(p:WorkspaceProps){
     <button className="primary full" disabled={busy||!acceptedTerms||document.replace(/\D/g,'').length<11} onClick={()=>void subscribe()}>{busy?'Preparando cobrança…':'Gerar Pix da assinatura'}<ArrowRight size={17}/></button>
     <button className="secondary full" disabled={busy} onClick={closeCheckout}>Cancelar</button>
    </>:<>
-    <div className={`fio-payment-state ${billing.providerStatus==='active'?'is-success':''}`}><span>{billing.providerStatus==='active'?<Check size={20}/>:<WalletCards size={20}/>}</span><div><h3>{billing.providerStatus==='active'?'Pagamento confirmado':'Pix pronto para pagamento'}</h3><p>{billing.providerStatus==='active'?'Seu plano foi confirmado e já pode ser usado pela barbearia.':'Pague o Pix abaixo. A liberação acontece somente depois da confirmação do pagamento.'}</p></div></div>
+    <div className={`fio-payment-state ${billing.providerStatus==='active'?'is-success':''}`}><span>{billing.providerStatus==='active'?<Check size={20}/>:<WalletCards size={20}/>}</span><div><h3>{billingStatusLabel(billing.providerStatus)}</h3><p>{billing.providerStatus==='active'?'Pagamento confirmado. Atualize o status para sincronizar o acesso da barbearia.':usablePix(billing)?'Pague o Pix abaixo. A liberação depende da confirmação do pagamento.':'Não há um Pix válido disponível agora. Atualize o status ou fale com o suporte; não pague um código vencido.'}</p></div></div>
     <div className="settings-readonly"><span>Assinatura</span><strong>FIO {billing.plan} · {BILLING_LABELS[billing.cycle]}</strong><small>{money(billing.amountCents)}{billing.payment?.expiresAt?` · válido até ${date(billing.payment.expiresAt)}`:''}</small></div>
-    {billing.payment?.pixCode&&<div className="fio-pix-box"><span>PIX COPIA E COLA</span><textarea readOnly value={billing.payment.pixCode} rows={4}/><button className="secondary full" onClick={()=>void copyPix()}><Copy size={16}/>Copiar código Pix</button></div>}
+    {usablePix(billing)&&<div className="fio-pix-box"><span>PIX COPIA E COLA</span><textarea aria-label="Código Pix copia e cola" readOnly value={billing.payment!.pixCode!} rows={4}/><button className="secondary full" onClick={()=>void copyPix()}><Copy size={16}/>Copiar código Pix</button></div>}
     {checkoutError&&<div className="fio-checkout-error">{checkoutError}</div>}
     {billing.providerStatus!=='active'&&<button className="primary full" disabled={busy} onClick={()=>void refreshBilling()}><RefreshCw size={16}/>{busy?'Atualizando…':'Já paguei · atualizar status'}</button>}
     <button className="secondary full" disabled={busy} onClick={closeCheckout}>{billing.providerStatus==='active'?'Concluir':'Fechar e pagar depois'}</button>

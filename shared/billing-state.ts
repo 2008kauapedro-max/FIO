@@ -1,0 +1,38 @@
+import type { BillingCycle } from './fio-plans.js';
+
+export type PaidPlan = 'PRO' | 'PREMIUM';
+export type BillingState = {
+ provider:'syncpay'; providerStatus:string; plan:PaidPlan; cycle:BillingCycle;
+ amountCents:number; nextChargeAt:string|null;
+ payment:{pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null}|null;
+};
+
+export function billingLocksNewSubscription(billing:BillingState|null){
+ return Boolean(billing && ['active','overdue','pending_first_payment'].includes(billing.providerStatus));
+}
+
+export function usablePix(billing:BillingState|null,now=Date.now()){
+ if(!billing?.payment?.pixCode || !['pending_first_payment','overdue'].includes(billing.providerStatus))return false;
+ const expiry=billing.payment.expiresAt;
+ return !expiry || Date.parse(expiry)>now;
+}
+
+export function billingStatusLabel(status:string){
+ return ({pending_first_payment:'Aguardando primeiro pagamento',active:'Assinatura ativa',overdue:'Pagamento em atraso',suspended:'Assinatura suspensa',cancelled:'Assinatura cancelada'} as Record<string,string>)[status]??'Confirmação em andamento';
+}
+
+export function billingErrorMessage(code?:string){
+ const messages:Record<string,string>={
+  INVALID_DOCUMENT:'Informe um CPF ou CNPJ válido.',
+  SYNCPAY_INVALID_REQUEST:'Confira os dados de cobrança e tente novamente.',
+  SYNCPAY_RATE_LIMIT:'Muitas tentativas seguidas. Aguarde alguns minutos.',
+  SYNCPAY_ENROLLMENT_UNCERTAIN:'Uma tentativa está em verificação. Não gere outra cobrança; aguarde e procure o suporte se ela não aparecer.',
+  SYNCPAY_ENROLLMENT_IN_PROGRESS:'Há uma tentativa de assinatura em verificação. Aguarde antes de escolher outro plano.',
+  SYNCPAY_SUBSCRIPTION_EXISTS:'Já existe uma assinatura ou cobrança em andamento. Consulte a cobrança atual.',
+  SYNCPAY_NOT_CONFIGURED:'A assinatura está temporariamente indisponível. Fale com o suporte.',
+  SYNCPAY_AUTH_ERROR:'A assinatura está temporariamente indisponível. Fale com o suporte.',
+  SYNCPAY_ACCOUNT_PENDING:'A assinatura está temporariamente indisponível. Fale com o suporte.',
+  OFFLINE:'Não foi possível conectar. Confira sua conexão e tente novamente.'
+ };
+ return messages[code??'']??'Não foi possível confirmar a cobrança agora. Tente consultar novamente em instantes.';
+}

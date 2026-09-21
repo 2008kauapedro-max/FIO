@@ -1,3 +1,4 @@
+import {AuthCaptcha,captchaSiteKey} from '../components/AuthCaptcha';
 import { useEffect,useState,type FormEvent,type ReactNode } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
@@ -35,11 +36,12 @@ function Pager({page,total,limit=25,onChange}:{page:number;total:number;limit?:n
 
 export function PlatformLogin({session,ready}:{session:Session|null;ready:boolean}){
  const navigate=useNavigate(),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [captchaToken,setCaptchaToken]=useState(''),[captchaAttempt,setCaptchaAttempt]=useState(0);
  useEffect(()=>{const m=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');if(m)m.href='/manifest-platform.webmanifest';},[]);
  if(!ready)return <div className="pf-login"><State loading/></div>;
  if(session)return <Navigate replace to="/platform"/>;
- async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const f=new FormData(e.currentTarget);try{if(!supabase)throw Error('Configure o Supabase para entrar.');const r=await supabase.auth.signInWithPassword({email:String(f.get('email')).trim(),password:String(f.get('password'))});if(r.error)throw Error('Não foi possível entrar. Confira suas credenciais.');navigate('/platform',{replace:true});}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- return <main className="pf-login"><form onSubmit={submit}><Link className="pf-logo pf-logo-image" to="/" aria-label="FIO"><img src="/FIOlogo+nome/Branco.png" alt="FIO"/></Link><small>PLATFORM</small><h1>Administração do FIO</h1><p>Acesse com sua conta autorizada.</p><label>E-mail<input name="email" type="email" autoComplete="username" required/></label><label>Senha<input name="password" type="password" autoComplete="current-password" required/></label><Link to="/login?mode=forgot&audience=platform">Esqueci minha senha</Link>{error&&<p role="alert">{error}</p>}<button className="pf-primary" disabled={busy}>{busy?'Entrando…':'Entrar'}</button><Link to="/login">Outros acessos</Link></form></main>;
+ async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();if(captchaSiteKey&&!captchaToken){setError('Conclua a verificação de segurança.');return;}setBusy(true);setError('');const f=new FormData(e.currentTarget);try{if(!supabase)throw Error('O acesso está temporariamente indisponível.');const r=await supabase.auth.signInWithPassword({email:String(f.get('email')).trim(),password:String(f.get('password')),options:{captchaToken:captchaToken||undefined}});if(r.error)throw Error('Não foi possível entrar. Confira suas credenciais.');navigate('/platform',{replace:true});}catch(e){setError((e as Error).message);}finally{setBusy(false);setCaptchaToken('');setCaptchaAttempt(v=>v+1);}}
+ return <main className="pf-login"><form onSubmit={submit}><Link className="pf-logo pf-logo-image" to="/" aria-label="FIO"><img src="/FIOlogo+nome/Branco.png" alt="FIO"/></Link><small>PLATFORM</small><h1>Administração do FIO</h1><p>Acesse com sua conta autorizada.</p><label>E-mail<input name="email" type="email" autoComplete="username" required/></label><label>Senha<input name="password" type="password" autoComplete="current-password" required/></label><Link to="/login?mode=forgot&audience=platform">Esqueci minha senha</Link>{captchaSiteKey&&<AuthCaptcha onToken={setCaptchaToken} attempt={captchaAttempt}/>} {error&&<p role="alert">{error}</p>}<button className="pf-primary" disabled={busy||Boolean(captchaSiteKey&&!captchaToken)}>{busy?'Entrando…':'Entrar'}</button><Link to="/login">Outros acessos</Link></form></main>;
 }
 export function PlatformApp({session,ready}:{session:Session|null;ready:boolean}){
  useEffect(()=>{const m=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');if(m)m.href='/manifest-platform.webmanifest';},[]);

@@ -9,3 +9,8 @@ dist-server/
 .DS_Store
 
 .npm-cache/
+
+playwright-report/
+test-results/
+*.zip
+*.sha256

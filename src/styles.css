@@ -742,3 +742,10 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
  .assistant-empty{padding-bottom:170px}
  .overview-primary.is-action{cursor:pointer;text-align:left;width:100%;border:0}
 }
+
+.fio-billing-resume{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px;margin:0 0 24px;border:1px solid var(--border,#333);border-radius:14px}
+.fio-billing-resume p{margin:6px 0 0;font-size:.85rem}
+.fio-billing-resume .page-actions{flex-wrap:wrap}
+@media(max-width:640px){.fio-billing-resume{align-items:stretch;flex-direction:column}.fio-billing-resume .page-actions>button{flex:1}}
+
+.auth-captcha{width:100%;min-width:0;margin:12px 0}.auth-captcha>div{width:100%;min-width:0}

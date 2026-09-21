@@ -13,7 +13,7 @@ function currentAuthSpace():AuthSpace{
  if(path.startsWith('/owner')||path==='/acesso/gestao'||audience==='owner')return 'owner';
  if(path.startsWith('/barber')||path==='/acesso/equipe'||audience==='staff')return 'staff';
  if(path.startsWith('/client')||audience==='client')return 'client';
- return 'main';
+ return 'owner';
 }
 
 const authSpace=currentAuthSpace();

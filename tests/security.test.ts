@@ -7,7 +7,8 @@ import { assistantContext } from '../server/context';
 import { demoData } from '../src/lib/demo';
 describe('limites da API',()=>{
  it('nega acesso sem Bearer token em todas as operações protegidas',async()=>{const app=createApp();for(const path of ['/bootstrap','/memberships','/conversations'])expect((await request(app).get(`/api${path}`)).status).toBe(401);for(const path of ['/assistant','/appointments','/services','/payments','/invitations','/onboarding'])expect((await request(app).post(`/api${path}`).send({})).status).toBe(401);});
- it('health não revela segredos',async()=>{const r=await request(createApp()).get('/api/health');expect(r.status).toBe(200);expect(Object.keys(r.body).sort()).toEqual(['configured','status']);});
+ it('health não revela configuração ou segredos',async()=>{const r=await request(createApp()).get('/api/health');expect(r.status).toBe(200);expect(r.body).toEqual({status:'ok'});expect(r.headers['cache-control']).toContain('no-store');expect(r.headers['x-request-id']).toBeTruthy();});
+ it('limita consultas públicas repetidas por origem',async()=>{const app=createApp();for(let i=0;i<30;i++)await request(app).get('/api/public/manifest/loja-teste');const r=await request(app).get('/api/public/manifest/loja-teste');expect(r.status).toBe(429);expect(r.headers['retry-after']).toBeTruthy();});
  it('token enviado é validado com Auth e um JWT forjado é negado',async()=>{
   vi.stubEnv('SUPABASE_URL','https://test.supabase.co');vi.stubEnv('SUPABASE_ANON_KEY','public-test-key');
   const fetchMock=vi.fn().mockResolvedValue(new Response(JSON.stringify({message:'Invalid JWT',code:'bad_jwt'}),{status:401,headers:{'Content-Type':'application/json'}}));vi.stubGlobal('fetch',fetchMock);

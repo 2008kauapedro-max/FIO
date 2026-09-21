@@ -5,7 +5,7 @@ $fioRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $fioDestination = [IO.Path]::GetFullPath($Destination)
 if ([IO.Path]::GetExtension($fioDestination) -ne '.zip') { throw 'Destination must be a ZIP file.' }
 if (Test-Path -LiteralPath $fioDestination) { throw 'Destination already exists; choose a new file.' }
-$fioExcluded = @('node_modules','.npm-cache','.git','work','dist','dist-server','test-results','playwright-report','.temp','.branches','.package-stage')
+$fioExcluded = @('node_modules','.npm-cache','.git','.vercel','work','dist','dist-server','test-results','playwright-report','.temp','.branches','.package-stage')
 function Get-FioFiles([string]$Directory) {
  foreach ($fioItem in Get-ChildItem -LiteralPath $Directory -Force) {
   if (($fioItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Symlink/reparse point is not permitted in the distribution.' }

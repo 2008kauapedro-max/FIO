@@ -1,3 +1,4 @@
+import {AuthCaptcha,captchaSiteKey} from '../components/AuthCaptcha';
 import { useEffect,useState,type FormEvent } from 'react';
 import { Link,useLocation,useNavigate } from 'react-router-dom';
 import { supabase,api,getRememberSession,setRememberSession } from '../lib/api';
@@ -26,6 +27,9 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  const [showPassword,setShowPassword]=useState(false);
  const [showConfirmPassword,setShowConfirmPassword]=useState(false);
  const [remember,setRemember]=useState(()=>getRememberSession());
+ const [captchaToken,setCaptchaToken]=useState(''),[captchaAttempt,setCaptchaAttempt]=useState(0);
+ const needsCaptcha=Boolean(captchaSiteKey)&&!reset;
+ useEffect(()=>{setCaptchaToken('');setCaptchaAttempt(v=>v+1);},[mode,reset]);
 
  useEffect(()=>{
   if(!reset||!supabase)return;
@@ -107,7 +111,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   setMessage('');
 
   if(!supabase){
-   setMessage('A conexão do Supabase precisa ser configurada para acessar sua conta.');
+   setMessage('O acesso está temporariamente indisponível. Tente novamente mais tarde.');
    return;
   }
 
@@ -126,6 +130,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    }
   }
 
+  if(needsCaptcha&&!captchaToken){setMessage('Conclua a verificação de segurança para continuar.');return;}
   setBusy(true);
 
   try{
@@ -146,7 +151,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     if(shop)query.set('shop',shop);
     const suffix=query.toString()?`?${query.toString()}`:'';
     const redirect=`${window.location.origin}/reset-password${suffix}`;
-    const result=await supabase.auth.resetPasswordForEmail(email,{redirectTo:redirect});
+    const result=await supabase.auth.resetPasswordForEmail(email,{redirectTo:redirect,captchaToken:captchaToken||undefined});
 
     if(result.error){
      setMessage('Não foi possível enviar o link agora. Confira o e-mail e tente novamente.');
@@ -165,7 +170,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     const result=await supabase.auth.signUp({
      email,
      password,
-     options:{emailRedirectTo:`${window.location.origin}/confirm-email?${query.toString()}`}
+     options:{captchaToken:captchaToken||undefined,emailRedirectTo:`${window.location.origin}/confirm-email?${query.toString()}`}
     });
 
     if(result.error){
@@ -178,7 +183,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    }
 
    setRememberSession(remember);
-   const result=await supabase.auth.signInWithPassword({email,password:submittedPassword});
+   const result=await supabase.auth.signInWithPassword({email,password:submittedPassword,options:{captchaToken:captchaToken||undefined}});
    if(result.error){
     setMessage('Não foi possível entrar. Confira seu e-mail e senha.');
     return;
@@ -193,6 +198,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    setMessage('Sem conexão. Tente novamente.');
   }finally{
    setBusy(false);
+   setCaptchaToken('');setCaptchaAttempt(v=>v+1);
   }
  }
 
@@ -220,7 +226,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    <div className="auth-card">
     <p className="eyebrow">RECUPERAÇÃO DE SENHA</p>
     <h1>Não foi possível abrir.</h1>
-    <p className="notice">A conexão do Supabase precisa ser configurada.</p>
+    <p className="notice">O acesso está temporariamente indisponível.</p>
    </div>
   </div>;
  }
@@ -303,9 +309,10 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
     {!reset&&mode==='login'&&<label className="remember-session"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/><span>Manter conectado neste dispositivo</span></label>}
 
+    {needsCaptcha&&<AuthCaptcha onToken={setCaptchaToken} attempt={captchaAttempt}/>}
     {message&&<p role="status" className="notice">{message}</p>}
 
-    <button className="primary full" disabled={busy}>
+    <button className="primary full" disabled={busy||(needsCaptcha&&!captchaToken)}>
      {busy
       ?'Aguarde…'
       :reset

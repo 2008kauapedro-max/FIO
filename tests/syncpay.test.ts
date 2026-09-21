@@ -58,6 +58,17 @@ describe('SyncPay billing boundary',()=>{
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('message=This+is+a+test+webhook+payload.'))).toBe(true);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('--fio-boundary\r\nContent-Disposition: form-data; name="message"\r\n\r\nThis is a test webhook payload.\r\n--fio-boundary--'))).toBe(true);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"event\":\"assinatura_ativada\"}'))).toBe(false);
-  expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"message\":\"This is a test webhook payload.\",\"event\":\"assinatura_ativada\"}'))).toBe(true);
+  expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"message\":\"This is a test webhook payload.\",\"event\":\"assinatura_ativada\"}'))).toBe(false);
+  expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{"message":"This is a test webhook payload.","ev\\u0065nt":"assinatura_ativada"}'))).toBe(false);
+ });
+ it('rejects a provider response for a different subscription',()=>{
+  expect(()=>syncpayInternals.normalizeProviderDetail({token:'sub_someone_else',status:'active'},{token:'sub_expected_123',planToken:'plan_12345678',gracePeriodDays:5})).toThrow();
+ });
+ it('uses server-controlled grace days instead of an unexpected provider override',()=>{
+  const detail=syncpayInternals.normalizeProviderDetail({status:'overdue',next_charge_at:'2026-09-30T12:00:00Z',plan:{token:'plan_12345678',grace_period_days:999}},{token:'sub_12345678',planToken:'plan_12345678',gracePeriodDays:5});
+  expect(syncpayInternals.accessUntil(detail)).toBe('2026-10-05T12:00:00.000Z');
+ });
+ it('unknown provider states fail closed',()=>{
+  expect(()=>syncpayInternals.normalizeProviderDetail({status:'unknown'},{token:'sub_12345678',planToken:'plan_12345678',gracePeriodDays:5})).toThrow();
  });
 });

@@ -22,12 +22,12 @@ export const FIO_PLAN_CATALOG: FioPlanDefinition[] = [
  {
   code:'PRO',name:'FIO PRO',eyebrow:'PARA CRESCER',description:'Gestão completa para a barbearia vender, acompanhar e atender melhor.',recommended:true,trialDays:14,
   prices:{weekly:3990,monthly:11990,annual:124990},
-  highlights:['Até 1.500 clientes','Responsável + até 5 profissionais','Até 40 serviços','Até 3 planos para clientes','Feed, comunicação e FIO IA','Relatórios completos e impressão','Cobrança recorrente via SyncPay com confirmação automática']
+  highlights:['Até 1.500 clientes','Responsável + até 5 profissionais','Até 40 serviços','Até 3 planos para clientes','Feed, comunicação e FIO IA','Consulta financeira e impressão','Assinatura via Pix com confirmação pela SyncPay']
  },
  {
   code:'PREMIUM',name:'FIO PREMIUM',eyebrow:'MÁXIMO CONTROLE',description:'Mais liberdade, escala e análise para operações que já estão crescendo.',
   prices:{weekly:5990,monthly:17990,annual:189990},
-  highlights:['Clientes, equipe e serviços sem limite comercial pequeno','Até 15 planos para clientes','Feed e comunicação ampliados','FIO IA com limite ampliado','Relatórios e análises avançadas','Gestão de indicações e desempenho da equipe','Recursos premium de operação e suporte']
+  highlights:['Clientes, equipe e serviços sem limite comercial pequeno','Até 15 planos para clientes','Feed e comunicação ampliados','FIO IA com limite ampliado','Consulta financeira e impressão','Mais capacidade para sua equipe e catálogo','Suporte pelo formulário do FIO']
  }
 ];
 

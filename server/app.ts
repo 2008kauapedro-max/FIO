@@ -9,6 +9,8 @@ import { ApiError,dbError } from './errors.js';
 import { askAssistant } from './assistant.js';
 import { bookingSchema } from '../shared/domain.js';
 import { createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook } from './syncpay.js';
+import { randomUUID } from 'node:crypto';
+import { rateLimit,rateLimitByUser } from './rate-limit.js';
 type Authenticator = typeof authenticate;
 
 function serviceDb(){
@@ -17,24 +19,26 @@ function serviceDb(){
  return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
 }
 function cleanPhone(value:string){return value.trim().replace(/\s+/g,' ');}
+function publicStorageUrl(bucket:string,path:string){
+ const base=process.env.SUPABASE_URL;
+ return base?`${base}/storage/v1/object/public/${bucket}/${path}`:'';
+}
+function secureLog(requestId:string,error:unknown){
+ // Never write headers, tokens, request bodies, database errors, or provider responses to logs.
+ if(!(error instanceof ApiError)&&!(error instanceof ZodError))console.error(JSON.stringify({event:'api_error',requestId,status:500,code:'INTERNAL_ERROR'}));
+}
 
 export function createApp(authenticator: Authenticator=authenticate) {
  const app=express();
  app.disable('x-powered-by');
- app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'",'https://*.supabase.co','wss://*.supabase.co'],imgSrc:["'self'",'data:','blob:','https://*.supabase.co'],objectSrc:["'none'"],frameAncestors:["'none'"]}}}));
+ app.use(helmet({referrerPolicy:{policy:'strict-origin-when-cross-origin'},strictTransportSecurity:process.env.NODE_ENV==='production'?undefined:false,contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'",'https://challenges.cloudflare.com'],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'",'https://*.supabase.co','wss://*.supabase.co'],imgSrc:["'self'",'data:','blob:','https://*.supabase.co'],frameSrc:['https://challenges.cloudflare.com'],objectSrc:["'none'"],frameAncestors:["'none'"]}}}));
+ app.use((_,res,next)=>{res.setHeader('X-Request-Id',randomUUID());res.setHeader('Cache-Control','no-store');next();});
+ app.use('/api',rateLimit('api-ingress',{windowMs:60_000,max:300}));
  // O webhook precisa do corpo bruto para validar a assinatura antes do JSON parser global.
  app.post('/api/webhooks/syncpay',express.raw({type:'*/*',limit:'64kb'}),async(req,res)=>handleSyncpayWebhook(req,res));
  app.use(express.json({limit:'12kb'}));
-app.get('/api/health', (_req, res) =>
-  res.json({
-    status: 'ok',
-    configured: !!(
-      process.env.SUPABASE_URL &&
-      process.env.SUPABASE_ANON_KEY
-    )
-  })
-);
- app.get('/api/public/shop/:slug',async(req,res)=>{
+ app.get('/api/health',rateLimit('health',{windowMs:60_000,max:30}), (_req, res) =>res.set('Cache-Control','no-store').json({status:'ok'}));
+ app.get('/api/public/shop/:slug',rateLimit('public-shop',{windowMs:60_000,max:60}),async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
   const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
@@ -51,9 +55,9 @@ app.get('/api/health', (_req, res) =>
   dbError(publicPlans.error);
   const asset=(path:string|null)=>path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:null;
   const instagram=shop.data.instagram?`@${String(shop.data.instagram).replace(/^@+/,'').trim()}`:null;
-  res.json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:publicPlans.data??[]});
+  res.set('Cache-Control','public, max-age=60').json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:publicPlans.data??[]});
  });
- app.get('/api/public/manifest/:slug',async(req,res)=>{
+ app.get('/api/public/manifest/:slug',rateLimit('public-manifest',{windowMs:60_000,max:30}),async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
   const shop=await db.from('barbershops').select('name,public_title,logo_url,logo_asset_path,accent_color,custom_accent').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
@@ -63,12 +67,13 @@ app.get('/api/health', (_req, res) =>
   const theme=shop.data.custom_accent||shop.data.accent_color||'#000000';
   res.type('application/manifest+json').set('Cache-Control','public, max-age=300').send(JSON.stringify({id:`/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/login?shop=${encodeURIComponent(slug)}&audience=client`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
  });
- app.use('/api',async(req,res,next)=>{res.locals.auth=await authenticator(req);next();});
+ app.use('/api',async(req,res,next)=>{res.locals.auth=await authenticator(req);res.set('Cache-Control','private, no-store');next();});
+ app.use('/api',rateLimitByUser('authenticated-api',60_000,180));
  app.get('/api/memberships',async(_req,res)=>{
   const a=res.locals.auth as AuthContext;
   const result=await a.db.from('memberships').select('*').eq('user_id',a.userId).eq('active',true);dbError(result.error);res.json(result.data);
  });
- app.post('/api/onboarding',async(req,res)=>{
+ app.post('/api/onboarding',rateLimitByUser('onboarding',600_000,8),async(req,res)=>{
   const v=z.discriminatedUnion('mode',[
    z.object({mode:z.literal('create'),name:z.string().trim().min(2).max(100),slug:z.string().regex(/^[a-z0-9-]{3,60}$/),displayName:z.string().trim().min(2).max(100)}).strict(),
    z.object({mode:z.literal('join'),slug:z.string().min(3).max(60),displayName:z.string().trim().min(2).max(100)}).strict(),
@@ -116,19 +121,18 @@ app.get('/api/health', (_req, res) =>
   });
   if(!rows.length)throw new ApiError(400,'INVALID_DATA','Escolha pelo menos um dia de funcionamento.');
   if(new Set(rows.map(row=>row.weekday)).size!==rows.length)throw new ApiError(400,'INVALID_DATA','Cada dia deve aparecer apenas uma vez.');
-  const del=await a.db.from('business_hours').delete().eq('barbershop_id',c.shopId);dbError(del.error);
-  const r=await a.db.from('business_hours').insert(rows);dbError(r.error);res.json({ok:true});
+  const r=await a.db.rpc('replace_business_hours',{p_shop:c.shopId,p_days:rows.map(({weekday,opens_at,closes_at})=>({weekday,opens_at,closes_at}))});dbError(r.error);res.json({ok:true});
  });
  app.post('/api/onboarding/activate',async(req,res)=>{const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const r=await a.db.rpc('activate_owner_onboarding',{p_shop:c.shopId});dbError(r.error);res.json({ok:true,shopId:c.shopId});});
  app.use('/api/platform',platformRouter());
  app.use('/api',async(req,res,next)=>{res.locals.ctx=await tenant(res.locals.auth,req);next();});
  const ctx=(res:express.Response)=>res.locals.ctx as TenantContext;
  app.get('/api/bootstrap',async(_req,res)=>res.json(await bootstrap(ctx(res))));
- app.post('/api/saas/trial',async(req,res)=>{
+ app.post('/api/saas/trial',rateLimitByUser('trial',3_600_000,3),async(req,res)=>{
   const c=ctx(res);requireOwner(c);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('start_saas_pro_trial',{p_shop:c.shopId});dbError(r.error);res.status(201).json({trialEndsAt:r.data});
  });
- app.post('/api/saas/subscribe',async(req,res)=>{
+ app.post('/api/saas/subscribe',rateLimitByUser('billing-subscribe',600_000,8),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
  });
  app.get('/api/saas/billing',async(_req,res)=>{
@@ -155,14 +159,14 @@ app.get('/api/health', (_req, res) =>
  app.patch('/api/profile/avatar',async(req,res)=>{
   const c=ctx(res),v=z.object({avatarUrl:z.string().trim().max(700),avatarPath:z.string().trim().max(500)}).strict().parse(req.body);
   const expected=`${c.shopId}/${c.userId}/`;
-  if(!v.avatarPath.startsWith(expected)||!v.avatarPath.endsWith('.webp'))throw new ApiError(400,'INVALID_IMAGE','Não foi possível usar esta imagem.');
+  if(!v.avatarPath.startsWith(expected)||!/^avatar-\d{13}\.webp$/.test(v.avatarPath.slice(expected.length))||v.avatarUrl!==publicStorageUrl('profile-avatars',v.avatarPath))throw new ApiError(400,'INVALID_IMAGE','Não foi possível usar esta imagem.');
   const r=await c.db.rpc('update_own_avatar',{p_shop:c.shopId,p_avatar_url:v.avatarUrl,p_avatar_path:v.avatarPath});dbError(r.error);res.json({ok:true});
  });
  app.patch('/api/shop/branding',async(req,res)=>{
   const c=ctx(res);requireOwner(c);const v=z.object({title:z.string().trim().max(100).default(''),description:z.string().trim().max(280).default(''),logoUrl:z.string().trim().max(500).default(''),coverUrl:z.string().trim().max(500).default(''),backgroundUrl:z.string().trim().max(500).default(''),accentColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#ffffff')}).strict().parse(req.body);
   const r=await c.db.rpc('update_shop_branding',{p_shop:c.shopId,p_title:v.title,p_description:v.description,p_logo_url:v.logoUrl,p_cover_url:v.coverUrl,p_background_url:v.backgroundUrl,p_accent_color:v.accentColor});dbError(r.error);res.json({ok:true});
  });
- app.post('/api/staff',async(req,res)=>{
+ app.post('/api/staff',rateLimitByUser('staff-provisioning',3_600_000,3),async(req,res)=>{
   const c=ctx(res);requireOwner(c);
   const v=z.object({name:z.string().trim().min(2).max(100),email:z.email().max(254),temporaryPassword:z.string().min(8).max(128),phone:z.string().trim().min(8).max(24)}).strict().parse(req.body);
   const admin=serviceDb();
@@ -193,7 +197,7 @@ app.get('/api/health', (_req, res) =>
   const c=ctx(res);requireOwner(c);const v=z.object({appointmentId:z.uuid(),method:z.enum(['cash','pix','card','other']).default('pix'),confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('record_payment',{p_shop:c.shopId,p_appointment:v.appointmentId,p_method:v.method});dbError(r.error);res.status(201).json({ok:true});
  });
- app.post('/api/invitations',async(req,res)=>{
+ app.post('/api/invitations',rateLimitByUser('invitations',600_000,10),async(req,res)=>{
   const c=ctx(res);requireOwner(c);const v=z.object({role:z.enum(['BARBER','CLIENT'])}).strict().parse(req.body);
   const r=await c.db.rpc('create_invitation',{p_shop:c.shopId,p_role:v.role});dbError(r.error);res.status(201).json({token:r.data});
  });
@@ -225,7 +229,7 @@ app.get('/api/health', (_req, res) =>
   const c=ctx(res),id=z.uuid().parse(req.params.id);
   const r=await c.db.from('notifications').update({read_at:new Date().toISOString()}).eq('id',id).eq('barbershop_id',c.shopId).eq('user_id',c.userId);dbError(r.error);res.json({ok:true});
  });
- app.post('/api/posts',async(req,res)=>{
+ app.post('/api/posts',rateLimitByUser('feed-posts',600_000,12),async(req,res)=>{
   const c=ctx(res);requireFioFeature(c,'feed');
   if(!['OWNER','BARBER'].includes(c.member.role)) throw new ApiError(403,'FORBIDDEN','Somente a equipe pode publicar no feed.');
   const v=z.object({caption:z.string().trim().max(500).default(''),imagePath:z.string().min(5).max(500)}).strict().parse(req.body);
@@ -242,7 +246,7 @@ app.get('/api/health', (_req, res) =>
   if(c.member.role!=='OWNER'&&existing.data.author_id!==c.userId) throw new ApiError(403,'FORBIDDEN','Você só pode remover suas próprias publicações.');
   const r=await c.db.from('feed_posts').delete().eq('id',id).eq('barbershop_id',c.shopId);dbError(r.error);res.json({ok:true,imagePath:existing.data.image_path});
  });
- app.post('/api/support/feedback',async(req,res)=>{
+ app.post('/api/support/feedback',rateLimitByUser('feedback',600_000,5),async(req,res)=>{
   const c=ctx(res),v=z.object({category:z.enum(['feedback','problem','question']),message:z.string().trim().min(3).max(1500)}).strict().parse(req.body);
   const r=await c.db.from('support_feedback').insert({barbershop_id:c.shopId,user_id:c.userId,role:c.member.role,category:v.category,message:v.message});dbError(r.error);res.status(201).json({ok:true});
  });
@@ -253,15 +257,19 @@ app.get('/api/health', (_req, res) =>
   const c=ctx(res),id=z.uuid().parse(req.params.id);requireFioFeature(c,'assistant');
   const r=await c.db.from('assistant_messages').select('id,role,content').eq('conversation_id',id).eq('barbershop_id',c.shopId).eq('user_id',c.userId).order('created_at').limit(200);dbError(r.error);res.json(r.data);
  });
- app.post('/api/assistant',async(req,res)=>{const c=ctx(res);requireFioFeature(c,'assistant');res.json(await askAssistant(c,req.body));});
+ app.post('/api/assistant',rateLimitByUser('assistant',60_000,12),async(req,res)=>{const c=ctx(res);requireFioFeature(c,'assistant');res.json(await askAssistant(c,req.body));});
  app.use('/api',(_req,res)=>res.status(404).json({code:'NOT_FOUND',message:'Recurso não encontrado.'}));
  if(process.env.NODE_ENV==='production') {
   app.use(express.static(resolve('dist')));
   app.get('/{*path}',(_req,res)=>res.sendFile(resolve('dist/index.html')));
  }
  app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
+  const parserError=error as {type?:string};
+  if(parserError?.type==='entity.too.large'){res.status(413).json({code:'PAYLOAD_TOO_LARGE',message:'O conteúdo enviado excede o limite permitido.'});return;}
+  if(parserError?.type==='entity.parse.failed'){res.status(400).json({code:'INVALID_JSON',message:'O conteúdo enviado é inválido.'});return;}
+  secureLog(String(res.getHeader('X-Request-Id')??''),error);
   if(error instanceof ZodError) {res.status(400).json({code:'INVALID_INPUT',message:'Confira os campos informados.'});return;}
-  if(error instanceof ApiError) {if(error.status===429)res.setHeader('Retry-After',error.code==='DAILY_LIMIT'?'86400':'60');res.status(error.status).json({code:error.code,message:error.message});return;}
+  if(error instanceof ApiError) {if(error.status===429&&!res.hasHeader('Retry-After'))res.setHeader('Retry-After',error.code==='DAILY_LIMIT'?'86400':'60');res.status(error.status).json({code:error.code,message:error.message});return;}
   res.status(500).json({code:'INTERNAL_ERROR',message:'Não foi possível concluir. Tente novamente.'});
  });
  return app;
