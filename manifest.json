@@ -1,0 +1,125 @@
+{
+  "base_commit": "f5aef19",
+  "files": [
+    {
+      "path": "scripts/check-syncpay.mjs",
+      "before": "3311367f31fa9c16a2efa34017631e75a8a0d277704781c23496c9b87f14e22e",
+      "after": "836c5fa0c5d1aa1ad10a27820fd106dcd76c216aae51059bf3d51762759edc59"
+    },
+    {
+      "path": "server/app.ts",
+      "before": "712aa7ed935b2f710be311d12901444e4eb4a5a624a02e9d5a2c4123d865a449",
+      "after": "54bf0fc81e096db601c80d7873b31a70a675b5ae5c1be32ac12d9e67559031f8"
+    },
+    {
+      "path": "server/assistant.ts",
+      "before": "40c2209fb3f0f4c93a7723691670771c5825f0fe71978ea3c3011c4eb7966db0",
+      "after": "4342c0c644a2a668b74bbc4529577690acdfa166aacdd30153d7a8fc97dd1b8b"
+    },
+    {
+      "path": "server/platform-ai.ts",
+      "before": "32471617e6463bda8e88f433fa2c28b3bdf9da1a94d1883a2ebabdccf8f02c91",
+      "after": "51bb711ac704b96396d8cdbb2227c7b511358bc5f2f41516ddefa1940aff40bc"
+    },
+    {
+      "path": "server/platform.ts",
+      "before": "4bb366c6d694aeb06c124a80ea49e0a5e3e77c9d90f27f033903a0e58affa533",
+      "after": "106e6cbbf0f8856b99d59292c238087ff0428d2e51ae7a6cf3a30a83f01512f7"
+    },
+    {
+      "path": "server/syncpay.ts",
+      "before": "221ac9a33f31bfa9c7b4708c3bc55656ef71fb391247416fefa140e0950e9e81",
+      "after": "8a3ef38b54781d82dbe1ff9309b6134bf6bf9b79e66eea23f4bf51c2fef7573a"
+    },
+    {
+      "path": "shared/billing-state.ts",
+      "before": "7d43765b1279bce3e0e383887c3bb3bcf73646fb4bc0a9b0cdafad0638ec2f68",
+      "after": "fe11f7c80819d2c30c7f5b559eb754630a84e389c901c8f0f4661a31eacb52ae"
+    },
+    {
+      "path": "src/App.tsx",
+      "before": "ca6b8949687e7e32ea5ff5c63753cf98bb1d1bb356612f365250429eb2eeff05",
+      "after": "822ed2c54406c8eecc21171d44a243898e2bd7d1a696315abff95cc2a966a11b"
+    },
+    {
+      "path": "src/components/GuidedTour.tsx",
+      "before": null,
+      "after": "5ac095b7faaed6ed17068cada74f343497cb8785be6e783a8d2b0e118f5ce950"
+    },
+    {
+      "path": "src/components/guided-tour.css",
+      "before": null,
+      "after": "600d4dd54ca2fdbbb2758a6abe198a8c46481c79024d1398766dc877d31e4953"
+    },
+    {
+      "path": "src/pages/Auth.tsx",
+      "before": "9f1c75e080ca604df9bf80bb97131d1b97fd12830bc30ecfd77b2acd6d942e09",
+      "after": "bd39d3bfa8a93f52fbfc907fd9bd8f15160a6f2599f1da30f21b82383ef6d040"
+    },
+    {
+      "path": "src/pages/FioPlans.tsx",
+      "before": "5c8f930d5b3a384b37a26919f76a3507844e310f817167ed5ca6c2a8440e9de2",
+      "after": "804ea50ceb4424730058a42347443b17c83405a25a43c9ff2b21528de818d7c1"
+    },
+    {
+      "path": "src/pages/Platform.tsx",
+      "before": "e7e21d6da155c46c74cfd3d8feb21d27d664b07db7af254389f1ed78fa04296b",
+      "after": "9273917f04c78f6d5778469ca1f9e30034fc3632c3feb2207f012cf793eaf45c"
+    },
+    {
+      "path": "src/pages/PlatformCopilot.tsx",
+      "before": "699a1d992424345584d031302b5484165189c0aa268294532fafe109c7688f01",
+      "after": "f81283c93f58fcb507d8f5150f228ab2579d5855983fc430037b2a7c0d7db892"
+    },
+    {
+      "path": "src/pages/Workspace.tsx",
+      "before": "74bc477b69e45471f732dea107fffd6adf764714e83b2daed1fdf8c1206c132e",
+      "after": "8725f3c1f60644b723b9b8be4d08812024c18da4f149cd7b77cfae698d20e503"
+    },
+    {
+      "path": "src/styles.css",
+      "before": "1f726daba7de4f4a0e65d778c93993c5ec6b8b6878de9263ab1a9904cafe058e",
+      "after": "ff38b93dbb77354d07203c52d149fcf58fa046574bfe6f24c0ad41bb3d6877bd"
+    },
+    {
+      "path": "supabase/migrations/20260922213913_billing_changes_and_support.sql",
+      "before": null,
+      "after": "cbcd4bd0e7ac41e53a19bc83f0ccd9cbd533ec8df065f128f3e43ca1ed6db5be"
+    },
+    {
+      "path": "tests/copilot-api.test.ts",
+      "before": "69d91623c7a92066deb2852ff397df5def59ca6863d0d476849e03287f32c97c",
+      "after": "df6f4e1853783561c25387c3f0d26eb0b3341436c707593e91479ebf531393cf"
+    },
+    {
+      "path": "tests/final-experience.test.ts",
+      "before": null,
+      "after": "643385cb5215c29989299323d35739cf779ae14c30e466bf0dca62c46557308f"
+    },
+    {
+      "path": "tests/fixtures/experience-api.ts",
+      "before": null,
+      "after": "7cf72bbe7fc2c1a4ebe00b5c90b6cf66393c6b461e2d8c7ec745378385b58088"
+    },
+    {
+      "path": "tests/fixtures/experience-preview.html",
+      "before": null,
+      "after": "30cd512dcf0e71fa287f6f4fb7fd63be4ec432e0a9213203389232061deee541"
+    },
+    {
+      "path": "tests/fixtures/experience-preview.tsx",
+      "before": null,
+      "after": "57a7613fe9eba73a3b09657f83d2f4d6cdfd8365f791b005ed99d667a5de56c5"
+    },
+    {
+      "path": "tests/fixtures/experience-vite.config.ts",
+      "before": null,
+      "after": "e7b001cc017e17f1baad76fa2bc31ccb815ee0435e74ae77360cff1b8a9cccb3"
+    },
+    {
+      "path": "tests/release-guards.test.ts",
+      "before": "7f6f55c68dd621071d59683dc3bdde8785752a9ceae1c7fba33188f77c16a301",
+      "after": "babab1592328f279372741e5e8e98227bcc5918c953fcfdf9ee9c885dc2cd2d3"
+    }
+  ]
+}
