@@ -41,7 +41,10 @@ export function AuthCaptcha({onToken,attempt}:{onToken:(token:string)=>void;atte
   void loadTurnstile().then(turnstile=>{
    if(!active||!container.current)return;
    api=turnstile;
-   widget=turnstile.render(container.current,{sitekey:captchaSiteKey,theme:'auto',size:compact?'compact':'flexible',execution:'execute',appearance:'always',retry:'never',refreshExpired:'manual',
+   // On narrow screens use Cloudflare's horizontal 300x65 widget instead of
+   // the taller 150x140 compact variant. The flexible widget remains full-width
+   // on desktop.
+   widget=turnstile.render(container.current,{sitekey:captchaSiteKey,theme:'auto',size:compact?'normal':'flexible',execution:'execute',appearance:'always',retry:'never',refreshExpired:'manual',
     callback:(token:string)=>{if(active&&startedRef.current){setFailed(false);setVerified(true);setStarted(false);onToken(token);}},
     'expired-callback':()=>{if(active){onToken('');setVerified(false);setStarted(false);startedRef.current=false;}},
     'timeout-callback':()=>{if(active){onToken('');setVerified(false);setStarted(false);startedRef.current=false;setFailed(true);}},
@@ -62,7 +65,7 @@ export function AuthCaptcha({onToken,attempt}:{onToken:(token:string)=>void;atte
   {!verified&&<button type="button" className="secondary full auth-captcha-start" disabled={!ready||started} onClick={startVerification}>
    {started?'Verificando…':failed?'Verificar novamente':'Verificar acesso'}
   </button>}
-  {verified&&<p className="auth-captcha-status" role="status">Verificação concluída. Toque em Entrar para continuar.</p>}
+  {verified&&<p className="auth-captcha-status" role="status"><span aria-hidden="true">✓</span> Verificado. Toque em Entrar para continuar.</p>}
   {failed&&<p role="alert" className="auth-captcha-error">Não foi possível concluir a verificação. Tente novamente.</p>}
   {!ready&&!failed&&<p className="auth-captcha-hint">Carregando verificação de segurança…</p>}
   {failed&&<button type="button" className="text-button auth-captcha-retry" onClick={()=>setRetry(v=>v+1)}>Recarregar verificação</button>}
