@@ -72,15 +72,33 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  useEffect(()=>{
   if(reset||mode!=='login'||!supabase)return;
   let active=true;
-  void supabase.auth.getSession().then(({data:{session}})=>{
-   if(!active||!session)return;
+  let redirected=false;
+  const goToAccount=(sessionExists:boolean)=>{
+   if(!active||!sessionExists||redirected)return;
+   redirected=true;
    if(audience==='platform')navigate('/platform',{replace:true});
    else if(audience==='owner')navigate('/owner',{replace:true});
    else if(audience==='staff')navigate('/barber',{replace:true});
    else if(audience==='client')navigate(shop?`/?shop=${encodeURIComponent(shop)}&audience=client`:'/client',{replace:true});
-  });
-  return()=>{active=false;};
+   else navigate('/',{replace:true});
+  };
+  const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>goToAccount(Boolean(session)));
+  void supabase.auth.getSession().then(({data:{session}})=>goToAccount(Boolean(session)));
+  return()=>{active=false;subscription.unsubscribe();};
  },[reset,mode,audience,shop,navigate]);
+
+ useEffect(()=>{
+  if(reset)return;
+  const callbackParams=new URLSearchParams(location.search);
+  const fragmentParams=new URLSearchParams(location.hash.replace(/^#/,'').replace(/^\?/,'') );
+  const oauthError=callbackParams.get('error_description')||callbackParams.get('error')||callbackParams.get('error_code')||fragmentParams.get('error_description')||fragmentParams.get('error')||fragmentParams.get('error_code');
+  if(!oauthError)return;
+  setMessage(oauthError==='access_denied'?'O acesso pelo Google foi cancelado. Você pode tentar novamente.':'O Google não conseguiu concluir o acesso. Confira a configuração do login Google e tente novamente.');
+  for(const params of [callbackParams,fragmentParams]){params.delete('error');params.delete('error_description');params.delete('error_code');}
+  const cleanSearch=callbackParams.toString();
+  const cleanHash=fragmentParams.toString();
+  navigate({pathname:location.pathname,search:cleanSearch?`?${cleanSearch}`:'',hash:cleanHash?`#${cleanHash}`:''},{replace:true});
+ },[location.pathname,location.search,location.hash,navigate,reset]);
 
  const destination=()=>{
   if(audience==='platform')return '/acesso/plataforma';
@@ -99,7 +117,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    query.set('audience',audience||'owner');
    if(shop)query.set('shop',shop);
    const redirectTo=`${window.location.origin}/login${query.toString()?`?${query.toString()}`:''}`;
-   if(mode==='signup')try{localStorage.setItem('fio-tour:google-signup-started',String(Date.now()));}catch{}
+   try{localStorage.setItem('fio-tour:google-signup-started',String(Date.now()));}catch{}
    const result=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo,queryParams:{prompt:'select_account'}}});
    if(result.error)throw result.error;
   }catch{setMessage('Não foi possível abrir o Google agora. Tente novamente.');setBusy(false);}
@@ -263,10 +281,10 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   </div>;
  }
 
- return <div className="auth-page">
+ return <div className="auth-page auth-page--login">
   <Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>
 
-  <div className="auth-card">
+  <div className="auth-card auth-card--login">
    <p className="eyebrow">{reset?'RECUPERAÇÃO DE SENHA':audience==='client'?'ACESSO DO CLIENTE':'BEM-VINDO AO FIO'}</p>
    <h1>{heading}</h1>
    <p className="muted">{description}</p>
