@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 
-type Turnstile={render:(element:HTMLElement,options:Record<string,unknown>)=>string;remove:(id:string)=>void;execute:(widgetId:string)=>void};
+type Turnstile={render:(element:HTMLElement,options:Record<string,unknown>)=>string;remove:(id:string)=>void};
 declare global {interface Window {turnstile?:Turnstile}}
 export const captchaSiteKey=String(import.meta.env.VITE_TURNSTILE_SITE_KEY??'').trim();
 let loading:Promise<Turnstile>|undefined;
@@ -22,11 +22,8 @@ function loadTurnstile(){
 
 export function AuthCaptcha({onToken,attempt}:{onToken:(token:string)=>void;attempt:number}){
  const container=useRef<HTMLDivElement>(null);
- const widgetRef=useRef<string|undefined>(undefined);
- const apiRef=useRef<Turnstile|undefined>(undefined);
- const startedRef=useRef(false);
  const [failed,setFailed]=useState(false),[retry,setRetry]=useState(0);
- const [ready,setReady]=useState(false),[started,setStarted]=useState(false),[verified,setVerified]=useState(false);
+ const [ready,setReady]=useState(false),[verified,setVerified]=useState(false);
  const [compact,setCompact]=useState(()=>typeof window!=='undefined'&&window.matchMedia('(max-width: 480px)').matches);
  useEffect(()=>{
   const media=window.matchMedia('(max-width: 480px)');
@@ -36,35 +33,24 @@ export function AuthCaptcha({onToken,attempt}:{onToken:(token:string)=>void;atte
  },[]);
  useEffect(()=>{
   let active=true,widget:string|undefined,api:Turnstile|undefined;
-  startedRef.current=false;widgetRef.current=undefined;apiRef.current=undefined;
-  onToken('');setFailed(false);setReady(false);setStarted(false);setVerified(false);
+  onToken('');setFailed(false);setReady(false);setVerified(false);
   void loadTurnstile().then(turnstile=>{
    if(!active||!container.current)return;
    api=turnstile;
-   // On narrow screens use Cloudflare's horizontal 300x65 widget instead of
-   // the taller 150x140 compact variant. The flexible widget remains full-width
-   // on desktop.
-   widget=turnstile.render(container.current,{sitekey:captchaSiteKey,theme:'auto',size:compact?'normal':'flexible',execution:'execute',appearance:'always',retry:'never',refreshExpired:'manual',
-    callback:(token:string)=>{if(active&&startedRef.current){setFailed(false);setVerified(true);setStarted(false);onToken(token);}},
-    'expired-callback':()=>{if(active){onToken('');setVerified(false);setStarted(false);startedRef.current=false;}},
-    'timeout-callback':()=>{if(active){onToken('');setVerified(false);setStarted(false);startedRef.current=false;setFailed(true);}},
-    'error-callback':()=>{if(active){onToken('');setVerified(false);setStarted(false);startedRef.current=false;setFailed(true);}}
+   // Render the Cloudflare widget immediately so its own checkbox/logo appears;
+   // use the horizontal fixed size on mobile and flexible width on desktop.
+   widget=turnstile.render(container.current,{sitekey:captchaSiteKey,theme:'auto',size:compact?'normal':'flexible',execution:'render',appearance:'always',retry:'auto',refreshExpired:'auto',
+    callback:(token:string)=>{if(active){setFailed(false);setVerified(true);onToken(token);}},
+    'expired-callback':()=>{if(active){onToken('');setVerified(false);}},
+    'timeout-callback':()=>{if(active){onToken('');setVerified(false);setFailed(true);}},
+    'error-callback':()=>{if(active){onToken('');setVerified(false);setFailed(true);}}
    });
-   widgetRef.current=widget;apiRef.current=turnstile;setReady(true);
+   setReady(true);
   }).catch(()=>{if(active)setFailed(true);});
-  return()=>{active=false;widgetRef.current=undefined;apiRef.current=undefined;if(widget!==undefined)api?.remove(widget);};
+  return()=>{active=false;if(widget!==undefined)api?.remove(widget);};
  },[onToken,attempt,retry,compact]);
- const startVerification=()=>{
-  const api=apiRef.current,widget=widgetRef.current;
-  if(!api||!widget||startedRef.current||verified)return;
-  startedRef.current=true;setStarted(true);setFailed(false);
-  try{api.execute(widget);}catch{startedRef.current=false;setStarted(false);setFailed(true);}
- };
  return <div className="auth-captcha">
   <div className="auth-captcha-widget" ref={container}/>
-  {!verified&&<button type="button" className="secondary full auth-captcha-start" disabled={!ready||started} onClick={startVerification}>
-   {started?'Verificando…':failed?'Verificar novamente':'Verificar acesso'}
-  </button>}
   {verified&&<p className="auth-captcha-status" role="status"><span aria-hidden="true">✓</span> Verificado. Toque em Entrar para continuar.</p>}
   {failed&&<p role="alert" className="auth-captcha-error">Não foi possível concluir a verificação. Tente novamente.</p>}
   {!ready&&!failed&&<p className="auth-captcha-hint">Carregando verificação de segurança…</p>}
