@@ -222,6 +222,23 @@ function paymentFromDetail(detail:ProviderDetail){
  return null;
 }
 
+function paymentFromChargePayload(value:unknown){
+ let raw:unknown=value;
+ for(let depth=0;depth<4;depth++){
+  if(!raw||typeof raw!=='object')return null;
+  const record=raw as Record<string,unknown>;
+  if(record.charge&&typeof record.charge==='object'){
+   const parsed=chargeSchema.safeParse(record.charge);
+   const charge=parsed.success?parsed.data:null;
+   if(charge?.payment?.pix_code)return {pixCode:charge.payment.pix_code,qrCode:charge.payment.qr_code??null,identifier:charge.payment.identifier??null,expiresAt:iso(charge.expires_at)};
+  }
+  const direct=loosePayment.safeParse(record.payment??record);
+  if(direct.success&&direct.data.pix_code)return {pixCode:direct.data.pix_code,qrCode:direct.data.qr_code??null,identifier:direct.data.identifier??null,expiresAt:iso(direct.data.expires_at)};
+  raw=record.data??record.subscription??null;
+ }
+ return null;
+}
+
 function accessUntil(detail:ProviderDetail){
  const next=iso(detail.next_charge_at);
  if(detail.status==='active'||detail.status==='overdue'){
@@ -311,15 +328,27 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
   await setEnrollmentIntent(db,intent.id,'linked',subscriptionToken,null);
   const link=await currentLink(db,ctx.shopId);
   if(!link)throw new ApiError(503,'BILLING_STATE_ERROR','A cobrança foi criada, mas o FIO não conseguiu vincular a assinatura. Não gere outra cobrança e entre em contato com o suporte.');
-  const status=normalizeProviderStatus(enrolled.status);
-  // Enrolment alone is not proof of payment. Reconcile provider truth before
-  // telling the UI that an active/overdue subscription has been confirmed.
-  if(status==='active'||status==='overdue'){
-   const detail=await getProviderDetail(subscriptionToken,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
-   await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-confirmation',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
-   return billingResponse(link,detail);
+  let detail:ProviderDetail;
+  try{
+   detail=await getProviderDetail(subscriptionToken,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
+  }catch(error){
+   // Enrollment and binding already succeeded. A temporary detail read failure
+   // must not mark the real subscription as uncertain or hide its initial Pix.
+   if(normalizeProviderStatus(enrolled.status)!=='pending_first_payment')throw error;
+   detail=normalizeProviderDetail({subscription_token:subscriptionToken,status:enrolled.status,plan_token:mapping.provider_plan_token,payment:enrolled.payment??null},{token:subscriptionToken,planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
+   const fallback=billingResponse(link,detail);
+   if(!fallback.payment?.pixCode&&enrolled.payment?.pix_code)fallback.payment={pixCode:enrolled.payment.pix_code,qrCode:enrolled.payment.qr_code??null,identifier:enrolled.payment.identifier??null,expiresAt:iso(enrolled.payment.expires_at)};
+   return fallback;
   }
-  return {provider:'syncpay' as const,providerStatus:status,plan:input.plan,cycle:input.cycle,amountCents:mapping.amount_cents,nextChargeAt:null,payment:enrolled.payment?{pixCode:enrolled.payment.pix_code??null,qrCode:enrolled.payment.qr_code??null,identifier:enrolled.payment.identifier??null,expiresAt:iso(enrolled.payment.expires_at)}:null};
+  await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-confirmation',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
+  const current=await currentLink(db,ctx.shopId);
+  const response=billingResponse(current??link,detail);
+  // Some SyncPay responses expose the first Pix on /enroll while the detail
+  // endpoint is still catching up. Keep that code if reconciliation has none.
+  if(!response.payment?.pixCode&&enrolled.payment?.pix_code){
+   response.payment={pixCode:enrolled.payment.pix_code,qrCode:enrolled.payment.qr_code??null,identifier:enrolled.payment.identifier??null,expiresAt:iso(enrolled.payment.expires_at)};
+  }
+  return response;
  }catch(e){
   const known=!subscriptionToken&&enrollmentFailureIsKnown(e);
   await setEnrollmentIntent(db,intent.id,known?'failed':'uncertain',subscriptionToken,e instanceof ApiError?e.code:'SYNCPAY_UNKNOWN_RESULT');
@@ -383,7 +412,17 @@ export async function manageSyncpayCharge(ctx:TenantContext,raw:unknown,fetcher:
  const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
  if(input.action==='cancel_pending'&&detail.status!=='pending_first_payment')throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','A cobrança mudou. Atualize antes de continuar.');
  if(input.action==='resend'&&!['pending_first_payment','overdue'].includes(detail.status))throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','Não há cobrança pendente para reenviar.');
- await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(link.provider_subscription_token)}/${input.action==='cancel_pending'?'cancel':'resend-charge'}`,{method:'PATCH',body:JSON.stringify(input.action==='cancel_pending'?{reason:'Responsável cancelou a contratação antes do primeiro pagamento no FIO'}:{})},false);
+ let payload:unknown;
+ try{
+  payload=await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(link.provider_subscription_token)}/${input.action==='cancel_pending'?'cancel':'resend-charge'}`,input.action==='cancel_pending'?{method:'PATCH',body:JSON.stringify({reason:'Responsável cancelou a contratação antes do primeiro pagamento no FIO'})}:{method:'PATCH'},false);
+ }catch(error){
+  if(input.action==='resend'&&error instanceof ApiError&&error.code==='SYNCPAY_INVALID_REQUEST')throw new ApiError(422,'SYNCPAY_RESEND_REJECTED','A SyncPay não aceitou gerar outro Pix agora. Atualize o status e, se continuar assim, fale com o suporte antes de tentar novamente.');
+  throw error;
+ }
+ if(input.action==='resend'){
+  const resentPayment=paymentFromChargePayload(payload);
+  if(resentPayment?.pixCode)return {configured:true,subscription:{...billingResponse(link,detail,resentPayment),change:null}};
+ }
  return getSyncpayBilling(ctx,fetcher);
 }
 
@@ -468,4 +507,4 @@ export async function handleSyncpayWebhook(req:Request,res:ExpressResponse,fetch
  res.status(200).json({received:true});
 }
 
-export const syncpayInternals={planConfig,validDocument,accessUntil,stateEventKey,isSyncpayDashboardTest,normalizeProviderDetail};
+export const syncpayInternals={planConfig,validDocument,accessUntil,stateEventKey,isSyncpayDashboardTest,normalizeProviderDetail,paymentFromChargePayload};

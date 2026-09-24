@@ -16,6 +16,13 @@ describe('SyncPay billing boundary',()=>{
   expect(syncpayInternals.validDocument('11111111111')).toBe(false);
  });
 
+ it('recovers Pix from the resend-charge response when SyncPay omits its QR image',()=>{
+  expect(syncpayInternals.paymentFromChargePayload({charge:{status:'pending',expires_at:'2026-09-25T12:00:00Z',payment:{pix_code:'000201010212',qr_code:null,identifier:'charge_123'}}})).toEqual({pixCode:'000201010212',qrCode:null,identifier:'charge_123',expiresAt:'2026-09-25T12:00:00.000Z'});
+  expect(syncpayInternals.paymentFromChargePayload({data:{charge:{status:'pending',expires_at:'2026-09-25T12:00:00Z',payment:{pix_code:'000201010212'}}}})).toMatchObject({pixCode:'000201010212',expiresAt:'2026-09-25T12:00:00.000Z'});
+  expect(syncpayInternals.paymentFromChargePayload({data:{payment:{pix_code:'000201010212',expires_at:'2026-09-25T12:00:00Z'}}})).toMatchObject({pixCode:'000201010212',expiresAt:'2026-09-25T12:00:00.000Z'});
+  expect(syncpayInternals.paymentFromChargePayload({charge:{status:'pending',payment:{qr_code:'data:image/png;base64,...'}}})).toBeNull();
+ });
+
  it('keeps overdue access only through the configured grace period',()=>{
   const detail={status:'overdue',next_charge_at:'2026-09-18T12:00:00Z',plan:{grace_period_days:5}} as Parameters<typeof syncpayInternals.accessUntil>[0];
   expect(syncpayInternals.accessUntil(detail)).toBe('2026-09-23T12:00:00.000Z');

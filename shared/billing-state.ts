@@ -19,7 +19,7 @@ export function usablePix(billing:BillingState|null,now=Date.now()){
 }
 
 export function billingStatusLabel(status:string){
- return ({pending_first_payment:'Aguardando primeiro pagamento',active:'Assinatura ativa',overdue:'Pagamento em atraso',suspended:'Assinatura suspensa',cancelled:'Assinatura cancelada'} as Record<string,string>)[status]??'Confirmação em andamento';
+ return ({pending_first_payment:'Contratação não finalizada',active:'Assinatura ativa',overdue:'Pagamento em atraso',suspended:'Assinatura suspensa',cancelled:'Assinatura cancelada'} as Record<string,string>)[status]??'Confirmação em andamento';
 }
 
 export function billingErrorMessage(code?:string){
@@ -31,6 +31,7 @@ export function billingErrorMessage(code?:string){
   SYNCPAY_SAME_PLAN:'Este já é o plano e período atuais.',
   INVALID_DOCUMENT:'Informe um CPF ou CNPJ válido.',
   SYNCPAY_INVALID_REQUEST:'Confira os dados de cobrança e tente novamente.',
+  SYNCPAY_RESEND_REJECTED:'A SyncPay não aceitou gerar outro Pix agora. Atualize o status e, se continuar assim, fale com o suporte antes de tentar novamente.',
   SYNCPAY_RATE_LIMIT:'Muitas tentativas seguidas. Aguarde alguns minutos.',
   SYNCPAY_ENROLLMENT_UNCERTAIN:'Uma tentativa está em verificação. Não gere outra cobrança; aguarde e procure o suporte se ela não aparecer.',
   SYNCPAY_ENROLLMENT_IN_PROGRESS:'Há uma tentativa de assinatura em verificação. Aguarde antes de escolher outro plano.',

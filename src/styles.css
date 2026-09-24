@@ -241,6 +241,20 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
 .pulse-mark{animation:pulseMark 1.3s ease-in-out infinite}
 @keyframes pulseMark{50%{opacity:.42;transform:scale(.97)}}
 
+/* Keep the assistant composer at the bottom of its available viewport. */
+.chat-main{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.assistant-page{display:flex;flex:1 1 auto;flex-direction:column;height:100%;min-height:0;width:100%}
+.message-scroll{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow-y:auto}
+.composer-area{position:relative;inset:auto;flex:0 0 auto;margin:0 auto;align-self:stretch;padding-top:12px;padding-bottom:12px}
+.assistant-empty{margin:auto;flex:0 0 auto;padding-bottom:12px}
+@media(max-width:760px){
+ .chat-main{height:calc(100dvh - 58px - 64px - env(safe-area-inset-bottom));min-height:0}
+ .assistant-page{height:100%;min-height:0}
+ .message-scroll{min-height:0;padding-bottom:6px}
+ .assistant-empty{padding-top:18px;padding-bottom:12px}
+ .composer-area{padding:10px 14px 8px;max-width:none;margin:0}
+}
+
 @media(max-width:760px){
  .sidebar{width:min(286px,84vw);padding:20px 14px 0}
  .sidebar-brand{margin:0 10px 20px}
@@ -681,13 +695,13 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
 .public-install-nudge{position:fixed!important;z-index:70!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;width:min(560px,calc(100% - 32px))!important;margin:0!important;box-shadow:0 24px 80px #000b!important}
 
 /* SyncPay checkout inside FIO plans */
-.fio-document-field{width:100%;text-align:left;margin:2px 0}.fio-document-field>span{font-size:.72rem;color:var(--muted)}
+.fio-checkout-placeholder{display:grid;gap:14px;min-width:0}.fio-checkout-placeholder .full{min-height:46px}.fio-document-field{width:100%;text-align:left;margin:2px 0}.fio-document-field>span{font-size:.72rem;color:var(--muted)}.fio-document-field small{display:block;margin-top:5px;color:var(--muted);font-size:.67rem;line-height:1.45}
 .fio-terms{width:100%;display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;text-align:left;border:1px solid #2e2e2e;background:#151515;border-radius:10px;padding:12px;color:#b6b6b6;font-size:.72rem;line-height:1.45}.fio-terms input{width:17px;min-width:17px;height:17px;min-height:17px;margin:1px 0 0;padding:0}
 .fio-checkout-error{width:100%;text-align:left;border:1px solid #63363a;background:#281719;color:#efb7bc;border-radius:9px;padding:10px 12px;font-size:.74rem;line-height:1.45}
-.fio-pix-box{width:100%;display:grid;gap:8px;text-align:left}.fio-pix-box>span{font-size:.62rem;letter-spacing:.1em;color:var(--muted)}.fio-pix-box textarea{font-size:.75rem;line-height:1.45;resize:none;word-break:break-all}
+.fio-pix-box{width:100%;min-width:0;display:grid;gap:10px;text-align:left;padding:14px;border:1px solid #353535;border-radius:12px;background:#111}.fio-pix-box>strong{font-size:.91rem}.fio-pix-box>p{margin:0;color:var(--muted);font-size:.72rem;line-height:1.45}.fio-pix-box>label{font-size:.67rem;color:var(--muted)}.fio-pix-box textarea{width:100%;min-width:0;box-sizing:border-box;font-size:.72rem;line-height:1.45;resize:vertical;min-height:76px;max-height:150px;overflow-wrap:anywhere;word-break:break-all}.fio-pix-qr{justify-self:center;max-width:100%;background:#fff;border-radius:12px;padding:12px;line-height:0}.fio-pix-qr svg{display:block;width:min(208px,58vw);height:auto;max-width:100%}.fio-pix-box .fio-pix-recipient-note{padding-top:3px;font-size:.66rem}
 .settings-readonly small{display:block;margin-top:3px;color:var(--muted);font-size:.67rem}
 :root[data-theme='light'] .fio-terms{background:#f8f8f5;border-color:#deded9;color:#555}:root[data-theme='light'] .fio-checkout-error{background:#fff1f1;border-color:#e1b8ba;color:#8b363b}
-@media(max-width:600px){.fio-checkout-placeholder{gap:10px}.fio-checkout-placeholder h3{font-size:1rem}.fio-checkout-placeholder>p{font-size:.78rem}.fio-document-field{margin-bottom:8px}.fio-terms{font-size:.68rem}}
+@media(max-width:600px){.fio-checkout-placeholder{gap:12px}.fio-checkout-placeholder h3{font-size:1rem}.fio-checkout-placeholder>p{font-size:.78rem}.fio-document-field{margin-bottom:3px}.fio-terms{font-size:.68rem}.fio-pix-box{padding:12px}.fio-pix-box textarea{min-height:68px}}
 
 /* ===== 2026-09-19 product polish: plans, support, public portal, auth ===== */
 .avatar{overflow:hidden}.avatar img{width:100%;height:100%;object-fit:cover;display:block}

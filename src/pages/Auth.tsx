@@ -99,6 +99,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    query.set('audience',audience||'owner');
    if(shop)query.set('shop',shop);
    const redirectTo=`${window.location.origin}/login${query.toString()?`?${query.toString()}`:''}`;
+   if(mode==='signup')try{localStorage.setItem('fio-tour:google-signup-started',String(Date.now()));}catch{}
    const result=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo,queryParams:{prompt:'select_account'}}});
    if(result.error)throw result.error;
   }catch{setMessage('Não foi possível abrir o Google agora. Tente novamente.');setBusy(false);}
@@ -177,6 +178,12 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     if(result.error){
      setMessage('Não foi possível criar a conta. Confira os dados e tente novamente.');
      return;
+    }
+
+    // Só a conta criada nesta etapa recebe o tutorial de boas-vindas.
+    // Usuários que já existiam e apenas fizerem login não verão a abertura automática.
+    if(result.data.user?.identities?.length){
+     try{localStorage.setItem(`fio-tour:new-account:${result.data.user.id}`,'pending');}catch{}
     }
 
     setMessage('Confira seu e-mail para confirmar o cadastro.');
