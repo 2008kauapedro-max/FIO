@@ -10,6 +10,10 @@ describe('SyncPay billing boundary',()=>{
   expect(syncpayInternals.planConfig('PREMIUM','annual')).toMatchObject({amountCents:189990,periodicityDays:365});
  });
 
+ it('rejects the proposed PLUS before any provider request',()=>{
+  expect(()=>syncpayInternals.planConfig('PLUS' as 'PRO','monthly')).toThrow('Escolha um plano pago válido.');
+ });
+
  it('accepts valid CPF/CNPJ and rejects malformed documents',()=>{
   expect(syncpayInternals.validDocument('52998224725')).toBe(true);
   expect(syncpayInternals.validDocument('11222333000181')).toBe(true);

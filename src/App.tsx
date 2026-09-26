@@ -1,13 +1,13 @@
 import { useCallback,useEffect,useRef,useState,lazy,Suspense } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
-import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,Images,Megaphone,Sun,Moon,Crown,CircleHelp } from 'lucide-react';
+import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,Images,Megaphone,Sun,Moon,Crown,CircleHelp,Settings,MoreHorizontal } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { Bootstrap,Membership,Role } from '../shared/domain';
 import { planAllows,type FioFeature } from '../shared/entitlements';
 import { roleHome } from '../shared/domain';
 import { api,supabase } from './lib/api';
 import { AuthPage,EmailConfirmationPage,Onboarding } from './pages/Auth';
-import { Agenda,Customers,Dashboard,Reports,Services,Settings as SettingsPage,Subscriptions,Team,Communication,Support,type WorkspaceProps } from './pages/Workspace';
+import { Agenda,Customers,Dashboard,Services,Settings as SettingsPage,Subscriptions,Team,Communication,Support,type WorkspaceProps } from './pages/Workspace';
 import { AssistantChat } from './components/AssistantChat';
 import { Feed } from './pages/Feed';
 import { PublicPortal } from './pages/PublicPortal';
@@ -30,10 +30,10 @@ const navItems:NavItem[]=[
  {path:'/clientes',label:'Clientes',icon:Users,roles:['OWNER','BARBER']},
  {path:'/equipe',label:'Equipe',icon:UserRound,roles:['OWNER','BARBER','CLIENT']},
  {path:'/servicos',label:'Serviços',icon:Scissors,roles:['OWNER','BARBER','CLIENT']},
- {path:'/assinaturas',label:'Assinaturas',icon:Wallet,roles:['OWNER','CLIENT']},
- {path:'/financeiro',label:'Financeiro',icon:Wallet,roles:['OWNER']},
+ {path:'/assinaturas',label:'Pacotes de cortes',icon:Wallet,roles:['OWNER','CLIENT']},
  {path:'/comunicacao',label:'Comunicação',icon:Megaphone,roles:['OWNER'],feature:'communication'},
  {path:'/plano-fio',label:'Plano FIO',icon:Crown,roles:['OWNER']},
+ {path:'/configuracoes',label:'Configurações',icon:Settings,roles:['OWNER','BARBER','CLIENT']},
  {path:'/suporte',label:'Ajuda e suporte',icon:CircleHelp,roles:['OWNER','BARBER','CLIENT']}
 ];
 
@@ -52,6 +52,7 @@ export default function App(){
  const [installPrompt,setInstallPrompt]=useState<InstallPromptEvent|null>(null);
  const sidebarNavRef=useRef<HTMLElement>(null);
 
+ useEffect(()=>{const change=(e:Event)=>setTheme((e as CustomEvent<Theme>).detail);window.addEventListener('fio-theme-change',change);return()=>window.removeEventListener('fio-theme-change',change);},[]);
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('fio-theme',theme);},[theme]);
  useEffect(()=>{const onInstall=(event:Event)=>{event.preventDefault();setInstallPrompt(event as InstallPromptEvent);};window.addEventListener('beforeinstallprompt',onInstall);return()=>window.removeEventListener('beforeinstallprompt',onInstall);},[]);
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{if(s)try{const started=Number(localStorage.getItem('fio-tour:google-signup-started'));const created=Date.parse(s.user.created_at);if(s.user.app_metadata.provider==='google'&&Number.isFinite(started)){if(Number.isFinite(created)&&created>=started-60_000&&created<=started+15*60_000)localStorage.setItem(`fio-tour:new-account:${s.user.id}`,'pending');localStorage.removeItem('fio-tour:google-signup-started');}}catch{}setSession(s);setAuthReady(true);if(!s){setData(null);setMemberships(null);}});return()=>subscription.unsubscribe();},[]);
@@ -77,7 +78,14 @@ export default function App(){
  useEffect(()=>{if(!session||!shopId||isPlatform||onboardingShopId)return;void refresh().catch(()=>undefined);},[location.pathname,session?.user.id,shopId,isPlatform,onboardingShopId,refresh]);
  useEffect(()=>{if(!session||!shopId||isPlatform||onboardingShopId)return;const sync=()=>void refresh().catch(()=>undefined);const visible=()=>{if(document.visibilityState==='visible')sync();};window.addEventListener('focus',sync);document.addEventListener('visibilitychange',visible);const timer=window.setInterval(sync,30000);return()=>{window.removeEventListener('focus',sync);document.removeEventListener('visibilitychange',visible);window.clearInterval(timer);};},[session?.user.id,shopId,isPlatform,onboardingShopId,refresh]);
  useEffect(()=>{setMenu(false);},[location.pathname]);
- useEffect(()=>{if(menu)requestAnimationFrame(()=>sidebarNavRef.current?.scrollTo({top:0,behavior:'instant'}));},[menu]);
+ useEffect(()=>{
+  if(!menu)return;
+  const previous=document.activeElement as HTMLElement|null;
+  const panel=sidebarNavRef.current?.closest('aside');
+  const frame=requestAnimationFrame(()=>{sidebarNavRef.current?.scrollTo({top:0});panel?.querySelector<HTMLElement>('button,a')?.focus();});
+  const key=(e:KeyboardEvent)=>{if(e.key==='Escape')setMenu(false);if(e.key==='Tab'&&panel){const nodes=Array.from(panel.querySelectorAll<HTMLElement>('a,button,select')).filter(n=>n.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};
+  document.addEventListener('keydown',key);return()=>{cancelAnimationFrame(frame);document.removeEventListener('keydown',key);previous?.focus();};
+ },[menu]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),5000);return()=>clearTimeout(timer);},[toast]);
  useEffect(()=>{
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -117,7 +125,6 @@ export default function App(){
   case '/equipe':content=<Team {...props}/>;break;
   case '/servicos':content=<Services {...props}/>;break;
   case '/assinaturas':content=<Subscriptions {...props}/>;break;
-  case '/financeiro':content=<Reports {...props}/>;break;
   case '/comunicacao':content=<Communication {...props}/>;break;
   case '/plano-fio':content=<FioPlans {...props}/>;break;
   case '/configuracoes':content=<SettingsPage {...props}/>;break;
@@ -127,7 +134,7 @@ export default function App(){
   default:content=<Dashboard {...props}/>;
  }
  const toggleTheme=()=>setTheme(t=>t==='dark'?'light':'dark');
- return <div className="app-shell">
+ return <div className={`app-shell ${page==='/assistente'?'chat-shell':''}`}>
   {menu&&<button className="menu-backdrop" aria-label="Fechar menu" onClick={()=>setMenu(false)}/>}
   <aside className={`sidebar ${menu?'is-open':''}`}>
    <div className="sidebar-brand sidebar-shop-brand">
@@ -156,10 +163,15 @@ export default function App(){
     </div>
    </div>
   </aside>
-  <div className="workspace">
+  <div className="workspace" inert={menu}>
    <header className="topbar"><div className="mobile-brand"><Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link></div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'Configurações':items.find(n=>n.path===page)?.label??'Visão geral'}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:<span className="plan-badge">FIO {data.plan}</span>}<button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
    <main key={`${base}:${shopId}:${page}`} className={page==='/assistente'?'chat-main assistant-chat-main':'main-content'}>{content}</main>
-   <nav className="bottom-nav" aria-label="Navegação mobile">{role==='CLIENT'?<><NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink><NavLink to={`${base}/agenda`}><CalendarDays size={21}/><span>Agenda</span></NavLink><NavLink to={`${base}/assinaturas`}><Wallet size={21}/><span>Assinatura</span></NavLink>{planAllows(data.plan,'feed')?<NavLink to={`${base}/feed`}><Images size={21}/><span>Feed</span></NavLink>:<NavLink to={`${base}/equipe`}><UserRound size={21}/><span>Equipe</span></NavLink>}<NavLink to={`${base}/suporte`}><CircleHelp size={21}/><span>Suporte</span></NavLink></>:role==='BARBER'?<><NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink><NavLink to={`${base}/agenda`}><CalendarDays size={21}/><span>Agenda</span></NavLink><NavLink to={`${base}/clientes`}><Users size={21}/><span>Clientes</span></NavLink>{planAllows(data.plan,'feed')?<NavLink to={`${base}/feed`}><Images size={21}/><span>Feed</span></NavLink>:<NavLink to={`${base}/equipe`}><UserRound size={21}/><span>Equipe</span></NavLink>}<NavLink to={`${base}/suporte`}><CircleHelp size={21}/><span>Suporte</span></NavLink></>:<><NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink><NavLink to={`${base}/agenda`}><CalendarDays size={21}/><span>Agenda</span></NavLink><NavLink to={`${base}/clientes`}><Users size={21}/><span>Clientes</span></NavLink><NavLink to={`${base}/equipe`}><UserRound size={21}/><span>Equipe</span></NavLink><NavLink to={`${base}/suporte`}><CircleHelp size={21}/><span>Suporte</span></NavLink></>}</nav>
+   <nav className="bottom-nav" aria-label="Navegação mobile">
+    <NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink>
+    <NavLink to={base+'/agenda'}><CalendarDays size={21}/><span>Agenda</span></NavLink>
+    {planAllows(data.plan,'assistant')?<NavLink to={base+'/assistente'}><Sparkles size={21}/><span>Assistente</span></NavLink>:<NavLink to={base+'/servicos'}><Scissors size={21}/><span>Serviços</span></NavLink>}
+    <button className={menu||!['','/agenda','/assistente','/servicos'].includes(page)?'active':''} aria-label="Mais opções" aria-expanded={menu} onClick={()=>setMenu(!menu)}><MoreHorizontal size={21}/><span>Mais</span></button>
+   </nav>
   </div>
   <GuidedTour key={`${shopId}:${data.membership.user_id}:${role}`} userId={data.membership.user_id} shopId={shopId} role={role} base={base} openMenu={setMenu}/>
   {toast&&<div className={`toast ${/não foi|falh|erro|indisponível|expir|aguarde|pendente/i.test(toast)?'is-error':'is-success'}`} role="status">{toast}<button aria-label="Fechar aviso" onClick={()=>setToast('')}><X size={16}/></button></div>}

@@ -19,7 +19,8 @@ describe('limites da API',()=>{
   const chain={select:()=>chain,eq:()=>chain,maybeSingle:async()=>({data:member,error:null})};
   const db={from:()=>chain} as unknown as SupabaseClient;
   const app=createApp(async()=>({db,userId:member.user_id}));
-  for(const path of ['/services','/customers','/invitations','/payments','/subscriptions']){const r=await request(app).post(`/api${path}`).set('X-Barbershop-Id',member.barbershop_id).send({});expect(r.status).toBe(403);}
+  expect((await request(app).post('/api/payments').set('X-Barbershop-Id',member.barbershop_id).send({})).status).toBe(404);
+  for(const path of ['/services','/customers','/invitations','/subscriptions']){const r=await request(app).post(`/api${path}`).set('X-Barbershop-Id',member.barbershop_id).send({});expect(r.status).toBe(403);}
  });
  it('CLIENT não consegue publicar no feed pela API',async()=>{const member=demoData('CLIENT').membership;const chain={select:()=>chain,eq:()=>chain,maybeSingle:async()=>({data:member,error:null})};const db={from:()=>chain} as unknown as SupabaseClient;const app=createApp(async()=>({db,userId:member.user_id}));const r=await request(app).post('/api/posts').set('X-Barbershop-Id',member.barbershop_id).send({caption:'fraude',imagePath:`${member.barbershop_id}/${member.user_id}/x.jpg`});expect(r.status).toBe(403);});
  it('rejeita injeção de role, tenant e preços nos contratos',()=>{expect(assistantSchema.safeParse({message:'oi',role:'OWNER',barbershop_id:'foreign'}).success).toBe(false);expect(bookingSchema.safeParse({serviceId:crypto.randomUUID(),clientId:crypto.randomUUID(),barberId:crypto.randomUUID(),startsAt:new Date().toISOString(),price_cents:1}).success).toBe(false);});

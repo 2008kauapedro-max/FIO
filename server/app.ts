@@ -203,10 +203,6 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const c=ctx(res),id=z.uuid().parse(req.params.id),v=z.object({status:z.enum(['confirmed','in_service','completed','cancelled','no_show']),confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('transition_appointment',{p_shop:c.shopId,p_id:id,p_status:v.status});dbError(r.error);res.json({ok:true});
  });
- app.post('/api/payments',async(req,res)=>{
-  const c=ctx(res);requireOwner(c);const v=z.object({appointmentId:z.uuid(),method:z.enum(['cash','pix','card','other']).default('pix'),confirmed:z.literal(true)}).strict().parse(req.body);
-  const r=await c.db.rpc('record_payment',{p_shop:c.shopId,p_appointment:v.appointmentId,p_method:v.method});dbError(r.error);res.status(201).json({ok:true});
- });
  app.post('/api/invitations',rateLimitByUser('invitations',600_000,10),async(req,res)=>{
   const c=ctx(res);requireOwner(c);const v=z.object({role:z.enum(['BARBER','CLIENT'])}).strict().parse(req.body);
   const r=await c.db.rpc('create_invitation',{p_shop:c.shopId,p_role:v.role});dbError(r.error);res.status(201).json({token:r.data});

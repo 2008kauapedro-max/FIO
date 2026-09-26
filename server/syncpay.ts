@@ -111,7 +111,7 @@ function validDocument(value:string){return validCpf(value)||validCnpj(value);}
 function planConfig(plan:PaidPlan,cycle:BillingCycle){
  const definition=FIO_PLAN_CATALOG.find(item=>item.code===plan);
  const amount=definition?.prices[cycle];
- if(!definition||amount==null||amount<=0)throw new ApiError(400,'INVALID_PLAN','Escolha um plano pago válido.');
+ if(!definition||definition.proposal||amount==null||amount<=0)throw new ApiError(400,'INVALID_PLAN','Escolha um plano pago válido.');
  return {plan,cycle,amountCents:amount,periodicityDays:CYCLE_DAYS[cycle],name:`${definition.name} · ${cycle==='weekly'?'Semanal':cycle==='monthly'?'Mensal':'Anual'} · v1 · ${amount}`};
 }
 

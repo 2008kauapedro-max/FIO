@@ -6,20 +6,20 @@ test('trial can become a paid PRO subscription',async({page})=>{
  await button.click();const dialog=page.getByRole('dialog');
  await expect(dialog.getByRole('heading',{name:'Assinar FIO PRO'})).toBeVisible();
  await dialog.getByLabel('CPF ou CNPJ do responsável').fill('52998224725');
- await dialog.getByRole('checkbox').check();await dialog.getByRole('button',{name:'Gerar Pix da assinatura'}).click();
+ await dialog.getByRole('checkbox').check();await dialog.getByRole('button',{name:'Gerar Pix'}).click();
  await expect(dialog.getByLabel('Código Pix copia e cola')).toHaveValue('PIX-SINTETICO-NAO-PAGAR');
  await dialog.getByRole('button',{name:'Fechar e pagar depois'}).click();
- await page.getByRole('button',{name:'Ver cobrança'}).click();
+ await page.getByRole('button',{name:'Ver detalhes'}).click();
  await expect(page.getByLabel('Código Pix copia e cola')).toBeVisible();
 });
 test('pending payment survives a page reload',async({page})=>{
  await page.goto(`${fixture}?scenario=pending`);await page.reload();
- await page.getByRole('button',{name:'Ver cobrança'}).click();
+ await page.getByRole('button',{name:'Ver detalhes'}).click();
  await expect(page.getByLabel('Código Pix copia e cola')).toBeVisible();
- await expect(page.getByRole('button',{name:'Gerar Pix da assinatura'})).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Gerar Pix'})).toHaveCount(0);
 });
 test('expired Pix is never presented for payment',async({page})=>{
- await page.goto(`${fixture}?scenario=expired`);await page.getByRole('button',{name:'Ver cobrança'}).click();
+ await page.goto(`${fixture}?scenario=expired`);await page.getByRole('button',{name:'Ver detalhes'}).click();
  await expect(page.getByRole('dialog')).toContainText('Não há um Pix válido disponível');
  await expect(page.getByLabel('Código Pix copia e cola')).toHaveCount(0);
 });
@@ -34,5 +34,23 @@ test('light and dark layouts keep the selected period visible without overflow',
   await expect(page.getByRole('heading',{name:'Escolha como sua barbearia cresce'})).toBeVisible();
   const annual=page.getByRole('tab',{name:/Anual/});await annual.click();await expect(annual).toHaveAttribute('aria-selected','true');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ }
+});
+
+test('four plans align in pairs on mobile and PLUS remains unavailable',async({page})=>{
+ for(const width of [320,360,390,768,1440]){
+  await page.setViewportSize({width,height:900});
+  await page.goto(`${fixture}?scenario=trial`);
+  await expect(page.locator('.fio-price-card')).toHaveCount(4);
+  const free=await page.locator('[data-plan="FREE"]').boundingBox();
+  const pro=await page.locator('[data-plan="PRO"]').boundingBox();
+  expect(Math.abs(free!.y-pro!.y)).toBeLessThan(2);
+  expect(pro!.x).toBeGreaterThan(free!.x);
+  for(const cycle of ['Semanal','Mensal','Anual']){
+   await page.getByRole('tab',{name:new RegExp(cycle)}).click();
+   await expect(page.locator('[data-plan="PLUS"]').getByRole('button',{name:'Em breve'})).toBeDisabled();
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+   expect(await page.locator('.fio-price-card').evaluateAll(cards=>cards.every(c=>c.scrollWidth<=c.clientWidth))).toBe(true);
+  }
  }
 });

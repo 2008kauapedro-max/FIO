@@ -17,3 +17,5 @@ export async function api<T>(path:string,_shop?:string,body?:unknown):Promise<T>
  if(path==='/saas/trial')return {ok:true} as T;
  throw new Error(`Unexpected fixture request: ${path}`);
 }
+
+export const supabase=null;

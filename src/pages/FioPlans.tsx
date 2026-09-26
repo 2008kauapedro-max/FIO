@@ -1,5 +1,5 @@
 import { useEffect,useMemo,useState } from 'react';
-import { ArrowRight,Check,Copy,Crown,Gift,Info,RefreshCw,ShieldCheck,Sparkles,WalletCards } from 'lucide-react';
+import { ArrowRight,Check,Copy,Crown,Gift,Info,RefreshCw,ShieldCheck,WalletCards } from 'lucide-react';
 import { BILLING_LABELS,FIO_PLAN_CATALOG,billingSuffix,type BillingCycle } from '../../shared/fio-plans';
 import { money } from '../../shared/domain';
 import { api,RequestError } from '../lib/api';
@@ -29,8 +29,7 @@ export function FioPlans(p:WorkspaceProps){
  const trialUsed=Boolean(sub.trial_ends_at);
  const trialActive=sub.status==='trialing'&&Boolean(sub.trial_ends_at)&&new Date(sub.trial_ends_at!)>new Date();
  const activeDefinition=useMemo(()=>FIO_PLAN_CATALOG.find(x=>x.code===p.data.plan)??FIO_PLAN_CATALOG[0],[p.data.plan]);
- const paidActive=['active','past_due'].includes(sub.status)&&p.data.plan!=='FREE';
- const billingLocked=billingLocksNewSubscription(billing);
+  const billingLocked=billingLocksNewSubscription(billing);
  useEffect(()=>{
   let active=true;
   void api<{configured:boolean;subscription:BillingState|null}>('/saas/billing',p.data.shop.id).then(result=>{
@@ -95,7 +94,7 @@ export function FioPlans(p:WorkspaceProps){
  }
 
  return <>
-  <PageTitle eyebrow="ASSINATURA FIO" title="Escolha como sua barbearia cresce" description="Compare os recursos e escolha semanal, mensal ou anual com clareza. Só o responsável pela barbearia pode alterar este plano."/>
+  <PageTitle eyebrow="ASSINATURA FIO" title="Escolha como sua barbearia cresce" description="Agenda e organização para cada fase da sua barbearia. Escolha o período e compare os planos."/>
 
   <section className="fio-plan-current">
    <div className="fio-plan-current-icon"><Crown size={21}/></div>
@@ -103,7 +102,7 @@ export function FioPlans(p:WorkspaceProps){
    <span className={`fio-billing-status ${trialActive?'is-trial':''}`}>{trialActive?'TESTE ATIVO':sub.status==='past_due'?'PAGAMENTO PENDENTE':p.data.plan==='FREE'?'GRÁTIS':sub.status==='cancelled'||sub.status==='inactive'?'INATIVO':'ATIVO'}</span>
   </section>
 
-  {billing?.providerStatus!=='cancelled'&&<section className="fio-billing-resume" aria-label="Cobrança atual">
+  {(billing&&billing.providerStatus!=='cancelled'||!billingLoaded||!billingConfigured)&&<section className="fio-billing-resume" aria-label="Cobrança atual">
    <div><strong>{billing?billingStatusLabel(billing.providerStatus):billingLoaded?(billingConfigured?'Nenhuma contratação iniciada':'Assinaturas temporariamente indisponíveis'):checkoutError?'Não foi possível consultar a cobrança':'Consultando sua assinatura…'}</strong>
    <p className="muted">{billing?.providerStatus==='pending_first_payment'?`Você iniciou a contratação do FIO ${billing.plan} · ${BILLING_LABELS[billing.cycle]} (${money(billing.amountCents)}), mas ainda não pagou o Pix. Nenhum valor foi debitado. A contratação só será concluída se você pagar.`:billing?`FIO ${billing.plan} · ${BILLING_LABELS[billing.cycle]} · ${money(billing.amountCents)}`:'Consulte a situação antes de iniciar uma nova assinatura.'}</p></div>
    <div className="page-actions">{billing&&<button className="primary" disabled={busy} onClick={()=>{setCheckoutPlan(billing.plan);setCheckoutError('');}}>Ver detalhes</button>}{billing?.providerStatus==='pending_first_payment'&&!billing.change&&<button className="danger" disabled={busy} onClick={()=>void manageCharge('cancel_pending')}>Cancelar contratação</button>}<button className="secondary" disabled={busy} onClick={()=>void refreshBilling()}><RefreshCw size={16}/>{busy?'Consultando…':'Atualizar status'}</button></div>
@@ -118,20 +117,21 @@ export function FioPlans(p:WorkspaceProps){
    </div>
   </section>
 
-  <div className="fio-pricing-grid">
+  <div className="fio-pricing-grid fio-pricing-compact">
    {FIO_PLAN_CATALOG.map(plan=>{
     const price=plan.prices[cycle],current=p.data.plan===plan.code,unavailable=price===null;
     const annualSaving=plan.code!=='FREE'&&cycle==='annual'&&plan.prices.monthly!=null&&price!=null?plan.prices.monthly*12-price:0;
     const monthlyEquivalent=cycle==='annual'&&price?Math.round(price/12):null;
-    return <article key={plan.code} className={`fio-price-card ${plan.recommended?'recommended':''} ${current?'current':''}`}>
+    return <article key={plan.code} data-plan={plan.code} className={`fio-price-card ${plan.recommended?'recommended':''} ${current?'current':''}`}>
      <div className="fio-price-card-accent"/>
-     <div className="fio-price-card-top"><div><span className="eyebrow">{plan.eyebrow}</span><h2>{plan.name}</h2><p>{plan.description}</p></div>{plan.recommended&&<span className="fio-recommended"><Sparkles size={14}/>Mais escolhido</span>}</div>
-     <div className="fio-price"><span>{unavailable?'—':price===0?'R$ 0':money(price)}</span>{!unavailable&&price!==0&&<small>{billingSuffix(cycle)}</small>}</div>
-     {monthlyEquivalent&&<small className="fio-price-equivalent">equivale a {money(monthlyEquivalent)}/mês</small>}
-     {annualSaving>0&&<div className="fio-saving">Você economiza {money(annualSaving)} no ano</div>}
-     {plan.code==='PRO'&&!trialUsed&&<div className="fio-trial-note"><Gift size={17}/><span><strong>14 dias grátis disponíveis</strong><small>Você decide entre testar primeiro ou assinar agora.</small></span></div>}
-     <div className="fio-plan-highlights">{plan.highlights.map(item=><div key={item}><span className="fio-highlight-check"><Check size={14}/></span><span>{item}</span></div>)}</div>
-     <div className="fio-card-action">{plan.code==='FREE'||unavailable?<button className="secondary full" disabled>{current?'Plano atual':'Plano gratuito'}</button>:billing?.providerStatus==='active'&&!billing.change?(billing.plan===plan.code&&billing.cycle===cycle?<button className="secondary full" disabled>Plano e período atuais</button>:<button className="primary full" disabled={busy} onClick={()=>{setChangePlan(plan.code as PaidPlan);setChangeAccepted(false);setCheckoutError('');}}>Trocar para {plan.code}<ArrowRight size={17}/></button>):billingLocked?<button className="secondary full" disabled={busy} onClick={()=>{if(billing)setCheckoutPlan(billing.plan);}}>Ver assinatura atual</button>:plan.code==='PRO'&&!trialUsed&&p.data.plan==='FREE'?<button className="primary full" disabled={busy||!billingLoaded||!billingConfigured} onClick={()=>setChoiceOpen(true)}>Começar com PRO<ArrowRight size={17}/></button>:<button className="primary full" disabled={busy||!billingLoaded||!billingConfigured} onClick={()=>selectPaid(plan.code as PaidPlan)}>Assinar {plan.code}<ArrowRight size={17}/></button>}</div>
+     <div className="fio-price-card-top"><div><span className="eyebrow">{plan.eyebrow}</span><h2>{plan.name}</h2><p>{plan.description}</p></div></div>
+     <div className="fio-price"><span>{unavailable?'—':price===0?'R$ 0':money(price)}</span>{!unavailable&&<small>{price===0?'sem custo':billingSuffix(cycle)}</small>}</div>
+     {monthlyEquivalent!==null&&<small className="fio-price-equivalent">equivale a {money(monthlyEquivalent)}/mês</small>}
+     {annualSaving>0&&<div className="fio-saving">Economia de {money(annualSaving)}/ano</div>}
+     {plan.code==='PRO'&&!trialUsed&&<div className="fio-trial-note"><Gift size={15}/><span>14 dias de teste grátis</span></div>}
+     <div className="fio-plan-highlights">{plan.highlights.slice(0,2).map(item=><div key={item}><span className="fio-highlight-check"><Check size={14}/></span><span>{item}</span></div>)}</div>
+     <details className="fio-plan-details"><summary>Ver recursos</summary><ul>{plan.highlights.slice(2).map(item=><li key={item}>{item}</li>)}</ul>{plan.proposal&&<p>Preço e recursos sujeitos à aprovação. Contratação indisponível.</p>}</details>
+     <div className="fio-card-action">{plan.proposal?<><small className="fio-proposal-note">Proposta · ainda indisponível</small><button className="secondary full" disabled>Em breve</button></>:plan.code==='FREE'||unavailable?<button className="secondary full" disabled>{current?'Plano atual':'Plano gratuito'}</button>:billing?.providerStatus==='active'&&!billing.change?(billing.plan===plan.code&&billing.cycle===cycle?<button className="secondary full" disabled>Plano atual</button>:<button className="primary full" disabled={busy} onClick={()=>{setChangePlan(plan.code as PaidPlan);setChangeAccepted(false);setCheckoutError('');}}>Trocar para {plan.code}<ArrowRight size={17}/></button>):billingLocked?<button className="secondary full" disabled={busy} onClick={()=>{if(billing)setCheckoutPlan(billing.plan);}}>Ver assinatura</button>:plan.code==='PRO'&&!trialUsed&&p.data.plan==='FREE'?<button className="primary full" disabled={busy||!billingLoaded||!billingConfigured} onClick={()=>setChoiceOpen(true)}>Começar com PRO<ArrowRight size={17}/></button>:<button className="primary full" disabled={busy||!billingLoaded||!billingConfigured} onClick={()=>selectPaid(plan.code as PaidPlan)}>Assinar {plan.code}<ArrowRight size={17}/></button>}</div>
     </article>;
    })}
   </div>

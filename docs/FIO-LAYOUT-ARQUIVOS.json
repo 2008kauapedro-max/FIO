@@ -1,0 +1,122 @@
+[
+  {
+    "file": "src/App.tsx",
+    "sha256": "FC371F7A569A9FC6D717D18517C6659C93B1150EFCB099D62EAC50D9D044294B"
+  },
+  {
+    "file": "src/styles.css",
+    "sha256": "9F5C7B715A9CFEBAF9C26E4191EF29DE838DD0725678E6AF78DF6748EDC49E91"
+  },
+  {
+    "file": "src/components/AssistantChat.tsx",
+    "sha256": "273B2024BF608297B84B198F9CEEB999F1B898C4AA187DCFA758C7B25DE7988A"
+  },
+  {
+    "file": "src/components/AuthCaptcha.tsx",
+    "sha256": "7EFE86BB21CFA0D8FBEC2BF30A627D24AB5DC3CC31787251FAA3CE6CA3E8CA0D"
+  },
+  {
+    "file": "src/components/GuidedTour.tsx",
+    "sha256": "E84F581B440D00E53F949DF6F845C780CB1DF461BEAD566AA779ACECB5E34344"
+  },
+  {
+    "file": "src/components/useChatViewport.ts",
+    "sha256": "BA7A25BA283D69478ABD4A6D4859FE91805373DAA09FBF47092A1831C18325F1"
+  },
+  {
+    "file": "src/pages/Workspace.tsx",
+    "sha256": "9376EB46D95C0C68C2FAAB23509C894DA8AF018474985EFA0FEF095278D688A2"
+  },
+  {
+    "file": "tests/fixtures/experience-api.ts",
+    "sha256": "8856E094B5C4CF1D3DF51734CC2B14AD539B070745A3DB0691B1F35FBDB0037C"
+  },
+  {
+    "file": "tests/fixtures/experience-vite.config.ts",
+    "sha256": "7B39B0630F2B6B179FED18EEA2627F527B213ADD21842E1B25DC3391BB3326F9"
+  },
+  {
+    "file": "tests/layout-browser.mjs",
+    "sha256": "798EB1258745961AFE664D34E05201056CAF748C6AB1BA70F671406700448915"
+  },
+  {
+    "file": "docs/FIO-LAYOUT-ENTREGA.md",
+    "sha256": "CED97D811A7A5DB3BA42714620FF422FB0F449539A0C5D91D79242C205ABE6D1"
+  },
+  {
+    "file": "docs/layout-evidence/agenda-1440-dark.png",
+    "sha256": "97BE310B994A9C407B560C3E2F70244C3E8E851BA02780EB647E1E4BF54344AE"
+  },
+  {
+    "file": "docs/layout-evidence/agenda-1440-light.png",
+    "sha256": "988910B8B2F9A89AF3E73B46A168F9F2A0E2C1E40DEA02C22B9939A50E4CE44A"
+  },
+  {
+    "file": "docs/layout-evidence/agenda-390-dark.png",
+    "sha256": "FEB3A4B657FD9A9D57FE6F2D39B940B186FFF4EE92557363F88CDEEA67D4EFA4"
+  },
+  {
+    "file": "docs/layout-evidence/agenda-390-light.png",
+    "sha256": "443BD6C40FA9C0A3C1843F7118A604ABF76C4F37DB2019EB46EE5AA3EFA0BDD7"
+  },
+  {
+    "file": "docs/layout-evidence/appointment-dialog-320.png",
+    "sha256": "71695A04211BD4428857BE5D72117E1F74F744D3E0A5C3AA84886CAC3E838D7B"
+  },
+  {
+    "file": "docs/layout-evidence/assistente-1440-dark.png",
+    "sha256": "F415BBAD4BA608EF931AEC94F7CABD30966264F7EA06CBFE8C8C646A17C31BA4"
+  },
+  {
+    "file": "docs/layout-evidence/assistente-1440-light.png",
+    "sha256": "74B002194F4AC1615DF121AEDE6AFFEC57A12C2F586075C4E4F2618CAEBE770F"
+  },
+  {
+    "file": "docs/layout-evidence/assistente-390-dark.png",
+    "sha256": "B374D852E716F840A193487F889BF3442D8151C5760A3D9840E11E446D71F934"
+  },
+  {
+    "file": "docs/layout-evidence/assistente-390-light.png",
+    "sha256": "4696713EFE0A61E6D7C5EF263522358E2F53FB36C96D70139AAE562D30F57B81"
+  },
+  {
+    "file": "docs/layout-evidence/booking-390.png",
+    "sha256": "F6716C7A4414EB77F105573746596B94F26628FD129D6B275CC3C222CFCAC211"
+  },
+  {
+    "file": "docs/layout-evidence/booking-results.json",
+    "sha256": "0A5BAC65EEE93DBCC3F84635961B29A210540A720616DFCF1DC3F34CFAA68788"
+  },
+  {
+    "file": "docs/layout-evidence/chat-error-390.png",
+    "sha256": "FF5FDAA6A4A138A09E4394AA624D4C13E5800BFAC5A3B7444C24EF7742F7C5AD"
+  },
+  {
+    "file": "docs/layout-evidence/configuracoes-1440-dark.png",
+    "sha256": "3DBC33BDF3CEC371A346287F8FBF6FFC030E6D0ECC0E59F9044CD7B3E5C44286"
+  },
+  {
+    "file": "docs/layout-evidence/configuracoes-1440-light.png",
+    "sha256": "619B7FDE7191E2E87DCB6EDC225BC4721A93F544610D636F684CBA18CF1967A0"
+  },
+  {
+    "file": "docs/layout-evidence/configuracoes-390-dark.png",
+    "sha256": "7A51DBFD69D00FE51CB7600C15DDF009184B75D8A81C0B2829CC9810242146AA"
+  },
+  {
+    "file": "docs/layout-evidence/configuracoes-390-light.png",
+    "sha256": "182B65E2B3CC91F9A80FAE8959BD99471093FE7501DB2B752FAF7D06DA66CF5B"
+  },
+  {
+    "file": "docs/layout-evidence/index.html",
+    "sha256": "B2D919B9D9F86E94711A9D9CEA9E4C6EAD61752DDE1436E02028CD6A6F34A7A9"
+  },
+  {
+    "file": "docs/layout-evidence/public-320.png",
+    "sha256": "29503941B4DAC48E7F7B56907D7BFE40575251F018DB6C0506B357982A8EDEAB"
+  },
+  {
+    "file": "docs/layout-evidence/results.json",
+    "sha256": "A45BEB3D9DD3A5739EC85AB63CDF1E2A5397CC984F950B783E74966419D75E21"
+  }
+]

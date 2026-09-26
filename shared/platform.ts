@@ -12,7 +12,6 @@ export const platformSections={
  team:{table:'memberships',columns:'user_id,display_name,role,active',order:'display_name'},
  clients:{table:'customers',columns:'id,name,phone,created_at',order:'created_at'},
  agenda:{table:'appointments',columns:'id,starts_at,ends_at,status,price_cents',order:'starts_at'},
- finance:{table:'payments',columns:'id,amount_cents,created_at',order:'created_at'},
  subscriptions:{table:'client_subscriptions',columns:'id,name,remaining_cuts,status,expires_at',order:'expires_at'},
  reviews:{table:'reviews',columns:'id,rating,comment,created_at',order:'created_at'},
 } as const;

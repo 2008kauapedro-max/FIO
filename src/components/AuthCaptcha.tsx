@@ -37,9 +37,8 @@ export function AuthCaptcha({onToken,attempt}:{onToken:(token:string)=>void;atte
   void loadTurnstile().then(turnstile=>{
    if(!active||!container.current)return;
    api=turnstile;
-   // Render the Cloudflare widget immediately so its own checkbox/logo appears;
-   // use the horizontal fixed size on mobile and flexible width on desktop.
-   widget=turnstile.render(container.current,{sitekey:captchaSiteKey,theme:'auto',size:compact?'normal':'flexible',execution:'render',appearance:'always',retry:'auto',refreshExpired:'auto',
+   // Compact is the provider's accessible narrow layout; never crop its iframe.
+   widget=turnstile.render(container.current,{sitekey:captchaSiteKey,theme:'auto',size:compact?'compact':'flexible',execution:'render',appearance:'always',retry:'auto',refreshExpired:'auto',
     callback:(token:string)=>{if(active){setFailed(false);setVerified(true);onToken(token);}},
     'expired-callback':()=>{if(active){onToken('');setVerified(false);}},
     'timeout-callback':()=>{if(active){onToken('');setVerified(false);setFailed(true);}},

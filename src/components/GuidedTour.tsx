@@ -12,9 +12,9 @@ export function GuidedTour({userId,shopId,role,base,openMenu}:{userId:string;sho
  const navigate=useNavigate(),dialog=useRef<HTMLDivElement>(null);
  const [index,setIndex]=useState<number|null>(null),[rect,setRect]=useState<DOMRect|null>(null),[position,setPosition]=useState<Position>({top:12,left:12});
  const steps=useMemo<Step[]>(()=>[
-  {target:'overview',title:'Seu resumo do dia',text:role==='OWNER'?'Este quadro resume os recebimentos desta semana. Depois do tutorial, abra Ver detalhes para escolher outro período.':role==='BARBER'?'Aqui você acompanha sua agenda e os próximos atendimentos.':'Aqui você vê seu próximo atendimento e os horários da sua barbearia.',route:base},
+  {target:'overview',title:'Seu resumo do dia',text:role==='OWNER'?'Aqui você acompanha os horários de hoje e os atendimentos concluídos. Abra a agenda para ver os detalhes.':role==='BARBER'?'Aqui você acompanha sua agenda e os próximos atendimentos.':'Aqui você vê seu próximo atendimento e os horários da sua barbearia.',route:base},
   {target:'nav-agenda',title:'Agenda',text:'O menu será aberto durante o tutorial. Aqui você encontra horários, agendamentos e detalhes dos atendimentos.',menu:true},
-  {target:'profile',title:'Seu perfil',text:'Seu nome e sua foto abrem as configurações da conta. Depois do tutorial, toque aqui para editar seus dados e opções de segurança.',menu:true},
+  {target:'nav-configuracoes',title:'Configurações',text:'Abra Configurações para editar seu perfil, aparência e segurança.',menu:true},
   {target:'nav-suporte',title:'Ajuda e suporte',text:'Aqui você pode falar com a equipe do FIO, tirar dúvidas ou contar quando algo não funcionar.',menu:true},
   {target:'feedback',title:'Envie uma sugestão ou dúvida',text:'Esta opção abre o formulário. O tutorial vai mostrar onde escrever e enviar sua mensagem.',route:`${base}/suporte`},
   {target:'feedback-message',title:'Escreva sua mensagem',text:'Explique o que aconteceu ou o que está faltando. Diga em qual tela ocorreu. Não inclua senhas nem códigos.',route:`${base}/suporte`},

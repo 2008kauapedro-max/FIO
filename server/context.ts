@@ -49,27 +49,25 @@ export async function bootstrap(ctx: TenantContext): Promise<Bootstrap> {
  const results=await Promise.all([
   db.from('barbershops').select('*').eq('id',shopId).single(),
   db.from('services').select('*').eq('barbershop_id',shopId).order('name'),
-  db.from('appointments').select('*').eq('barbershop_id',shopId).gte('starts_at',from).order('starts_at').limit(500),
+  db.from('appointments').select('id,client_id,barber_id,service_id,starts_at,ends_at,status,price_cents,subscription_id').eq('barbershop_id',shopId).gte('starts_at',from).order('starts_at').limit(500),
   db.from('customers').select('id,name,phone,user_id').eq('barbershop_id',shopId).order('name').limit(500),
   db.from('memberships').select('*').eq('barbershop_id',shopId).eq('active',true),
   db.from('client_subscriptions').select('*').eq('barbershop_id',shopId).order('expires_at').limit(500),
   db.from('saas_subscriptions').select('*').eq('barbershop_id',shopId).single(),
   db.from('memberships').select('*').eq('user_id',ctx.userId).eq('active',true),
-  ctx.member.role==='OWNER'?db.rpc('weekly_revenue',{p_shop:shopId}):Promise.resolve({data:null,error:null}),
   db.from('plan_features').select('plan,ai_enabled'),
   feedAllowed?db.from('feed_posts').select('id,author_id,author_name,caption,image_path,created_at').eq('barbershop_id',shopId).order('created_at',{ascending:false}).limit(100):Promise.resolve({data:[],error:null}),
   db.from('subscription_plans').select('id,name,description,cuts,validity_days,price_cents,active').eq('barbershop_id',shopId).order('name'),
-  ctx.member.role==='OWNER'?db.from('payments').select('appointment_id,amount_cents,created_at').eq('barbershop_id',shopId).order('created_at',{ascending:false}).limit(500):Promise.resolve({data:[],error:null}),
   communicationAllowed?db.from('campaigns').select('id,title,body,audience,status,created_at,published_at').eq('barbershop_id',shopId).order('created_at',{ascending:false}).limit(100):Promise.resolve({data:[],error:null}),
   db.from('notifications').select('id,title,body,read_at,created_at').eq('barbershop_id',shopId).eq('user_id',ctx.userId).order('created_at',{ascending:false}).limit(50),
   db.from('reviews').select('id,appointment_id,client_id,barber_id,rating,comment,created_at').eq('barbershop_id',shopId).order('created_at',{ascending:false}).limit(500)
  ]);
  results.forEach(r=>dbError(r.error));
- const [shop,services,appointments,customers,team,subscriptions,billing,memberships,revenue,features,posts,subscriptionPlans,payments,campaigns,notifications,reviews]=results.map(r=>r.data);
+ const [shop,services,appointments,customers,team,subscriptions,billing,memberships,features,posts,subscriptionPlans,campaigns,notifications,reviews]=results.map(r=>r.data);
  const plan=ctx.plan;
  const aiEnabled=planAllows(plan,'assistant')&&(features as {plan:string;ai_enabled:boolean}[]).some(f=>f.plan===plan&&f.ai_enabled);
  const fioSubscription={plan:billing.plan,status:billing.status,starts_at:billing.starts_at,current_period_end:billing.current_period_end,trial_ends_at:billing.trial_ends_at,cancelled_at:billing.cancelled_at};
- return {shop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans,payments,campaigns,notifications,posts,reviews,fioSubscription,plan,aiEnabled,revenue} as Bootstrap;
+ return {shop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans,campaigns,notifications,posts,reviews,fioSubscription,plan,aiEnabled} as Bootstrap;
 }
 
 // The provider receives a deliberately small, role-scoped data projection, never a frontend snapshot.
@@ -80,7 +78,7 @@ export function assistantContext(data: Bootstrap) {
   coverage:'Agenda: últimos 30 dias e próximos 60 dias, até 80 registros. Clientes e assinaturas: até 100 registros. Não inferir totais fora deste recorte.',
   services:data.services.filter(s=>s.active).slice(0,80).map(s=>({name:s.name,description:s.description??undefined,duration_minutes:s.duration_minutes,price_cents:s.price_cents})),
   appointments:data.appointments.slice(0,80).map(a=>({start:a.starts_at,end:a.ends_at,status:a.status,service:data.services.find(s=>s.id===a.service_id)?.name,client:data.customers.find(c=>c.id===a.client_id)?.name})),
-  ...(role==='OWNER'?{received_this_week_cents:data.revenue,customers:data.customers.slice(0,100).map(c=>({name:c.name})),subscriptions:data.subscriptions.slice(0,100).map(s=>({name:s.name,remaining_cuts:s.remaining_cuts,expires_at:s.expires_at,status:s.status}))}:{}),
+  ...(role==='OWNER'?{customers:data.customers.slice(0,100).map(c=>({name:c.name})),subscriptions:data.subscriptions.slice(0,100).map(s=>({name:s.name,remaining_cuts:s.remaining_cuts,expires_at:s.expires_at,status:s.status}))}:{}),
   ...(role==='CLIENT'?{subscriptions:data.subscriptions.slice(0,100).map(s=>({name:s.name,remaining_cuts:s.remaining_cuts,expires_at:s.expires_at,status:s.status}))}:{}),
   cancellation_policy:'Cliente pode cancelar até 2 horas antes. Nenhuma ação é executada pelo chat.'
  };

@@ -76,8 +76,7 @@ export async function askAssistant(ctx: TenantContext, body: unknown) {
   if(/agend|hor[aá]rio|atendimento/.test(q)&&appointments.length===0)return 'Ainda não há agendamentos no período disponível para consulta. Quando houver movimentação na agenda, eu consigo te ajudar a entendê-la por aqui.';
   if(/servi[cç]o|pre[cç]o/.test(q)&&services.length===0)return 'Ainda não há serviços ativos cadastrados nesta barbearia.';
   if(/assinatura|plano de corte/.test(q)&&subscriptions.length===0)return 'Ainda não há assinaturas de clientes disponíveis para consulta no seu acesso.';
-  if(/fatur|receita|receb/.test(q)&&ctx.member.role==='OWNER'&&context.received_this_week_cents===0)return 'Ainda não há recebimentos registrados nesta semana.';
-  return 'Não consegui acessar o modelo de IA agora. Seus dados continuam disponíveis normalmente no FIO; tente novamente em instantes ou faça uma pergunta sobre agenda, serviços, assinaturas ou recebimentos.';
+  return 'Não consegui acessar o modelo de IA agora. Seus dados continuam disponíveis normalmente no FIO; tente novamente em instantes ou faça uma pergunta sobre agenda, serviços ou pacotes de cortes.';
  };
  try {
   const providerBody=JSON.stringify({model,max_tokens:1200,messages:[
