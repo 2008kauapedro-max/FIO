@@ -11,6 +11,7 @@ import { bookingSchema } from '../shared/domain.js';
 import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook } from './syncpay.js';
 import { randomUUID } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
+import {publicPushConfig,validPushEndpoint} from './platform-push.js';
 type Authenticator = typeof authenticate;
 
 function serviceDb(){
@@ -192,12 +193,48 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const r=await c.db.rpc('submit_review',{p_shop:c.shopId,p_appointment:v.appointmentId,p_rating:v.rating,p_comment:v.comment});dbError(r.error);res.status(201).json({id:r.data});
  });
  app.get('/api/slots',async(req,res)=>{
-  const c=ctx(res);const v=z.object({barberId:z.uuid(),serviceId:z.uuid(),day:z.iso.date()}).parse(req.query);
-  const r=await c.db.rpc('available_slots',{p_shop:c.shopId,p_barber:v.barberId,p_service:v.serviceId,p_day:v.day});dbError(r.error);res.json(r.data);
+  const c=ctx(res);const v=z.object({barberId:z.union([z.uuid(),z.literal('any')]),serviceId:z.uuid(),day:z.iso.date()}).parse(req.query);
+  const r=await c.db.rpc('available_slots',{p_shop:c.shopId,p_barber:v.barberId==='any'?null:v.barberId,p_service:v.serviceId,p_day:v.day});dbError(r.error);res.json(r.data);
  });
  app.post('/api/appointments',async(req,res)=>{
   const c=ctx(res),v=bookingSchema.parse(req.body);
-  const r=await c.db.rpc('book_appointment',{p_shop:c.shopId,p_client:v.clientId,p_barber:v.barberId,p_service:v.serviceId,p_start:v.startsAt,p_use_subscription:v.useSubscription});dbError(r.error);res.status(201).json({id:r.data});
+  const r=await c.db.rpc('book_appointment',{p_shop:c.shopId,p_client:v.clientId,p_barber:v.barberId,p_service:v.serviceId,p_start:v.startsAt,p_use_subscription:v.useSubscription});dbError(r.error);
+  const assigned=await c.db.from('appointments').select('barber_id').eq('barbershop_id',c.shopId).eq('id',r.data).maybeSingle();
+  res.status(201).json({id:r.data,barberId:assigned.data?.barber_id??null});
+ });
+ app.get('/api/appointments/period',async(req,res)=>{
+  const c=ctx(res),v=z.object({from:z.iso.date(),to:z.iso.date(),barberId:z.uuid().optional()}).parse(req.query);
+  const r=await c.db.rpc('appointment_period',{p_shop:c.shopId,p_from:v.from,p_to:v.to,p_barber:v.barberId??null});dbError(r.error);res.json(r.data);
+ });
+ app.post('/api/appointments/:id/reschedule',async(req,res)=>{
+  const c=ctx(res),id=z.uuid().parse(req.params.id),v=z.object({startsAt:z.iso.datetime({offset:true}),confirmed:z.literal(true)}).strict().parse(req.body);
+  const r=await c.db.rpc('reschedule_appointment',{p_shop:c.shopId,p_id:id,p_start:v.startsAt});dbError(r.error);res.json({ok:true});
+ });
+ app.get('/api/staff-schedule',async(_req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const [hours,blocks,rules]=await Promise.all(['staff_hours','staff_blocks','staff_service_rules'].map(table=>c.db.from(table).select('*').eq('barbershop_id',c.shopId)));
+  [hours,blocks,rules].forEach(r=>dbError(r.error));res.json({hours:hours.data,blocks:blocks.data,rules:rules.data});
+ });
+ app.post('/api/staff-schedule',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const v=z.object({barberId:z.uuid(),hours:z.array(z.object({weekday:z.number().int().min(0).max(6),opens_at:z.string().regex(/^\d{2}:\d{2}$/),closes_at:z.string().regex(/^\d{2}:\d{2}$/)}).strict()).max(28),disabledServices:z.array(z.uuid()).max(500)}).strict().parse(req.body);
+  const r=await c.db.rpc('configure_staff_schedule',{p_shop:c.shopId,p_barber:v.barberId,p_hours:v.hours,p_disabled_services:v.disabledServices});dbError(r.error);res.json({ok:true});
+ });
+ app.post('/api/staff-blocks',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const v=z.object({barberId:z.uuid(),startsAt:z.iso.datetime({offset:true}),endsAt:z.iso.datetime({offset:true})}).strict().parse(req.body);
+  const r=await c.db.rpc('add_staff_block',{p_shop:c.shopId,p_barber:v.barberId,p_start:v.startsAt,p_end:v.endsAt});dbError(r.error);res.json({id:r.data});
+ });
+ app.delete('/api/staff-blocks/:id',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const r=await c.db.from('staff_blocks').delete().eq('barbershop_id',c.shopId).eq('id',z.uuid().parse(req.params.id));dbError(r.error);res.json({ok:true});
+ });
+ app.get('/api/appointments/:id',async(req,res)=>{const c=ctx(res);const r=await c.db.from('appointments').select('id,client_id,barber_id,service_id,starts_at,ends_at,status,price_cents,subscription_id').eq('barbershop_id',c.shopId).eq('id',z.uuid().parse(req.params.id)).maybeSingle();dbError(r.error);if(!r.data)throw new ApiError(404,'NOT_FOUND','Agendamento não encontrado no seu acesso.');res.json(r.data);});
+ app.get('/api/push/config',async(_req,res)=>res.json(publicPushConfig()));
+ app.get('/api/push/preferences',async(_req,res)=>{const c=ctx(res);const r=await c.db.from('appointment_push_devices').select('endpoint,enabled,changes,reminders').eq('barbershop_id',c.shopId).eq('user_id',c.userId);dbError(r.error);res.json(r.data);});
+ app.post('/api/push/devices',rateLimitByUser('push',60_000,10),async(req,res)=>{
+  const c=ctx(res),v=z.object({optIn:z.literal(true),endpoint:z.string().max(2048).refine(validPushEndpoint),keys:z.object({p256dh:z.string(),auth:z.string()}).strict(),changes:z.boolean(),reminders:z.boolean()}).strict().parse(req.body);
+  const r=await c.db.rpc('register_appointment_push',{p_shop:c.shopId,p_endpoint:v.endpoint,p_keys:v.keys,p_changes:v.changes,p_reminders:v.reminders});dbError(r.error);res.json({ok:true});
+ });
+ app.delete('/api/push/devices',async(req,res)=>{
+  const c=ctx(res),v=z.object({endpoint:z.string().max(2048)}).strict().parse(req.body);const r=await c.db.rpc('disable_appointment_push',{p_shop:c.shopId,p_endpoint:v.endpoint});dbError(r.error);res.json({ok:true});
  });
  app.patch('/api/appointments/:id',async(req,res)=>{
   const c=ctx(res),id=z.uuid().parse(req.params.id),v=z.object({status:z.enum(['confirmed','in_service','completed','cancelled','no_show']),confirmed:z.literal(true)}).strict().parse(req.body);

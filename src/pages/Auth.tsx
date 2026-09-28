@@ -1,3 +1,4 @@
+import {appointmentLink} from '../lib/appointment-link';
 import { clientContext,rememberClientShop } from '../lib/client-context';
 import { ShopIdentity } from '../components/ShopIdentity';
 import {AuthCaptcha,captchaSiteKey} from '../components/AuthCaptcha';
@@ -79,7 +80,8 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   const goToAccount=(sessionExists:boolean)=>{
    if(!active||!sessionExists||redirected)return;
    redirected=true;
-   if(audience==='platform')navigate('/platform',{replace:true});
+   if(appointmentLink(params.get('next')))navigate(appointmentLink(params.get('next'))!,{replace:true});
+   else if(audience==='platform')navigate('/platform',{replace:true});
    else if(audience==='owner')navigate('/owner',{replace:true});
    else if(audience==='staff')navigate('/barber',{replace:true});
    else if(audience==='client')navigate(shop?`/?shop=${encodeURIComponent(shop)}&audience=client`:'/client',{replace:true});
@@ -218,7 +220,8 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     return;
    }
 
-   if(audience==='platform')navigate('/platform',{replace:true});
+   if(appointmentLink(params.get('next')))navigate(appointmentLink(params.get('next'))!,{replace:true});
+   else if(audience==='platform')navigate('/platform',{replace:true});
    else if(audience==='owner')navigate('/owner',{replace:true});
    else if(audience==='staff')navigate('/barber',{replace:true});
    else if(audience==='client')navigate(shop?`/?shop=${encodeURIComponent(shop)}&audience=client`:'/client',{replace:true});
@@ -521,3 +524,4 @@ export function Onboarding({onDone,shopId}:{onDone:()=>void;shopId?:string}) {
  if(audience==='client'||window.location.pathname.startsWith('/client'))return <div className="auth-page"><div className="auth-card"><h1>Acesse o link da sua barbearia.</h1><p>Peça o link ao profissional para criar seu perfil de cliente e agendar.</p><button className="secondary" onClick={()=>void supabase?.auth.signOut()}>Sair da conta</button></div></div>;
  return <OwnerOnboarding onDone={onDone} shopId={shopId}/>;
 }
+

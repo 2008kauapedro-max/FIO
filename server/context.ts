@@ -55,11 +55,11 @@ export async function bootstrap(ctx: TenantContext): Promise<Bootstrap> {
   db.from('client_subscriptions').select('*').eq('barbershop_id',shopId).order('expires_at').limit(500),
   db.from('saas_subscriptions').select('*').eq('barbershop_id',shopId).single(),
   db.from('memberships').select('*').eq('user_id',ctx.userId).eq('active',true),
-  db.from('plan_features').select('plan,ai_enabled'),
+  db.from('plan_features').select('plan,ai_enabled,ai_daily_limit,ai_per_minute'),
   feedAllowed?db.from('feed_posts').select('id,author_id,author_name,caption,image_path,created_at').eq('barbershop_id',shopId).order('created_at',{ascending:false}).limit(100):Promise.resolve({data:[],error:null}),
   db.from('subscription_plans').select('id,name,description,cuts,validity_days,price_cents,active').eq('barbershop_id',shopId).order('name'),
   communicationAllowed?db.from('campaigns').select('id,title,body,audience,status,created_at,published_at').eq('barbershop_id',shopId).order('created_at',{ascending:false}).limit(100):Promise.resolve({data:[],error:null}),
-  db.from('notifications').select('id,title,body,read_at,created_at').eq('barbershop_id',shopId).eq('user_id',ctx.userId).order('created_at',{ascending:false}).limit(50),
+  db.from('notifications').select('id,title,body,read_at,created_at,appointment_id').eq('barbershop_id',shopId).eq('user_id',ctx.userId).order('created_at',{ascending:false}).limit(50),
   db.from('reviews').select('id,appointment_id,client_id,barber_id,rating,comment,created_at').eq('barbershop_id',shopId).order('created_at',{ascending:false}).limit(500)
  ]);
  results.forEach(r=>dbError(r.error));
@@ -68,7 +68,7 @@ export async function bootstrap(ctx: TenantContext): Promise<Bootstrap> {
  const aiEnabled=planAllows(plan,'assistant')&&(features as {plan:string;ai_enabled:boolean}[]).some(f=>f.plan===plan&&f.ai_enabled);
  const fioSubscription={plan:billing.plan,status:billing.status,starts_at:billing.starts_at,current_period_end:billing.current_period_end,trial_ends_at:billing.trial_ends_at,cancelled_at:billing.cancelled_at};
  const brandingShop={...shop,logo_url:shop.logo_url||(shop.logo_asset_path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${shop.logo_asset_path}`:null)};
- return {shop:brandingShop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans,campaigns,notifications,posts,reviews,fioSubscription,plan,aiEnabled} as Bootstrap;
+ return {shop:brandingShop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans,campaigns,notifications,posts,reviews,fioSubscription,plan,aiEnabled,aiLimits:features.find((f:{plan:string})=>f.plan===plan)} as Bootstrap;
 }
 
 // The provider receives a deliberately small, role-scoped data projection, never a frontend snapshot.
@@ -76,7 +76,7 @@ export function assistantContext(data: Bootstrap) {
  const role=data.membership.role;
  return {
   role, barbershop:{name:data.shop.name,timezone:data.shop.timezone}, current_time:new Date().toISOString(),
-  coverage:'Agenda: últimos 30 dias e próximos 60 dias, até 80 registros. Clientes e assinaturas: até 100 registros. Não inferir totais fora deste recorte.',
+  coverage:'Agenda: recorte dos registros a partir dos últimos 30 dias, até 80 registros; pode não incluir todos os horários futuros. Clientes e assinaturas: até 100 registros. Não inferir totais fora deste recorte.',
   services:data.services.filter(s=>s.active).slice(0,80).map(s=>({name:s.name,description:s.description??undefined,duration_minutes:s.duration_minutes,price_cents:s.price_cents})),
   appointments:data.appointments.slice(0,80).map(a=>({start:a.starts_at,end:a.ends_at,status:a.status,service:data.services.find(s=>s.id===a.service_id)?.name,client:data.customers.find(c=>c.id===a.client_id)?.name})),
   ...(role==='OWNER'?{customers:data.customers.slice(0,100).map(c=>({name:c.name})),subscriptions:data.subscriptions.slice(0,100).map(s=>({name:s.name,remaining_cuts:s.remaining_cuts,expires_at:s.expires_at,status:s.status}))}:{}),
@@ -84,3 +84,6 @@ export function assistantContext(data: Bootstrap) {
   cancellation_policy:'Cliente pode cancelar até 2 horas antes. Nenhuma ação é executada pelo chat.'
  };
 }
+
+
+

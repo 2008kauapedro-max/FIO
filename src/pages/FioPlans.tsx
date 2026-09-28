@@ -93,7 +93,7 @@ export function FioPlans(p:WorkspaceProps){
   catch{p.notify('Não foi possível copiar automaticamente. Selecione o código manualmente.');}
  }
 
- return <>
+ return <>{p.data.aiLimits&&<p className="notice">Limite de IA do seu plano: {p.data.aiLimits.ai_daily_limit} consultas/dia e {p.data.aiLimits.ai_per_minute}/minuto por usuário. Tentativas enviadas ao provedor contam para a cota.</p>}
   <PageTitle eyebrow="ASSINATURA FIO" title="Escolha como sua barbearia cresce" description="Agenda e organização para cada fase da sua barbearia. Escolha o período e compare os planos."/>
 
   <section className="fio-plan-current">
@@ -166,3 +166,4 @@ export function FioPlans(p:WorkspaceProps){
   </div></Modal>}
  </>;
 }
+

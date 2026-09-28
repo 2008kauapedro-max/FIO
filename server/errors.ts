@@ -2,6 +2,8 @@ export class ApiError extends Error {
  constructor(public status: number, public code: string, message: string) { super(message); }
 }
 const errors: Record<string, [number, string]> = {
+ CLIENT_ALREADY_BOOKED:[409,'Você já tem um atendimento nesse horário. Escolha outro.'],
+ NO_ACTIVE_SUBSCRIPTION:[409,'O pacote não está disponível para esse horário. Revise sua escolha.'],
  PLAN_CAPACITY: [409, 'O limite deste plano foi atingido. Desative um item existente ou escolha um plano com mais capacidade.'],
  INVALID_PHONE: [400, 'Informe um telefone válido.'],
  FORBIDDEN: [403, 'Você não tem permissão para esta ação.'], AUTH_REQUIRED: [401, 'Entre novamente para continuar.'],
@@ -9,10 +11,10 @@ const errors: Record<string, [number, string]> = {
  DAILY_LIMIT: [429, 'Você atingiu o limite diário do Assistente. Tente amanhã.'], RATE_LIMIT: [429, 'Muitas mensagens. Aguarde um minuto.'],
  SLOT_UNAVAILABLE: [409, 'Este horário acabou de ser ocupado. Escolha outro.'], INVALID_TIME: [400, 'Escolha um horário futuro dentro dos próximos 60 dias.'],
  OUTSIDE_BUSINESS_HOURS: [400, 'Horário fora do expediente.'], INVALID_TRANSITION: [409, 'Este atendimento já foi atualizado.'],
- CANCELLATION_WINDOW: [409, 'Cancelamentos pelo aplicativo exigem duas horas de antecedência. Entre em contato com a barbearia.'],
+ CANCELLATION_WINDOW: [409, 'Cancelamentos e remarcações pelo aplicativo exigem duas horas de antecedência. Entre em contato com a barbearia.'],
  TOO_EARLY: [409, 'Aguarde o início do atendimento para concluir.'], INVALID_INVITATION: [400, 'Convite inválido, utilizado ou expirado.'],
  OWNER_SHOP_LIMIT: [409, 'Sua conta já possui uma barbearia.'], SHOP_NOT_FOUND: [404, 'Barbearia não encontrada.'],
- INVALID_APPOINTMENT: [400, 'Conclua o atendimento antes de registrar o recebimento.'],
+ INVALID_APPOINTMENT: [400, 'Este atendimento não está disponível para esta ação.'],
  INVALID_BARBER: [400, 'Profissional indisponível.'], INVALID_SERVICE: [400, 'Serviço indisponível.'], INVALID_SERVICE_OR_BARBER: [400, 'Serviço ou profissional indisponível.']
  ,SLUG_TAKEN: [409, 'Este link já está em uso. Escolha outro.']
  ,INVALID_SLUG: [400, 'Use apenas letras minúsculas, números e hífens no link.']
@@ -29,3 +31,4 @@ export function dbError(error: { message: string; code?: string } | null) {
  if(error.code==='23503'||error.code==='23514'||error.code==='22023') throw new ApiError(400,'INVALID_DATA','Confira os dados informados.');
  throw new ApiError(503,'DATABASE_UNAVAILABLE','Não foi possível acessar os dados. Tente novamente.');
 }
+

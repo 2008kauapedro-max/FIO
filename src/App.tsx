@@ -1,3 +1,4 @@
+import {appointmentLink} from './lib/appointment-link';
 import { clientContext,rememberClientShop } from './lib/client-context';
 import { useCallback,useEffect,useRef,useState,lazy,Suspense } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
@@ -61,15 +62,16 @@ export default function App(){
   const m=await api<Membership[]>('/memberships');setMemberships(m);
   const clientSlug=clientContext(window.location.pathname,window.location.search);
   if(clientSlug)rememberClientShop(clientSlug);
-  let preferredShop='';let needsClientJoin=false;
-  if(clientSlug){
+  const requestedShop=new URLSearchParams(window.location.search).get('shopId');
+  let preferredShop=m.some(x=>x.barbershop_id===requestedShop)?requestedShop!:'';let needsClientJoin=false;
+  if(clientSlug&&!preferredShop){
    try{
     const response=await fetch(`/api/public/shop/${encodeURIComponent(clientSlug)}`),body=await response.json();
     if(!response.ok)throw new Error('Não foi possível abrir a barbearia deste link. Confira o endereço e tente novamente.');
     const targetId=String(body?.shop?.id??'');
     if(!targetId)throw new Error('Barbearia não encontrada.');
-    if(targetId){if(m.some(x=>x.barbershop_id===targetId))preferredShop=targetId;else needsClientJoin=true;}
-   }catch{throw new Error('Não foi possível abrir a barbearia deste link. Confira o endereço e tente novamente.');}
+    if(targetId){const membership=m.find(x=>x.barbershop_id===targetId);if(membership&&membership.role!=='CLIENT')throw new Error('CLIENT_ACCOUNT_REQUIRED');if(membership)preferredShop=targetId;else needsClientJoin=true;}
+   }catch(e){if((e as Error).message==='CLIENT_ACCOUNT_REQUIRED')throw new Error('Esta conta pertence à equipe da barbearia. Saia e entre com sua conta de cliente para usar este link.');throw new Error('Não foi possível abrir a barbearia deste link. Confira o endereço e tente novamente.');}
   }
   setClientJoinPending(needsClientJoin);
   const owner=m.find(x=>x.role==='OWNER');
@@ -110,10 +112,10 @@ export default function App(){
  if(!demo&&!authReady)return <AppLoading/>;
  if(!demo&&!session){
   const audience=location.pathname.startsWith('/owner')?'owner':location.pathname.startsWith('/barber')?'staff':location.pathname.startsWith('/client')?'client':new URLSearchParams(location.search).get('audience')||(clientContext(location.pathname,location.search)?'client':'');
-  const params=new URLSearchParams();if(audience)params.set('audience',audience);const shop=clientContext(location.pathname,location.search);if(shop)params.set('shop',shop);
+  const params=new URLSearchParams();const next=appointmentLink(location.pathname+location.search);if(next)params.set('next',next);if(audience)params.set('audience',audience);const shop=clientContext(location.pathname,location.search);if(shop)params.set('shop',shop);
   return <Navigate replace to={`/login${params.toString()?`?${params.toString()}`:''}`}/>;
  }
- if(error)return <div className="full-error"><h1>Não foi possível abrir seu espaço.</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>Tentar novamente</button><Link to="/login">Voltar ao acesso</Link></div>;
+ if(error)return <div className="full-error"><h1>Não foi possível abrir seu espaço.</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>Tentar novamente</button><button className="secondary" onClick={()=>void supabase?.auth.signOut({scope:'local'})}>Sair da conta</button><Link to="/login">Voltar ao acesso</Link></div>;
  if(!demo&&memberships===null)return <AppLoading/>;
  if(!demo&&(memberships?.length===0||Boolean(onboardingShopId)||clientJoinPending))return <Onboarding shopId={onboardingShopId||undefined} onDone={()=>void loadMemberships()}/>;
  if(!data)return <AppLoading/>;
@@ -182,3 +184,5 @@ export default function App(){
   {toast&&<div className={`toast ${/não foi|falh|erro|indisponível|expir|aguarde|pendente/i.test(toast)?'is-error':'is-success'}`} role="status">{toast}<button aria-label="Fechar aviso" onClick={()=>setToast('')}><X size={16}/></button></div>}
  </div>;
 }
+
+

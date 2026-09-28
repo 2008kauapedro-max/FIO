@@ -14,4 +14,5 @@ if(location.pathname.startsWith('/b/')){
  const original=window.fetch;
  window.fetch=async(input,init)=>String(input).startsWith('/api/public/shop/')?new Response(JSON.stringify({shop:{id:'test',name:'Studio de Teste',slug:'studio-teste'},services:[{id:'service',name:'Corte',duration_minutes:30,price_cents:3500}],team:[]})):original(input,init);
 }
-createRoot(document.getElementById('root')!).render(<BrowserRouter><div style={{background:'#ddd',color:'#111',fontSize:11,textAlign:'center'}}>AMBIENTE LOCAL DE TESTE · DADOS SINTÉTICOS</div>{location.pathname.startsWith('/b/')?<PublicPortal/>:location.pathname==='/acesso/plataforma'?<PlatformLogin session={null} ready/>:<PlatformApp session={session} ready/>}</BrowserRouter>);
+createRoot(document.getElementById('root')!).render(<BrowserRouter>{location.pathname.startsWith('/b/')?<PublicPortal/>:location.pathname==='/acesso/plataforma'?<PlatformLogin session={null} ready/>:<PlatformApp session={session} ready/>}</BrowserRouter>);
+

@@ -1,0 +1,10 @@
+{
+  "engine": "PostgreSQL 18.4 on x86_64-windows, compiled by msvc-19.44.35226, 64-bit",
+  "connections": 2,
+  "tests": [
+    "Second connection waits on PostgreSQL lock and loses conflicting slot",
+    "Two automatic bookings assign different eligible professionals",
+    "Same customer cannot book overlapping times on different professionals"
+  ],
+  "passed": 3
+}
