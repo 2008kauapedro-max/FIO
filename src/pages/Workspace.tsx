@@ -175,7 +175,7 @@ export function Settings(p:WorkspaceProps){
  const sections=[
   ['profile','Meu perfil',UserRound],
   ...(owner?[['barbershop','Barbearia',Store] as const,['plan','Plano FIO',Crown] as const]:[]),
-  ['access','Acessos e app',ShieldCheck],
+  ...(p.data.membership.role!=='CLIENT'?[['access','Acessos e app',ShieldCheck] as const]:[]),
   ['account','Conta e segurança',KeyRound],
  ] as const;
 
@@ -243,7 +243,7 @@ export function Settings(p:WorkspaceProps){
      </section>
     </>}
 
-    {section==='access'&&<>
+    {section==='access'&&p.data.membership.role!=='CLIENT'&&<>
      <section className="settings-card">
       <div className="section-title"><h2>Links de acesso</h2><span className="muted">Prontos para enviar.</span></div>
       <div className="share-links">
