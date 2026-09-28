@@ -1,0 +1,14 @@
+public/sw.js
+server/context.ts
+src/App.tsx
+src/components/AssistantChat.tsx
+src/components/ShopIdentity.tsx
+src/lib/api.ts
+src/lib/client-context.ts
+src/pages/Auth.tsx
+src/styles.css
+tests/client-session.test.ts
+tests/client.playwright.config.ts
+tests/e2e/client-access.spec.ts
+tests/fixtures/client-auth-supabase.ts
+tests/fixtures/client-vite.config.ts

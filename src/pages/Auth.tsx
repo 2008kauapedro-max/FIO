@@ -1,3 +1,5 @@
+import { clientContext,rememberClientShop } from '../lib/client-context';
+import { ShopIdentity } from '../components/ShopIdentity';
 import {AuthCaptcha,captchaSiteKey} from '../components/AuthCaptcha';
 import { useEffect,useState,type FormEvent } from 'react';
 import { Link,useLocation,useNavigate } from 'react-router-dom';
@@ -11,8 +13,9 @@ type AuthMode='login'|'signup'|'forgot';
 export function AuthPage({reset=false}:{reset?:boolean}) {
  const location=useLocation(),navigate=useNavigate();
  const params=new URLSearchParams(location.search);
- const shop=params.get('shop')??'';
- const audience=params.get('audience')??'';
+ const shop=clientContext(location.pathname,location.search);
+ const audience=params.get('audience')||(shop?'client':'');
+ useEffect(()=>{if(shop)rememberClientShop(shop);},[shop]);
  const requestedMode=params.get('mode');
  const initialMode:AuthMode=requestedMode==='forgot'?'forgot':requestedMode==='signup'?'signup':'login';
 
@@ -104,7 +107,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   if(audience==='platform')return '/acesso/plataforma';
   if(audience==='owner')return '/acesso/gestao';
   if(audience==='staff')return '/acesso/equipe';
-  if(audience==='client'&&shop)return `/login?shop=${encodeURIComponent(shop)}&audience=client`;
+  if(audience==='client')return `/login?audience=client${shop?`&shop=${encodeURIComponent(shop)}`:''}`;
   return '/login';
  };
 
@@ -231,7 +234,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  const heading=reset
   ?'Crie sua nova senha.'
   :mode==='signup'
-   ?'Seu próximo capítulo.'
+   ?(audience==='client'?'Crie sua conta de cliente.':'Seu próximo capítulo.')
    :mode==='forgot'
     ?'Recupere seu acesso.'
     :audience==='client'
@@ -282,7 +285,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  }
 
  return <div className="auth-page auth-page--login">
-  <Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>
+  {shop?<ShopIdentity slug={shop}/>:<Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>}
 
   <div className="auth-card auth-card--login">
    <p className="eyebrow">{reset?'RECUPERAÇÃO DE SENHA':audience==='client'?'ACESSO DO CLIENTE':'BEM-VINDO AO FIO'}</p>
@@ -388,7 +391,7 @@ function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  return <div className="auth-page">
-  <span className="auth-logo"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></span>
+  <ShopIdentity slug={slug}/>
   <div className="auth-card">
    <p className="eyebrow">SEU PERFIL</p><h1>Como podemos te chamar?</h1><p className="muted">Só precisamos do básico para conectar sua conta a esta barbearia.</p>
    <form onSubmit={submit}>
@@ -456,8 +459,8 @@ function LegacyOnboarding({onDone}:{onDone:()=>void}) {
 export function EmailConfirmationPage(){
  const location=useLocation(),navigate=useNavigate();
  const params=new URLSearchParams(location.search);
- const audience=params.get('audience')||'owner';
- const shop=params.get('shop')??'';
+ const shop=clientContext(location.pathname,location.search);
+ const audience=params.get('audience')||(shop?'client':'owner');
  const email=params.get('email')??'';
  const [state,setState]=useState<'checking'|'confirmed'|'invalid'>('checking');
 
@@ -513,7 +516,8 @@ export function EmailConfirmationPage(){
 }
 
 export function Onboarding({onDone,shopId}:{onDone:()=>void;shopId?:string}) {
- const params=new URLSearchParams(window.location.search),audience=params.get('audience'),shop=params.get('shop')??'';
- if(audience==='client'&&shop)return <ClientJoinOnboarding onDone={onDone} slug={shop}/>;
+ const params=new URLSearchParams(window.location.search),shop=clientContext(window.location.pathname,window.location.search),audience=params.get('audience');
+ if(shop)return <ClientJoinOnboarding onDone={onDone} slug={shop}/>;
+ if(audience==='client'||window.location.pathname.startsWith('/client'))return <div className="auth-page"><div className="auth-card"><h1>Acesse o link da sua barbearia.</h1><p>Peça o link ao profissional para criar seu perfil de cliente e agendar.</p><button className="secondary" onClick={()=>void supabase?.auth.signOut()}>Sair da conta</button></div></div>;
  return <OwnerOnboarding onDone={onDone} shopId={shopId}/>;
 }

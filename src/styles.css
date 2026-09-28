@@ -909,3 +909,14 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
  .app-shell .fio-pricing-compact{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
 }
 @media(max-height:450px) and (max-width:760px){.chat-shell .bottom-nav{display:none}.assistant-toolbar{padding-block:4px}.composer-area>p{display:none}}
+
+/* Client identity stays visible without occupying the scheduling workspace. */
+.client-auth-brand{display:flex;align-items:center;gap:12px;max-width:100%;margin:0 auto 24px;text-decoration:none;color:var(--text);min-width:0}
+.client-auth-brand img{width:52px;height:52px;object-fit:contain;border-radius:12px}
+.client-auth-brand span{display:grid;gap:4px;min-width:0}.client-auth-brand strong{overflow-wrap:anywhere}.client-auth-brand small{opacity:.65}
+.client-mobile-brand{display:flex;align-items:center;gap:10px;min-width:0;text-decoration:none;color:inherit}
+.client-mobile-brand img{width:34px;height:34px;object-fit:contain;border-radius:8px;flex-shrink:0}
+.client-mobile-brand span{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.client-shell .mobile-brand{min-width:0;flex:1}.client-shell .header-right{flex-shrink:0}
+
+.client-chat-logo{width:32px;height:32px;object-fit:contain;border-radius:8px;flex-shrink:0}.client-shell .assistant-toolbar-title{min-width:0}.client-shell .assistant-toolbar-title>div{min-width:0}.client-shell .assistant-toolbar-title strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45vw}

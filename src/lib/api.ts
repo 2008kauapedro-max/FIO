@@ -1,3 +1,4 @@
+import { clientContext,rememberClientShop } from './client-context';
 import { createClient } from '@supabase/supabase-js';
 
 const url=import.meta.env.VITE_SUPABASE_URL,key=import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -9,6 +10,8 @@ function currentAuthSpace():AuthSpace{
  const path=window.location.pathname;
  const params=new URLSearchParams(window.location.search);
  const audience=params.get('audience');
+ const shop=clientContext(path,window.location.search);
+ if(shop){rememberClientShop(shop);return 'client';}
  if(path.startsWith('/platform')||path==='/acesso/plataforma'||audience==='platform')return 'platform';
  if(path.startsWith('/owner')||path==='/acesso/gestao'||audience==='owner')return 'owner';
  if(path.startsWith('/barber')||path==='/acesso/equipe'||audience==='staff')return 'staff';
@@ -46,14 +49,44 @@ export const supabase=url&&key?createClient(url,key,{auth:{
 }}):null;
 
 export class RequestError extends Error { constructor(public code:string,message:string){super(message);} }
+// Concurrent 401s share one refresh, never a retry loop.
+let refreshInFlight:Promise<string|null>|null=null;
+async function renewedToken(rejectedToken:string){
+ if(!supabase)return null;
+ const {data:{session}}=await supabase.auth.getSession();
+ if(session?.access_token&&session.access_token!==rejectedToken)return session.access_token;
+ if(!refreshInFlight){
+  refreshInFlight=supabase.auth.refreshSession().then(({data,error})=>{
+   if(error)throw error;
+   return data.session?.access_token??null;
+  }).finally(()=>{refreshInFlight=null;});
+ }
+ return refreshInFlight;
+}
 export async function api<T>(path:string,shopId?:string,body?:unknown,method?:string):Promise<T> {
  if(!supabase) throw new RequestError('SETUP_REQUIRED','A conexão com a barbearia ainda não está configurada.');
  const {data:{session}}=await supabase.auth.getSession();
  if(!session)throw new RequestError('AUTH_REQUIRED','Entre para continuar.');
- let response:Response;
- try {response=await fetch(`/api${path}`,{method:method??(body?'POST':'GET'),headers:{Authorization:`Bearer ${session.access_token}`,...(shopId?{'X-Barbershop-Id':shopId}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(40000)});}
- catch {throw new RequestError('OFFLINE','Não foi possível conectar. Confira sua conexão e tente novamente.');}
- const data=await response.json().catch(()=>({code:'INVALID_RESPONSE',message:'Não foi possível concluir agora. Tente novamente.'}));
+ const send=async(token:string)=>{
+  try{return await fetch(`/api${path}`,{method:method??(body?'POST':'GET'),headers:{Authorization:`Bearer ${token}`,...(shopId?{'X-Barbershop-Id':shopId}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(40000)});}
+  catch{throw new RequestError('OFFLINE','Não foi possível conectar. Confira sua conexão e tente novamente.');}
+ };
+ let response=await send(session.access_token);
+ let data=await response.json().catch(()=>({code:'INVALID_RESPONSE',message:'Não foi possível concluir agora. Tente novamente.'}));
+ // Only authentication rejection before the handler may replay a request.
+ if(response.status===401&&data.code==='AUTH_REQUIRED'){
+  let token:string|null=null;
+  try{token=await renewedToken(session.access_token);}catch(e){
+   const status=(e as {status?:number}).status;
+   if(!status||status>=500)throw new RequestError('OFFLINE','Não foi possível renovar sua conexão. Tente novamente.');
+  }
+  if(token){response=await send(token);data=await response.json().catch(()=>({code:'INVALID_RESPONSE'}));}
+  if(!token||(response.status===401&&data.code==='AUTH_REQUIRED')){
+   // End local UI polling and require a fresh login without revoking other devices.
+   await supabase.auth.signOut({scope:'local'});
+   throw new RequestError('AUTH_REQUIRED','Sua sessão expirou. Entre novamente.');
+  }
+ }
  if(!response.ok)throw new RequestError(String(data.code??'REQUEST_FAILED'),String(data.message??'Não foi possível concluir agora. Tente novamente.'));
  return data as T;
 }

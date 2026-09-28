@@ -67,7 +67,8 @@ export async function bootstrap(ctx: TenantContext): Promise<Bootstrap> {
  const plan=ctx.plan;
  const aiEnabled=planAllows(plan,'assistant')&&(features as {plan:string;ai_enabled:boolean}[]).some(f=>f.plan===plan&&f.ai_enabled);
  const fioSubscription={plan:billing.plan,status:billing.status,starts_at:billing.starts_at,current_period_end:billing.current_period_end,trial_ends_at:billing.trial_ends_at,cancelled_at:billing.cancelled_at};
- return {shop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans,campaigns,notifications,posts,reviews,fioSubscription,plan,aiEnabled} as Bootstrap;
+ const brandingShop={...shop,logo_url:shop.logo_url||(shop.logo_asset_path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${shop.logo_asset_path}`:null)};
+ return {shop:brandingShop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans,campaigns,notifications,posts,reviews,fioSubscription,plan,aiEnabled} as Bootstrap;
 }
 
 // The provider receives a deliberately small, role-scoped data projection, never a frontend snapshot.

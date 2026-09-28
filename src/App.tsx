@@ -1,3 +1,4 @@
+import { clientContext,rememberClientShop } from './lib/client-context';
 import { useCallback,useEffect,useRef,useState,lazy,Suspense } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
 import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,Images,Megaphone,Sun,Moon,Crown,CircleHelp,Settings,MoreHorizontal } from 'lucide-react';
@@ -58,14 +59,17 @@ export default function App(){
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{if(s)try{const started=Number(localStorage.getItem('fio-tour:google-signup-started'));const created=Date.parse(s.user.created_at);if(s.user.app_metadata.provider==='google'&&Number.isFinite(started)){if(Number.isFinite(created)&&created>=started-60_000&&created<=started+15*60_000)localStorage.setItem(`fio-tour:new-account:${s.user.id}`,'pending');localStorage.removeItem('fio-tour:google-signup-started');}}catch{}setSession(s);setAuthReady(true);if(!s){setData(null);setMemberships(null);}});return()=>subscription.unsubscribe();},[]);
  const loadMemberships=useCallback(async()=>{try{
   const m=await api<Membership[]>('/memberships');setMemberships(m);
-  const params=new URLSearchParams(window.location.search),clientSlug=params.get('audience')==='client'?params.get('shop')??'':'';
+  const clientSlug=clientContext(window.location.pathname,window.location.search);
+  if(clientSlug)rememberClientShop(clientSlug);
   let preferredShop='';let needsClientJoin=false;
   if(clientSlug){
    try{
     const response=await fetch(`/api/public/shop/${encodeURIComponent(clientSlug)}`),body=await response.json();
-    const targetId=response.ok?String(body?.shop?.id??''):'';
+    if(!response.ok)throw new Error('Não foi possível abrir a barbearia deste link. Confira o endereço e tente novamente.');
+    const targetId=String(body?.shop?.id??'');
+    if(!targetId)throw new Error('Barbearia não encontrada.');
     if(targetId){if(m.some(x=>x.barbershop_id===targetId))preferredShop=targetId;else needsClientJoin=true;}
-   }catch{needsClientJoin=false;}
+   }catch{throw new Error('Não foi possível abrir a barbearia deste link. Confira o endereço e tente novamente.');}
   }
   setClientJoinPending(needsClientJoin);
   const owner=m.find(x=>x.role==='OWNER');
@@ -87,11 +91,12 @@ export default function App(){
   document.addEventListener('keydown',key);return()=>{cancelAnimationFrame(frame);document.removeEventListener('keydown',key);previous?.focus();};
  },[menu]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),5000);return()=>clearTimeout(timer);},[toast]);
+ useEffect(()=>{if(data?.membership.role==='CLIENT')rememberClientShop(data.shop.slug);},[data?.membership.role,data?.shop.slug]);
  useEffect(()=>{
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
   if(!manifest||!data||isPlatform)return;
   manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':`/api/public/manifest/${encodeURIComponent(data.shop.slug)}`;
- },[data?.membership.role,isPlatform]);
+ },[data?.membership.role,data?.shop.slug,isPlatform]);
 
  if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<AppLoading/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
  if(isPlatform)return <Suspense fallback={<AppLoading/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
@@ -104,8 +109,8 @@ export default function App(){
  if(location.pathname==='/'&&!authReady)return <AppLoading/>;
  if(!demo&&!authReady)return <AppLoading/>;
  if(!demo&&!session){
-  const audience=location.pathname.startsWith('/owner')?'owner':location.pathname.startsWith('/barber')?'staff':location.pathname.startsWith('/client')?'client':new URLSearchParams(location.search).get('audience')??'';
-  const params=new URLSearchParams();if(audience)params.set('audience',audience);const shop=new URLSearchParams(location.search).get('shop');if(shop)params.set('shop',shop);
+  const audience=location.pathname.startsWith('/owner')?'owner':location.pathname.startsWith('/barber')?'staff':location.pathname.startsWith('/client')?'client':new URLSearchParams(location.search).get('audience')||(clientContext(location.pathname,location.search)?'client':'');
+  const params=new URLSearchParams();if(audience)params.set('audience',audience);const shop=clientContext(location.pathname,location.search);if(shop)params.set('shop',shop);
   return <Navigate replace to={`/login${params.toString()?`?${params.toString()}`:''}`}/>;
  }
  if(error)return <div className="full-error"><h1>Não foi possível abrir seu espaço.</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>Tentar novamente</button><Link to="/login">Voltar ao acesso</Link></div>;
@@ -130,11 +135,11 @@ export default function App(){
   case '/configuracoes':content=<SettingsPage {...props}/>;break;
   case '/suporte':content=<Support {...props}/>;break;
   case '/feed':content=<Feed {...props}/>;break;
-  case '/assistente':content=<AssistantChat role={role} plan={data.plan} aiEnabled={data.aiEnabled} shopId={data.shop.id} demo={demo} base={base}/>;break;
+  case '/assistente':content=<AssistantChat role={role} plan={data.plan} aiEnabled={data.aiEnabled} shopId={data.shop.id} shopName={data.shop.public_title||data.shop.name} shopLogo={data.shop.logo_url||undefined} demo={demo} base={base}/>;break;
   default:content=<Dashboard {...props}/>;
  }
  const toggleTheme=()=>setTheme(t=>t==='dark'?'light':'dark');
- return <div className={`app-shell ${page==='/assistente'?'chat-shell':''}`}>
+ return <div className={`app-shell ${role==='CLIENT'?'client-shell':''} ${page==='/assistente'?'chat-shell':''}`}>
   {menu&&<button className="menu-backdrop" aria-label="Fechar menu" onClick={()=>setMenu(false)}/>}
   <aside className={`sidebar ${menu?'is-open':''}`}>
    <div className="sidebar-brand sidebar-shop-brand">
@@ -164,7 +169,7 @@ export default function App(){
    </div>
   </aside>
   <div className="workspace" inert={menu}>
-   <header className="topbar"><div className="mobile-brand"><Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link></div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'Configurações':items.find(n=>n.path===page)?.label??'Visão geral'}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:<span className="plan-badge">FIO {data.plan}</span>}<button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
+   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'Configurações':items.find(n=>n.path===page)?.label??'Visão geral'}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:role==='BARBER'?<span className="plan-badge">FIO {data.plan}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
    <main key={`${base}:${shopId}:${page}`} className={page==='/assistente'?'chat-main assistant-chat-main':'main-content'}>{content}</main>
    <nav className="bottom-nav" aria-label="Navegação mobile">
     <NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink>

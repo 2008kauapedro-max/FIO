@@ -1,4 +1,4 @@
-const CACHE='fio-shell-v4';
+const CACHE='fio-shell-v5';
 // Push is opt-in and provisioned only for Platform Admin. Existing cache handlers stay intact.
 self.addEventListener('push',event=>{
  event.waitUntil(self.registration.showNotification('FIO Platform',{body:'Há um alerta que precisa da sua atenção.',icon:'/icons/icon-192.png',tag:'fio-platform-alert',data:{url:'/platform/alertas'}}));
@@ -20,7 +20,7 @@ self.addEventListener('fetch',event=>{
  const url=new URL(request.url);
  if(url.origin!==self.location.origin||url.pathname.startsWith('/api/'))return;
  if(request.mode==='navigate'){
-  event.respondWith(fetch(request).then(response=>{const copy=response.clone();caches.open(CACHE).then(cache=>cache.put('/',copy));return response;}).catch(()=>caches.match('/')));
+  event.respondWith(fetch(request).then(response=>{if(response.ok&&response.headers.get('content-type')?.includes('text/html')){const copy=response.clone();void caches.open(CACHE).then(cache=>cache.put('/',copy)).catch(()=>undefined);}return response;}).catch(async()=>await caches.match('/')||new Response('Sem conexão. Reconecte e tente novamente.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}})));
   return;
  }
  event.respondWith(caches.match(request).then(cached=>cached||fetch(request).then(response=>{if(response.ok&&['script','style','image','font'].includes(request.destination)){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(request,copy));}return response;})));
