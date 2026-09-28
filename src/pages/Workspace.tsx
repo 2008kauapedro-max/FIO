@@ -131,7 +131,12 @@ export function Settings(p:WorkspaceProps){
  const [accentColor,setAccentColor]=useState(p.data.shop.accent_color??'#ffffff');
  const [busy,setBusy]=useState(false),[accountEmail,setAccountEmail]=useState('');
  const origin=typeof window==='undefined'?'':window.location.origin;
- const links={gestao:`${origin}/acesso/gestao`,equipe:`${origin}/acesso/equipe`,clientes:`${origin}/${p.data.shop.slug}`};
+ const links={
+  gestao:`${origin}/acesso/gestao`,
+  equipe:`${origin}/acesso/equipe`,
+  site:`${origin}/${p.data.shop.slug}`,
+  clientes:`${origin}/login?audience=client&shop=${encodeURIComponent(p.data.shop.slug)}`
+ };
 
  useEffect(()=>{let active=true;if(!supabase)return;void supabase.auth.getUser().then(({data})=>{if(active)setAccountEmail(data.user?.email??'');});return()=>{active=false;};},[]);
 
@@ -228,7 +233,8 @@ export function Settings(p:WorkspaceProps){
      <section className="settings-card">
       <div className="section-title"><h2>Site e app dos clientes</h2><span className="muted">Link público da barbearia.</span></div>
       <div className="share-links">
-       <button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>Link dos clientes</span><small>{links.clientes}</small></div><Copy size={16}/></button>
+       <button onClick={()=>copy(links.site)}><LinkIcon size={17}/><div><span>Site público</span><small>{links.site}</small></div><Copy size={16}/></button>
+       <button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>Acesso dos clientes</span><small>{links.clientes}</small></div><Copy size={16}/></button>
       </div>
       <p className="muted settings-help">A logo da barbearia identifica a experiência instalada pelos clientes.</p>
      </section>
