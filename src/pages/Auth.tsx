@@ -32,6 +32,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
  const [mode,setMode]=useState<AuthMode>(initialMode);
  const [email,setEmail]=useState(params.get('email')??'');
+ const [signupPhone,setSignupPhone]=useState('');
  const [password,setPassword]=useState('');
  const [confirmPassword,setConfirmPassword]=useState('');
  const [message,setMessage]=useState('');
@@ -198,6 +199,11 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    }
 
    if(mode==='signup'){
+    const phoneDigits=signupPhone.replace(/\D/g,'');
+    if(phoneDigits.length<10||phoneDigits.length>13){
+     setMessage('Informe um WhatsApp / telefone válido para vincular esta conta.');
+     return;
+    }
     setRememberSession(remember);
     const confirmationAudience=audience||'owner';
     const query=new URLSearchParams({audience:confirmationAudience,email:email.trim()});
@@ -205,11 +211,16 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     const result=await supabase.auth.signUp({
      email,
      password,
-     options:{captchaToken:captchaToken||undefined,emailRedirectTo:`${window.location.origin}/confirm-email?${query.toString()}`}
+     options:{captchaToken:captchaToken||undefined,emailRedirectTo:`${window.location.origin}/confirm-email?${query.toString()}`,data:{account_phone:signupPhone.trim()}}
     });
 
     if(result.error){
      setMessage('Não foi possível criar a conta. Confira os dados e tente novamente.');
+     return;
+    }
+    if(result.data.user&&Array.isArray(result.data.user.identities)&&result.data.user.identities.length===0){
+     setMode('login');
+     setMessage('Este e-mail já está vinculado a uma conta FIO. Entre com a conta existente.');
      return;
     }
 
@@ -325,6 +336,21 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
      />
     </Field>}
 
+    {!reset&&mode==='signup'&&<Field label="WhatsApp / telefone">
+     <input
+      type="tel"
+      inputMode="tel"
+      autoComplete="tel"
+      placeholder="(61) 99999-9999"
+      minLength={8}
+      maxLength={24}
+      value={signupPhone}
+      onChange={e=>setSignupPhone(e.target.value)}
+      required
+     />
+     <small>Um número pode ficar vinculado a apenas uma conta FIO.</small>
+    </Field>}
+
     {(reset||mode!=='forgot')&&<Field label={reset?'Nova senha':'Senha'}>
       <div style={{position:'relative'}}>
        <input name="password" type={showPassword?'text':'password'} minLength={8}
@@ -403,10 +429,23 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
 function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
  const [displayName,setDisplayName]=useState(''),[phone,setPhone]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ useEffect(()=>{
+  if(!supabase)return;
+  let active=true;
+  void supabase.auth.getUser().then(({data:{user}})=>{
+   if(!active||!user)return;
+   const meta=user.user_metadata as Record<string,unknown>;
+   const metaName=[meta?.display_name,meta?.full_name,meta?.name].find(v=>typeof v==='string'&&v.trim().length>=2);
+   const accountPhone=typeof meta?.account_phone==='string'?meta.account_phone.trim():'';
+   if(metaName)setDisplayName(current=>current||String(metaName).trim());
+   if(accountPhone)setPhone(current=>current||accountPhone);
+  });
+  return()=>{active=false;};
+ },[]);
  async function submit(e:FormEvent){
   e.preventDefault();setBusy(true);setError('');
   try{
-   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'join',slug,displayName:displayName.trim()});
+   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'join',slug,displayName:displayName.trim(),phone:phone.trim()});
    sessionStorage.setItem('fio-shop',r.barbershopId);
    if(phone.trim())await api('/profile/contact',r.barbershopId,{displayName:displayName.trim(),phone:phone.trim()},'PATCH');
    onDone();
@@ -418,7 +457,7 @@ function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
    <p className="eyebrow">SEU PERFIL</p><h1>Como podemos te chamar?</h1><p className="muted">Só precisamos do básico para conectar sua conta a esta barbearia.</p>
    <form onSubmit={submit}>
     <Field label="Seu nome"><input minLength={2} maxLength={100} autoComplete="name" required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></Field>
-    <Field label="WhatsApp / telefone (opcional)"><input type="tel" inputMode="tel" autoComplete="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)}/></Field>
+    <Field label="WhatsApp / telefone"><input type="tel" inputMode="tel" autoComplete="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)} required/><small>Esse número identifica sua conta e não pode pertencer a outra conta FIO.</small></Field>
     {error&&<p className="notice" role="alert">{error}</p>}
     <button className="primary full" disabled={busy}>{busy?'Entrando…':'Entrar na barbearia'}</button>
    </form>
@@ -438,7 +477,7 @@ function LegacyOnboarding({onDone}:{onDone:()=>void}) {
   setBusy(true);
   setError('');
   try{
-   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode,displayName,...(mode==='create'?{name,slug}:mode==='join'?{slug}:{token:invite})});
+   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode,displayName,phone:phone.trim(),...(mode==='create'?{name,slug}:mode==='join'?{slug}:{token:invite})});
    sessionStorage.setItem('fio-shop',r.barbershopId);
    if(phone.trim())await api('/profile/contact',r.barbershopId,{displayName:displayName.trim(),phone:phone.trim()},'PATCH');
    onDone();
@@ -463,7 +502,7 @@ function LegacyOnboarding({onDone}:{onDone:()=>void}) {
 
    <form onSubmit={submit}>
     <Field label="Seu nome"><input minLength={2} maxLength={100} required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></Field>
-    <Field label="WhatsApp / telefone"><input type="tel" inputMode="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)}/></Field>
+    <Field label="WhatsApp / telefone"><input type="tel" inputMode="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)} required/><small>Um número pode ficar vinculado a apenas uma conta FIO.</small></Field>
     {mode==='create'&&<Field label="Nome da barbearia"><input required minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></Field>}
     {mode!=='invite'
      ?<Field label="Identificador da barbearia"><input required pattern="[a-z0-9-]{3,60}" placeholder="ex.: studio-011" value={slug} onChange={e=>setSlug(e.target.value.toLowerCase())}/></Field>

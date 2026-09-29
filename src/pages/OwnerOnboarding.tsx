@@ -1,7 +1,8 @@
-import { useEffect,useMemo,useState,type ChangeEvent } from 'react';
+import { useEffect,useMemo,useRef,useState,type ChangeEvent } from 'react';
 import { Check,ChevronLeft,ChevronRight,Copy,ExternalLink,ImagePlus,Plus,Share2,Trash2 } from 'lucide-react';
 import { api,supabase } from '../lib/api';
 import { optimizeImage } from '../lib/images';
+import { QRCodeSVG } from 'qrcode.react';
 
 type Service={id?:string;_key:string;name:string;description?:string|null;duration_minutes:number;price_cents:number;active:boolean;_durationInput?:string;_priceInput?:string};
 type DaySchedule={weekday:number;enabled:boolean;opensAt:string;closesAt:string};
@@ -45,8 +46,23 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  const [shopId,setShopId]=useState(initialShopId??''),[step,setStep]=useState(1),[completed,setCompleted]=useState<number[]>([]),[draft,setDraft]=useState<Record<string,unknown>>({}),[snapshot,setSnapshot]=useState<Snapshot|null>(null),[loading,setLoading]=useState(Boolean(initialShopId)),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[success,setSuccess]=useState(false);
  const [operationMode,setOperationMode]=useState<'SHOP'|'SOLO'>('SHOP'),[name,setName]=useState(''),[slug,setSlug]=useState(''),[slugTouched,setSlugTouched]=useState(false),[displayName,setDisplayName]=useState(''),[whatsapp,setWhatsapp]=useState(''),[instagram,setInstagram]=useState(''),[address,setAddress]=useState(''),[amenities,setAmenities]=useState<string[]>([]),[services,setServices]=useState<Service[]>(serviceDefaults),[schedules,setSchedules]=useState<DaySchedule[]>(scheduleDefaults),[hoursSaved,setHoursSaved]=useState(false),[paletteKey,setPaletteKey]=useState('fio-black'),[themeMode,setThemeMode]=useState<'light'|'dark'>('dark'),[customAccent,setCustomAccent]=useState('#ffffff'),[logoPath,setLogoPath]=useState<string|null>(null),[coverPath,setCoverPath]=useState<string|null>(null),[backgroundPath,setBackgroundPath]=useState<string|null>(null);
  const publicLink=shopId&&slug?`${window.location.origin}/${slug}`:'';
+ const qrRef=useRef<HTMLDivElement>(null);
 
  useEffect(()=>{window.scrollTo({top:0,behavior:'auto'});},[step]);
+
+ useEffect(()=>{
+  if(shopId||!supabase)return;
+  let active=true;
+  void supabase.auth.getUser().then(({data:{user}})=>{
+   if(!active||!user)return;
+   const meta=user.user_metadata as Record<string,unknown>;
+   const metaName=[meta?.display_name,meta?.full_name,meta?.name].find(v=>typeof v==='string'&&v.trim().length>=2);
+   const accountPhone=typeof meta?.account_phone==='string'?meta.account_phone.trim():'';
+   if(metaName)setDisplayName(current=>current||String(metaName).trim());
+   if(accountPhone)setWhatsapp(current=>current||accountPhone);
+  });
+  return()=>{active=false;};
+ },[shopId]);
 
  useEffect(()=>{
   if(!shopId)return;
@@ -96,7 +112,7 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
    let ownerName=displayName.trim();
    if(!ownerName&&supabase){const current=await supabase.auth.getUser();const user=current.data.user;const meta=user?.user_metadata as Record<string,unknown>|undefined;const fromMeta=[meta?.display_name,meta?.full_name,meta?.name].find(v=>typeof v==='string'&&v.trim().length>=2);const fromEmail=user?.email?.split('@')[0]?.replace(/[._-]+/g,' ').trim();ownerName=typeof fromMeta==='string'?fromMeta.trim():(fromEmail&&fromEmail.length>=2?fromEmail:'Responsável');}
    if(!ownerName)ownerName='Responsável';setDisplayName(ownerName);
-   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'create',name:name.trim(),slug,displayName:ownerName,operationMode});
+   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'create',name:name.trim(),slug,displayName:ownerName,operationMode,phone:whatsapp.trim()});
    setShopId(r.barbershopId);sessionStorage.setItem('fio-shop',r.barbershopId);return r.barbershopId;
   }catch(e){setError((e as Error).message);return '';}finally{setBusy(false);}
  }
@@ -166,10 +182,17 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
 
  const copy=async()=>{if(publicLink)await navigator.clipboard?.writeText(publicLink);};
  const share=async()=>{if(publicLink&&navigator.share)await navigator.share({title:name,text:`Agora você pode agendar seu horário comigo pelo link: ${publicLink}`,url:publicLink});else await copy();};
+ const downloadQr=()=>{
+  const svg=qrRef.current?.querySelector('svg');if(!svg||!publicLink)return;
+  const source=`<?xml version="1.0" encoding="UTF-8"?>${new XMLSerializer().serializeToString(svg)}`;
+  const url=URL.createObjectURL(new Blob([source],{type:'image/svg+xml;charset=utf-8'}));
+  const anchor=document.createElement('a');anchor.href=url;anchor.download=`${slug||'fio'}-qr-code.svg`;document.body.appendChild(anchor);anchor.click();anchor.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+ };
  const canContinue=step===1?Boolean(name.trim().length>=2&&/^[a-z0-9-]{3,60}$/.test(slug)&&whatsapp.replace(/\D/g,'').length>=10):step===2?services.some(s=>s.active&&validService(s)):step===3?validSchedules.length>0:step===4?Boolean(paletteKey&&logoPath):true;
 
  if(loading)return <div className="owner-onboarding ob-loading">Carregando seu progresso…</div>;
- if(success)return <div className="owner-onboarding ob-success"><span className="ob-success-mark"><Check/></span><p className="eyebrow">TUDO PRONTO</p><h1>{operationMode==='SOLO'?'Sua agenda profissional está pronta.':'Sua barbearia está pronta.'}</h1><p className="ob-muted">Seu espaço já está disponível para os clientes.</p><div className="ob-success-actions"><a href={`/${slug}`} target="_blank" rel="noreferrer"><ExternalLink size={16}/>Ver página do cliente</a><button onClick={()=>void copy()}><Copy size={16}/>Copiar link</button><button onClick={()=>void share()}><Share2 size={16}/>Compartilhar</button><button onClick={onDone}>Entrar no FIO Gestão</button></div><div className="ob-qr"><img src={`https://quickchart.io/qr?size=180&text=${encodeURIComponent(publicLink)}`} alt="QR Code da página pública"/><a download="fio-link.png" href={`https://quickchart.io/qr?size=800&text=${encodeURIComponent(publicLink)}`}>Baixar QR Code</a></div></div>;
+ if(success)return <div className="owner-onboarding ob-success"><span className="ob-success-mark"><Check/></span><p className="eyebrow">TUDO PRONTO</p><h1>{operationMode==='SOLO'?'Sua agenda profissional está pronta.':'Sua barbearia está pronta.'}</h1><p className="ob-muted">Seu espaço já está disponível para os clientes.</p><div className="ob-success-actions"><a href={`/${slug}`} target="_blank" rel="noreferrer"><ExternalLink size={16}/>Ver página do cliente</a><button onClick={()=>void copy()}><Copy size={16}/>Copiar link</button><button onClick={()=>void share()}><Share2 size={16}/>Compartilhar</button><button onClick={onDone}>Entrar no FIO Gestão</button></div><div className="ob-qr"><div className="ob-qr-code" ref={qrRef} aria-label="QR Code da página pública"><QRCodeSVG value={publicLink} size={180} level="M" includeMargin bgColor="#ffffff" fgColor="#000000"/></div><button type="button" className="secondary" onClick={downloadQr}>Baixar QR Code</button></div></div>;
  if(!shopId&&step!==1)return null;
 
  return <main className="owner-onboarding" style={previewStyle}>

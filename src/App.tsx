@@ -57,7 +57,18 @@ export default function App(){
 
  useEffect(()=>{const change=(e:Event)=>setTheme((e as CustomEvent<Theme>).detail);window.addEventListener('fio-theme-change',change);return()=>window.removeEventListener('fio-theme-change',change);},[]);
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('fio-theme',theme);},[theme]);
- useEffect(()=>{const onInstall=(event:Event)=>{event.preventDefault();setInstallPrompt(event as InstallPromptEvent);};window.addEventListener('beforeinstallprompt',onInstall);return()=>window.removeEventListener('beforeinstallprompt',onInstall);},[]);
+ useEffect(()=>{
+  type InstallWindow=Window&{__fioInstallPrompt?:InstallPromptEvent|null};
+  const installWindow=window as InstallWindow;
+  const syncPrompt=()=>setInstallPrompt(installWindow.__fioInstallPrompt??null);
+  const onInstall=(event:Event)=>{event.preventDefault();installWindow.__fioInstallPrompt=event as InstallPromptEvent;setInstallPrompt(event as InstallPromptEvent);};
+  const onInstalled=()=>{installWindow.__fioInstallPrompt=null;setInstallPrompt(null);};
+  syncPrompt();
+  window.addEventListener('beforeinstallprompt',onInstall);
+  window.addEventListener('fio-install-ready',syncPrompt);
+  window.addEventListener('fio-app-installed',onInstalled);
+  return()=>{window.removeEventListener('beforeinstallprompt',onInstall);window.removeEventListener('fio-install-ready',syncPrompt);window.removeEventListener('fio-app-installed',onInstalled);};
+ },[]);
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{if(s)try{const started=Number(localStorage.getItem('fio-tour:google-signup-started'));const created=Date.parse(s.user.created_at);if(s.user.app_metadata.provider==='google'&&Number.isFinite(started)){if(Number.isFinite(created)&&created>=started-60_000&&created<=started+15*60_000)localStorage.setItem(`fio-tour:new-account:${s.user.id}`,'pending');localStorage.removeItem('fio-tour:google-signup-started');}}catch{}setSession(s);setAuthReady(true);if(!s){setData(null);setMemberships(null);}});return()=>subscription.unsubscribe();},[]);
  const loadMemberships=useCallback(async()=>{try{
   const m=await api<Membership[]>('/memberships');setMemberships(m);
@@ -125,7 +136,15 @@ export default function App(){
  const role=data.membership.role,base=roleHome(role),page=location.pathname.slice(base.length),solo=data.shop.operation_mode==='SOLO',items=navItems.filter(n=>n.roles.includes(role)&&(!n.feature||planAllows(data.plan,n.feature))&&!(solo&&n.path==='/equipe'));
  if(!location.pathname.startsWith(base+'/')&&location.pathname!==base)return <Navigate replace to={base}/>;
  if(page!==''&&page!=='/configuracoes'&&!items.some(n=>n.path===page))return <Navigate replace to={base}/>;
- const props:WorkspaceProps={data,demo,base,refresh,notify:setToast,updateDemo:fn=>setData(d=>d?fn(d):d),canInstall:Boolean(installPrompt),installApp:async()=>{if(!installPrompt){setToast('No navegador do celular, use “Adicionar à tela inicial”.');return;}await installPrompt.prompt();await installPrompt.userChoice;setInstallPrompt(null);}};
+ const props:WorkspaceProps={data,demo,base,refresh,notify:setToast,updateDemo:fn=>setData(d=>d?fn(d):d),canInstall:Boolean(installPrompt),installApp:async()=>{
+  type InstallWindow=Window&{__fioInstallPrompt?:InstallPromptEvent|null};
+  const prompt=installPrompt??(window as InstallWindow).__fioInstallPrompt??null;
+  if(!prompt){setToast('O navegador ainda não liberou a instalação. Abra no Chrome ou Edge e tente novamente.');return;}
+  await prompt.prompt();
+  await prompt.userChoice;
+  (window as InstallWindow).__fioInstallPrompt=null;
+  setInstallPrompt(null);
+ }};
  let content;
  switch(page){
   case '/agenda':content=<Agenda {...props}/>;break;

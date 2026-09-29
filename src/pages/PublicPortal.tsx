@@ -69,7 +69,7 @@ function accentContrast(hex:string){
 
 export function PublicPortal(){
  const {pathname}=useLocation(),slug=pathSlug(pathname);
- const [data,setData]=useState<PublicData|null>(null),[error,setError]=useState(''),[installEvent,setInstallEvent]=useState<InstallPromptEvent|null>(null),[installGuide,setInstallGuide]=useState(false),[installGate,setInstallGate]=useState(false),[installReason,setInstallReason]=useState(''),[installing,setInstalling]=useState(false),[installMessage,setInstallMessage]=useState(''),[tab,setTab]=useState<PortalTab>('services'),[query,setQuery]=useState('');
+ const [data,setData]=useState<PublicData|null>(null),[error,setError]=useState(''),[installEvent,setInstallEvent]=useState<InstallPromptEvent|null>(null),[installGuide,setInstallGuide]=useState(false),[installGate,setInstallGate]=useState(false),[installing,setInstalling]=useState(false),[installMessage,setInstallMessage]=useState(''),[tab,setTab]=useState<PortalTab>('services'),[query,setQuery]=useState('');
  const standalone=standaloneMode();
  const clientPlatform=detectClientPlatform();
 
@@ -78,12 +78,17 @@ export function PublicPortal(){
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
   const previous=manifest?.href;
   if(manifest)manifest.href=`/api/public/manifest/${encodeURIComponent(slug)}?v=client-brand-v2`;
-  const listener=(event:Event)=>{event.preventDefault();setInstallEvent(event as InstallPromptEvent);};
+  type InstallWindow=Window&{__fioInstallPrompt?:InstallPromptEvent|null};
+  const installWindow=window as InstallWindow;
+  const syncInstallPrompt=()=>setInstallEvent(installWindow.__fioInstallPrompt??null);
+  const listener=(event:Event)=>{event.preventDefault();installWindow.__fioInstallPrompt=event as InstallPromptEvent;setInstallEvent(event as InstallPromptEvent);};
+  syncInstallPrompt();
   window.addEventListener('beforeinstallprompt',listener);
+  window.addEventListener('fio-install-ready',syncInstallPrompt);
   let active=true;const controller=new AbortController();
   setData(null);setError('');
   fetch(`/api/public/shop/${encodeURIComponent(slug)}`,{signal:controller.signal,cache:'no-store'}).then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.message||'Não foi possível abrir este espaço.');return body as PublicData;}).then(result=>{if(active)setData(result);}).catch(()=>{if(active)setError('Não foi possível abrir este espaço agora.');});
-  return()=>{active=false;controller.abort();window.removeEventListener('beforeinstallprompt',listener);if(manifest&&previous)manifest.href=previous;};
+  return()=>{active=false;controller.abort();window.removeEventListener('beforeinstallprompt',listener);window.removeEventListener('fio-install-ready',syncInstallPrompt);if(manifest&&previous)manifest.href=previous;};
  },[slug]);
 
  const title=useMemo(()=>data?.shop.public_title||data?.shop.name||'FIO',[data]);
@@ -104,10 +109,10 @@ export function PublicPortal(){
 
  const filteredServices=useMemo(()=>{const q=query.trim().toLocaleLowerCase('pt-BR');return !q?data?.services??[]:(data?.services??[]).filter(service=>`${service.name} ${service.description??''}`.toLocaleLowerCase('pt-BR').includes(q));},[data?.services,query]);
  const goClient=()=>window.location.assign(`/login?shop=${encodeURIComponent(slug)}&audience=client`);
- function requireApp(reason:string){
+ function requireApp(_reason:string){
   if(standalone){goClient();return;}
   setInstallMessage('');
-  setInstallReason(reason);setInstallGate(true);
+  setInstallGate(true);
  }
  async function installPlatform(platform:InstallPlatform){
   if(standalone){goClient();return;}
@@ -124,23 +129,29 @@ export function PublicPortal(){
    return;
   }
   if(installing)return;
-  if(!installEvent){
-   setInstallMessage(platform==='mac'?'Abra este link no Chrome. Quando o navegador liberar a instalação, toque novamente em Baixar no Mac.':'Abra este link no Chrome ou Edge. Quando o navegador liberar a instalação, toque novamente no botão de baixar.');
+  type InstallWindow=Window&{__fioInstallPrompt?:InstallPromptEvent|null};
+  const installWindow=window as InstallWindow;
+  const prompt=installEvent??installWindow.__fioInstallPrompt??null;
+  if(!prompt){
+   setInstallMessage(platform==='mac'
+    ?'Seu navegador ainda não liberou a instalação. Abra este link no Chrome e toque em Mac novamente.'
+    :'Seu navegador ainda não liberou a instalação. Abra este link no Chrome ou Edge e toque novamente.');
    setInstallGate(true);
    return;
   }
   setInstalling(true);
   try{
-   await installEvent.prompt();
-   const choice=await installEvent.userChoice;
+   await prompt.prompt();
+   const choice=await prompt.userChoice;
+   installWindow.__fioInstallPrompt=null;
    setInstallEvent(null);
    if(choice.outcome==='accepted')setInstallGate(false);
+   else setInstallMessage('Instalação cancelada. Quando quiser, toque novamente no seu aparelho.');
   }finally{setInstalling(false);}
  }
- function openInstallChooser(reason='Escolha seu aparelho para instalar o app desta barbearia.'){
+ function openInstallChooser(_reason='Escolha seu aparelho para instalar o app desta barbearia.'){
   if(standalone){goClient();return;}
   setInstallMessage('');
-  setInstallReason(reason);
   setInstallGate(true);
  }
 
@@ -178,8 +189,8 @@ export function PublicPortal(){
     <span className="booking-app-icon">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Smartphone size={20}/>}</span>
     <div><strong>Tenha {title} no seu aparelho</strong><small>Escolha onde você quer instalar o app desta {data.shop.operation_mode==='SOLO'?'agenda':'barbearia'}.</small></div>
     <div className="booking-platform-buttons" aria-label="Escolha a plataforma">
-     <button className={clientPlatform==='android'?'brand-button recommended':''} onClick={()=>void installPlatform('android')}><Download size={14}/>Android</button>
      <button className={clientPlatform==='windows'?'brand-button recommended':''} onClick={()=>void installPlatform('windows')}><Download size={14}/>Windows</button>
+     <button className={clientPlatform==='android'?'brand-button recommended':''} onClick={()=>void installPlatform('android')}><Download size={14}/>Android</button>
      <button className={clientPlatform==='mac'?'brand-button recommended':''} onClick={()=>void installPlatform('mac')}><Download size={14}/>Mac</button>
      <button className={clientPlatform==='iphone'?'brand-button recommended':''} onClick={()=>void installPlatform('iphone')}><Smartphone size={14}/>iPhone</button>
     </div>
@@ -223,16 +234,15 @@ export function PublicPortal(){
   {installGate&&<div className="client-app-gate" role="dialog" aria-modal="true" aria-label="Instalar aplicativo"><div className="client-app-gate-card">
    <button className="client-app-gate-close" aria-label="Fechar" onClick={()=>setInstallGate(false)}><X size={18}/></button>
    <span className="client-app-gate-logo">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Download size={23}/>}</span>
-   <p className="eyebrow">APP DO CLIENTE</p><h2>Baixe {title} para continuar.</h2><p>{installReason||'Sua conta, seus agendamentos e seus horários ficam no app desta barbearia.'}</p>
+   <p className="eyebrow">BAIXAR APP</p><h2>Baixe {title} para continuar.</h2><p>Escolha o modelo do seu aparelho e faça o download.</p>
    <div className="client-platform-grid" aria-label="Escolha o seu aparelho">
-    <button className={clientPlatform==='android'?'brand-button recommended':''} onClick={()=>void installPlatform('android')} disabled={installing}><Download size={16}/><span>Android</span>{clientPlatform==='android'&&<small>Este aparelho</small>}</button>
     <button className={clientPlatform==='windows'?'brand-button recommended':''} onClick={()=>void installPlatform('windows')} disabled={installing}><Download size={16}/><span>Windows</span>{clientPlatform==='windows'&&<small>Este aparelho</small>}</button>
+    <button className={clientPlatform==='android'?'brand-button recommended':''} onClick={()=>void installPlatform('android')} disabled={installing}><Download size={16}/><span>Android</span>{clientPlatform==='android'&&<small>Este aparelho</small>}</button>
     <button className={clientPlatform==='mac'?'brand-button recommended':''} onClick={()=>void installPlatform('mac')} disabled={installing}><Download size={16}/><span>Mac</span>{clientPlatform==='mac'&&<small>Este aparelho</small>}</button>
     <button className={clientPlatform==='iphone'?'brand-button recommended':''} onClick={()=>void installPlatform('iphone')} disabled={installing}><Smartphone size={16}/><span>iPhone</span>{clientPlatform==='iphone'&&<small>Este aparelho</small>}</button>
    </div>
    {installing&&<p className="client-install-status">Abrindo instalação…</p>}
    {installMessage&&<p className="client-install-status warning">{installMessage}</p>}
-   <small>Android, Windows e Mac usam a instalação do navegador. No iPhone, mostramos o passo a passo da Tela de Início.</small>
   </div></div>}
 
   {installGuide&&<div className="install-guide-overlay" role="dialog" aria-modal="true"><div className="install-guide-card client-install-guide"><button className="install-guide-close" aria-label="Fechar" onClick={()=>setInstallGuide(false)}><X size={18}/></button>

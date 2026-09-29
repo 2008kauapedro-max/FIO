@@ -18,11 +18,55 @@ const whats=(phone?:string|null)=>{const digits=(phone??'').replace(/\D/g,'');if
 const accentContrast=(hex:string)=>{const value=hex.replace('#','');if(!/^[0-9a-f]{6}$/i.test(value))return '#050505';const r=parseInt(value.slice(0,2),16),g=parseInt(value.slice(2,4),16),b=parseInt(value.slice(4,6),16);return (r*299+g*587+b*114)/1000<145?'#ffffff':'#050505';};
 export const dayKey=(date:string,zone:string)=>new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(date));
 function MemberAvatar({member,className=''}:{member:{display_name:string;avatar_url?:string|null};className?:string}){return <span className={`avatar ${className}`}>{member.avatar_url?<img src={member.avatar_url} alt=""/>:member.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>;}
+
+type HomeSlide={eyebrow:string;title:string;text:string;action:string;kind:'route'|'public'|'install';to?:string};
+function HomeCarousel(p:WorkspaceProps){
+ const navigate=useNavigate(),role=p.data.membership.role;
+ const shopName=p.data.shop.public_title||p.data.shop.name;
+ const slides:HomeSlide[]=role==='CLIENT'
+  ?[
+    {eyebrow:'SEU HORÁRIO',title:`Agende na ${shopName} sem complicação.`,text:'Escolha serviço, profissional e horário disponível direto pelo FIO.',action:'Agendar agora',kind:'route',to:`${p.base}/agenda?novo=1`},
+    {eyebrow:'NO SEU APARELHO',title:`Tenha ${shopName} sempre por perto.`,text:'Instale o app personalizado e abra sua barbearia direto pela tela inicial.',action:'Instalar app',kind:'install'},
+    {eyebrow:'TUDO ORGANIZADO',title:'Seus próximos horários ficam em um só lugar.',text:'Consulte, acompanhe e gerencie seus agendamentos sem precisar procurar mensagens antigas.',action:'Ver agenda',kind:'route',to:`${p.base}/agenda`}
+   ]
+  :role==='OWNER'
+   ?[
+     {eyebrow:'SEU MINI SITE',title:'Seu link está pronto para receber clientes.',text:'Compartilhe sua página pública para mostrar serviços, equipe e levar o cliente ao app da sua barbearia.',action:'Abrir mini site',kind:'public'},
+     {eyebrow:'IDENTIDADE',title:'Mantenha sua marca sempre atualizada.',text:'Logo, capa, fundo, cores e informações do estabelecimento podem ser ajustados nas Configurações.',action:'Personalizar',kind:'route',to:`${p.base}/configuracoes`},
+     {eyebrow:'ROTINA',title:'Veja o dia antes de começar.',text:'Use a agenda para conferir horários, organizar atendimentos e evitar conflitos.',action:'Ver agenda',kind:'route',to:`${p.base}/agenda`}
+    ]
+   :[
+     {eyebrow:'SEU DIA',title:'Seus próximos atendimentos em um só lugar.',text:'Abra a agenda para conferir horários e manter sua rotina organizada.',action:'Ver agenda',kind:'route',to:`${p.base}/agenda`},
+     {eyebrow:'ACESSO RÁPIDO',title:'Tenha o FIO na tela inicial.',text:'Instale o app para abrir sua agenda sem procurar o link no navegador.',action:'Instalar app',kind:'install'},
+     {eyebrow:'PERFIL',title:'Mantenha seus dados de contato atualizados.',text:'Revise seu perfil e as preferências do aplicativo quando precisar.',action:'Configurações',kind:'route',to:`${p.base}/configuracoes`}
+    ];
+ const [index,setIndex]=useState(0);
+ useEffect(()=>{setIndex(0);},[role,p.data.shop.id]);
+ useEffect(()=>{if(slides.length<2)return;const timer=window.setInterval(()=>setIndex(current=>(current+1)%slides.length),6500);return()=>window.clearInterval(timer);},[role,p.data.shop.id,slides.length]);
+ const run=async(slide:HomeSlide)=>{
+  if(slide.kind==='route'&&slide.to){navigate(slide.to);return;}
+  if(slide.kind==='public'){window.open(`/${p.data.shop.slug}`,'_blank','noopener,noreferrer');return;}
+  if(slide.kind==='install'){
+   if(p.canInstall)await p.installApp?.();
+   else p.notify('Abra este acesso no Chrome ou Edge para instalar o app.');
+  }
+ };
+ return <section className="home-carousel" aria-label="Destaques do FIO">
+  <div className="home-carousel-track">{slides.map((slide,i)=><article key={`${slide.eyebrow}-${i}`} className={`home-carousel-slide ${i===index?'active':''}`} aria-hidden={i!==index}>
+   <div className="home-carousel-copy"><p className="eyebrow">{slide.eyebrow}</p><h2>{slide.title}</h2><p>{slide.text}</p></div>
+   <button type="button" className="secondary home-carousel-action" tabIndex={i===index?0:-1} onClick={()=>void run(slide)}>{slide.action}<ArrowUpRight size={16}/></button>
+  </article>)}</div>
+  <div className="home-carousel-footer">
+   <div className="home-carousel-dots">{slides.map((slide,i)=><button type="button" key={slide.eyebrow} className={`home-carousel-dot ${i===index?'active':''}`} aria-label={`Mostrar destaque ${i+1}`} onClick={()=>setIndex(i)}/>)}</div>
+   <div className="home-carousel-nav"><button type="button" aria-label="Destaque anterior" onClick={()=>setIndex(current=>(current-1+slides.length)%slides.length)}><ChevronLeft size={16}/></button><button type="button" aria-label="Próximo destaque" onClick={()=>setIndex(current=>(current+1)%slides.length)}><ChevronRight size={16}/></button></div>
+  </div>
+ </section>;
+}
 export function Dashboard(p:WorkspaceProps){
  const {data,base}=p,role=data.membership.role,navigate=useNavigate(),today=dayKey(new Date().toISOString(),data.shop.timezone);
  const appointments=data.appointments.filter(a=>dayKey(a.starts_at,data.shop.timezone)===today&&a.status!=='cancelled');
  const next=(role==='CLIENT'?data.appointments:appointments).filter(a=>['scheduled','confirmed','in_service'].includes(a.status)&&new Date(a.ends_at)>new Date()).slice(0,4),done=appointments.filter(a=>a.status==='completed').length;
- return <><PageTitle eyebrow={new Date().toLocaleDateString('pt-BR',{timeZone:data.shop.timezone,weekday:'long',day:'numeric',month:'long'})} title={role==='CLIENT'?'Agende seu horário':'Agenda de hoje'} action={<button className="primary" onClick={()=>navigate(`${base}/agenda?novo=1`)}><Plus size={18}/>Agendar horário</button>}/>{role==='CLIENT'&&<section className="client-welcome">{data.shop.cover_url&&<img className="client-cover" src={data.shop.cover_url} alt=""/>}<div><h2>{data.shop.public_title||data.shop.name}</h2><p>{data.shop.public_description||'Escolha o profissional, o serviço e um horário disponível.'}</p><div className="page-actions"><button className="secondary" onClick={()=>navigate(`${base}/equipe`)}>Profissionais</button><button className="secondary" onClick={()=>navigate(`${base}/servicos`)}>Serviços</button>{data.shop.whatsapp&&<a className="secondary" href={whats(data.shop.whatsapp)} target="_blank" rel="noreferrer">Contato</a>}</div></div></section>}{role!=='CLIENT'&&<dl className="period-counts"><div><dt>Agendamentos hoje</dt><dd>{appointments.length}</dd></div><div><dt>Concluídos</dt><dd>{done}</dd></div></dl>}<section><div className="section-title"><h2>{role==='CLIENT'?'Seus próximos horários':'Próximos atendimentos'}</h2><ArrowLink onClick={()=>navigate(`${base}/agenda`)}>Ver agenda</ArrowLink></div>{next.length?<div className="appointment-list">{next.map(a=><AppointmentRow key={a.id} appointment={a} data={data} onClick={()=>navigate(`${base}/agenda?appointment=${a.id}`)}/>)}</div>:<Empty title="Nenhum horário marcado">Seus próximos agendamentos aparecem aqui.</Empty>}</section>{role==='CLIENT'&&<ReviewPrompt {...p}/>}<InstallNudge {...p}/></>;
+ return <><PageTitle eyebrow={new Date().toLocaleDateString('pt-BR',{timeZone:data.shop.timezone,weekday:'long',day:'numeric',month:'long'})} title={role==='CLIENT'?'Agende seu horário':'Agenda de hoje'} action={<button className="primary" onClick={()=>navigate(`${base}/agenda?novo=1`)}><Plus size={18}/>Agendar horário</button>}/><HomeCarousel {...p}/>{role==='CLIENT'&&<section className="client-welcome">{data.shop.cover_url&&<img className="client-cover" src={data.shop.cover_url} alt=""/>}<div><h2>{data.shop.public_title||data.shop.name}</h2><p>{data.shop.public_description||'Escolha o profissional, o serviço e um horário disponível.'}</p><div className="page-actions"><button className="secondary" onClick={()=>navigate(`${base}/equipe`)}>Profissionais</button><button className="secondary" onClick={()=>navigate(`${base}/servicos`)}>Serviços</button>{data.shop.whatsapp&&<a className="secondary" href={whats(data.shop.whatsapp)} target="_blank" rel="noreferrer">Contato</a>}</div></div></section>}{role!=='CLIENT'&&<dl className="period-counts"><div><dt>Agendamentos hoje</dt><dd>{appointments.length}</dd></div><div><dt>Concluídos</dt><dd>{done}</dd></div></dl>}<section><div className="section-title"><h2>{role==='CLIENT'?'Seus próximos horários':'Próximos atendimentos'}</h2><ArrowLink onClick={()=>navigate(`${base}/agenda`)}>Ver agenda</ArrowLink></div>{next.length?<div className="appointment-list">{next.map(a=><AppointmentRow key={a.id} appointment={a} data={data} onClick={()=>navigate(`${base}/agenda?appointment=${a.id}`)}/>)}</div>:<Empty title="Nenhum horário marcado">Seus próximos agendamentos aparecem aqui.</Empty>}</section>{role==='CLIENT'&&<ReviewPrompt {...p}/>}<InstallNudge {...p}/></>;
 }function InstallNudge(p:WorkspaceProps){
  const key=`fio-install-dismissed:${p.data.shop.id}:${p.data.membership.user_id}`;
  const standalone=typeof window!=='undefined'&&(window.matchMedia?.('(display-mode: standalone)').matches||(navigator as Navigator&{standalone?:boolean}).standalone===true);

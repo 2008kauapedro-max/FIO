@@ -1,4 +1,16 @@
 (function () {
+  // Capture the Chromium PWA prompt before React mounts. On fast mobile
+  // connections the browser may fire beforeinstallprompt before the page
+  // component is ready; keeping it here makes the install button reliable.
+  window.addEventListener('beforeinstallprompt', function (event) {
+    event.preventDefault();
+    window.__fioInstallPrompt = event;
+    window.dispatchEvent(new CustomEvent('fio-install-ready'));
+  });
+  window.addEventListener('appinstalled', function () {
+    window.__fioInstallPrompt = null;
+    window.dispatchEvent(new CustomEvent('fio-app-installed'));
+  });
   var path = window.location.pathname || '/';
   var parts = path.split('/').filter(Boolean);
   var query = new URLSearchParams(window.location.search);
