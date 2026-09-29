@@ -54,6 +54,7 @@ export default function App(){
  const [theme,setTheme]=useState<Theme>(()=>(localStorage.getItem('fio-theme')==='light'?'light':'dark'));
  const [installPrompt,setInstallPrompt]=useState<InstallPromptEvent|null>(null);
  const sidebarNavRef=useRef<HTMLElement>(null);
+ const activeRole=data?.membership.role;
 
  useEffect(()=>{const change=(e:Event)=>setTheme((e as CustomEvent<Theme>).detail);window.addEventListener('fio-theme-change',change);return()=>window.removeEventListener('fio-theme-change',change);},[]);
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('fio-theme',theme);},[theme]);
@@ -94,7 +95,24 @@ export default function App(){
  const refresh=useCallback(async()=>{if(demo||!shopId)return;const next=await api<Bootstrap>('/bootstrap',shopId);setData(next);setError('');},[demo,shopId]);
  useEffect(()=>{if(session&&shopId&&!isPlatform&&!isPublicPortal&&!onboardingShopId){setData(null);void refresh().catch(e=>setError(e.message));}},[shopId,session?.user.id,refresh,isPlatform,isPublicPortal,onboardingShopId]);
  useEffect(()=>{if(!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;void refresh().catch(()=>undefined);},[location.pathname,session?.user.id,shopId,isPlatform,isPublicPortal,onboardingShopId,refresh]);
- useEffect(()=>{if(!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;const sync=()=>void refresh().catch(()=>undefined);const visible=()=>{if(document.visibilityState==='visible')sync();};window.addEventListener('focus',sync);document.addEventListener('visibilitychange',visible);const timer=window.setInterval(sync,30000);return()=>{window.removeEventListener('focus',sync);document.removeEventListener('visibilitychange',visible);window.clearInterval(timer);};},[session?.user.id,shopId,isPlatform,isPublicPortal,onboardingShopId,refresh]);
+ useEffect(()=>{if(!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;const sync=()=>void refresh().catch(()=>undefined);const visible=()=>{if(document.visibilityState==='visible')sync();};window.addEventListener('focus',sync);window.addEventListener('online',sync);document.addEventListener('visibilitychange',visible);const timer=window.setInterval(sync,60000);return()=>{window.removeEventListener('focus',sync);window.removeEventListener('online',sync);document.removeEventListener('visibilitychange',visible);window.clearInterval(timer);};},[session?.user.id,shopId,isPlatform,isPublicPortal,onboardingShopId,refresh]);
+ useEffect(()=>{
+  if(!supabase||!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;
+  let refreshTimer:number|undefined;
+  const scheduleRefresh=(showNew:boolean,createdBy?:string)=>{
+   if(refreshTimer)window.clearTimeout(refreshTimer);
+   refreshTimer=window.setTimeout(()=>{
+    void refresh().catch(()=>undefined);
+    if(showNew&&activeRole!=='CLIENT'&&createdBy!==session.user.id)setToast('Novo agendamento recebido.');
+   },180);
+  };
+  const channel=supabase.channel(`fio-appointments-${shopId}-${session.user.id}`)
+   .on('postgres_changes',{event:'INSERT',schema:'public',table:'appointments',filter:`barbershop_id=eq.${shopId}`},payload=>{const record=payload.new as {created_by?:string};scheduleRefresh(true,record.created_by);})
+   .on('postgres_changes',{event:'UPDATE',schema:'public',table:'appointments',filter:`barbershop_id=eq.${shopId}`},()=>scheduleRefresh(false))
+   .subscribe();
+  return()=>{if(refreshTimer)window.clearTimeout(refreshTimer);void supabase?.removeChannel(channel);};
+ },[session?.user.id,shopId,isPlatform,isPublicPortal,onboardingShopId,refresh,activeRole]);
+
  useEffect(()=>{setMenu(false);},[location.pathname]);
  useEffect(()=>{
   if(!menu)return;
