@@ -1,0 +1,25 @@
+FIO - CLIENTE + PWA + BARBEIRO SOLO
+
+Este patch adiciona:
+- mini site público mais clean, inspirado na referência enviada;
+- pesquisa de serviços e abas Serviços / Detalhes / Profissionais;
+- botão para instalar o app da própria barbearia;
+- Android: usa o prompt nativo de instalação do PWA quando disponível;
+- iPhone: tutorial de Adicionar à Tela de Início;
+- ao tentar agendar pelo site, pede a instalação do app primeiro;
+- app/manifest usa nome e logo da barbearia;
+- assinatura discreta "Tecnologia por FIO" no rodapé;
+- onboarding com opção "Barbearia / equipe" ou "Barbeiro solo";
+- no modo solo, o dono passa a poder ser o profissional que recebe agendamentos;
+- modo solo esconde a área de equipe do painel.
+
+DEPOIS DE COPIAR OS ARQUIVOS, NÃO PUBLIQUE DIRETO.
+Rode primeiro:
+  npx supabase db push --dry-run
+  npx supabase db push
+  npm run typecheck
+  npm test
+  npm run build
+
+Depois publique:
+  npx vercel --prod

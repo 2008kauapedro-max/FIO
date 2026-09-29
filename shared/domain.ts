@@ -13,7 +13,7 @@ export const suggestions: Record<Role, string[]> = {
  CLIENT: ['Quando é meu próximo corte?', 'Quantos cortes tenho no plano?', 'Quais serviços estão disponíveis?']
 };
 export interface Membership { barbershop_id: string; user_id: string; role: Role; display_name: string; phone?: string|null; avatar_url?:string|null; avatar_asset_path?:string|null; active: boolean }
-export interface Shop { id: string; name: string; slug: string; timezone: string; public_title?:string|null; public_description?:string|null; logo_url?:string|null; cover_url?:string|null; background_url?:string|null; accent_color?:string|null; whatsapp?:string|null; instagram?:string|null; address?:string|null; logo_asset_path?:string|null; cover_asset_path?:string|null; background_asset_path?:string|null }
+export interface Shop { id: string; name: string; slug: string; timezone: string; operation_mode?:'SHOP'|'SOLO'; public_title?:string|null; public_description?:string|null; logo_url?:string|null; cover_url?:string|null; background_url?:string|null; accent_color?:string|null; whatsapp?:string|null; instagram?:string|null; address?:string|null; logo_asset_path?:string|null; cover_asset_path?:string|null; background_asset_path?:string|null }
 export interface Service { id: string; name: string; description?:string|null; duration_minutes: number; price_cents: number; active: boolean }
 export type AppointmentStatus = 'scheduled'|'confirmed'|'in_service'|'completed'|'cancelled'|'no_show';
 export interface Appointment { id: string; client_id: string; barber_id: string; service_id: string; starts_at: string; ends_at: string; status: AppointmentStatus; price_cents: number; subscription_id?:string|null }

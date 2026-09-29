@@ -116,7 +116,7 @@ export function Support(p:WorkspaceProps){
 }
 
 export function Settings(p:WorkspaceProps){
- const owner=p.data.membership.role==='OWNER',navigate=useNavigate();
+ const owner=p.data.membership.role==='OWNER',solo=p.data.shop.operation_mode==='SOLO',navigate=useNavigate();
  const [section,setSection]=useState<'home'|'profile'|'barbershop'|'plan'|'access'|'account'|'notifications'|'schedule'>('home');
  useEffect(()=>{window.scrollTo({top:0,behavior:'instant'});},[section]);
  const [displayName,setDisplayName]=useState(p.data.membership.display_name);
@@ -131,12 +131,7 @@ export function Settings(p:WorkspaceProps){
  const [accentColor,setAccentColor]=useState(p.data.shop.accent_color??'#ffffff');
  const [busy,setBusy]=useState(false),[accountEmail,setAccountEmail]=useState('');
  const origin=typeof window==='undefined'?'':window.location.origin;
- const links={
-  gestao:`${origin}/acesso/gestao`,
-  equipe:`${origin}/acesso/equipe`,
-  site:`${origin}/${p.data.shop.slug}`,
-  clientes:`${origin}/login?audience=client&shop=${encodeURIComponent(p.data.shop.slug)}`
- };
+ const links={gestao:`${origin}/acesso/gestao`,equipe:`${origin}/acesso/equipe`,clientes:`${origin}/${p.data.shop.slug}`};
 
  useEffect(()=>{let active=true;if(!supabase)return;void supabase.auth.getUser().then(({data})=>{if(active)setAccountEmail(data.user?.email??'');});return()=>{active=false;};},[]);
 
@@ -177,11 +172,11 @@ export function Settings(p:WorkspaceProps){
 
  const sections=[
   ['profile','Meu perfil',UserRound],
-  ...(owner?[['barbershop','Barbearia',Store] as const,['plan','Plano FIO',Crown] as const]:[]),
+  ...(owner?[[ 'barbershop',solo?'Perfil profissional':'Barbearia',Store] as const,['plan','Plano FIO',Crown] as const]:[]),
   ...(p.data.membership.role!=='CLIENT'?[['access','Acessos e app',ShieldCheck] as const]:[]),
   ['account','Conta e segurança',KeyRound],
   ['notifications','Notificações',MessageCircle],
-  ...(owner?[['schedule','Equipe e horários',CalendarDays] as const]:[]),
+  ...(owner&&!solo?[['schedule','Equipe e horários',CalendarDays] as const]:[]),
  ] as const;
 
  return <>
@@ -192,12 +187,12 @@ export function Settings(p:WorkspaceProps){
     {sections.map(([key,label,Icon])=><button key={key} type="button" className={section===key?'active':''} onClick={()=>setSection(key)}><Icon size={17}/><span>{label}</span></button>)}
    </nav>
 
-   <div className="settings-content">{section==='schedule'&&owner&&<StaffSchedule {...p}/>} {section==='notifications'&&<PushSettings {...p}/>}<div className="settings-shortcuts">{owner&&<button className="secondary" onClick={()=>navigate(p.base+'/equipe')}><Users size={17}/>Equipe</button>}<button className="secondary" onClick={()=>{const next=document.documentElement.dataset.theme==='light'?'dark':'light';window.dispatchEvent(new CustomEvent('fio-theme-change',{detail:next}));}}><Palette size={17}/>Alternar aparência</button><button className="secondary" onClick={()=>navigate(p.base+'/suporte')}><CircleHelp size={17}/>Ajuda</button></div>
+   <div className="settings-content">{section==='schedule'&&owner&&<StaffSchedule {...p}/>} {section==='notifications'&&<PushSettings {...p}/>}<div className="settings-shortcuts">{owner&&!solo&&<button className="secondary" onClick={()=>navigate(p.base+'/equipe')}><Users size={17}/>Equipe</button>}<button className="secondary" onClick={()=>{const next=document.documentElement.dataset.theme==='light'?'dark':'light';window.dispatchEvent(new CustomEvent('fio-theme-change',{detail:next}));}}><Palette size={17}/>Alternar aparência</button><button className="secondary" onClick={()=>navigate(p.base+'/suporte')}><CircleHelp size={17}/>Ajuda</button></div>
     {section==='profile'&&<>
      <section className="settings-card settings-profile-card">
       <div className="settings-profile-head">
        <span className="avatar settings-avatar">{avatarUrl?<img src={avatarUrl} alt="Foto de perfil"/>:p.data.membership.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>
-       <div><h2>{p.data.membership.display_name}</h2><p className="muted">{owner?'Responsável pela barbearia':p.data.membership.role==='BARBER'?'Profissional da equipe':'Cliente'}</p></div>
+       <div><h2>{p.data.membership.display_name}</h2><p className="muted">{owner?(solo?'Barbeiro solo':'Responsável pela barbearia'):p.data.membership.role==='BARBER'?'Profissional da equipe':'Cliente'}</p></div>
       </div>
       <label className="profile-photo-action"><ImagePlus size={16}/><span>Alterar foto de perfil</span><input hidden type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>void uploadAvatar(e.target.files?.[0])}/></label>
       {accountEmail&&<div className="settings-readonly"><span>E-mail da conta</span><strong>{accountEmail}</strong></div>}
@@ -214,7 +209,7 @@ export function Settings(p:WorkspaceProps){
 
     {section==='barbershop'&&owner&&<>
      <section className="settings-card branding-card">
-      <div className="section-title"><h2>Identidade da barbearia</h2><span className="muted">O que o cliente vê.</span></div>
+      <div className="section-title"><h2>{solo?'Identidade profissional':'Identidade da barbearia'}</h2><span className="muted">O que o cliente vê.</span></div>
       <Field label="Nome exibido"><input maxLength={100} value={title} onChange={e=>setTitle(e.target.value)}/></Field>
       <Field label="Descrição"><textarea maxLength={280} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Uma frase curta sobre a barbearia."/></Field>
       <div className="branding-upload-grid">
@@ -231,10 +226,9 @@ export function Settings(p:WorkspaceProps){
       <button className="primary" disabled={busy} onClick={saveBrand}><Palette size={16}/>{busy?'Salvando…':'Salvar identidade'}</button>
      </section>
      <section className="settings-card">
-      <div className="section-title"><h2>Site e app dos clientes</h2><span className="muted">Link público da barbearia.</span></div>
+      <div className="section-title"><h2>Site e app dos clientes</h2><span className="muted">Links separados para divulgar e acessar.</span></div>
       <div className="share-links">
-       <button onClick={()=>copy(links.site)}><LinkIcon size={17}/><div><span>Site público</span><small>{links.site}</small></div><Copy size={16}/></button>
-       <button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>Acesso dos clientes</span><small>{links.clientes}</small></div><Copy size={16}/></button>
+       <button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>Site público / link da bio</span><small>{links.clientes}</small></div><Copy size={16}/></button>
       </div>
       <p className="muted settings-help">A logo da barbearia identifica a experiência instalada pelos clientes.</p>
      </section>
@@ -254,11 +248,11 @@ export function Settings(p:WorkspaceProps){
       <div className="section-title"><h2>Links de acesso</h2><span className="muted">Prontos para enviar.</span></div>
       <div className="share-links">
        {owner&&<button onClick={()=>copy(links.gestao)}><LinkIcon size={17}/><div><span>FIO Gestão</span><small>{links.gestao}</small></div><Copy size={16}/></button>}
-       {owner&&<button onClick={()=>copy(links.equipe)}><LinkIcon size={17}/><div><span>FIO Equipe</span><small>{links.equipe}</small></div><Copy size={16}/></button>}
-       <button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>Link dos clientes</span><small>{links.clientes}</small></div><Copy size={16}/></button>
+       {owner&&!solo&&<button onClick={()=>copy(links.equipe)}><LinkIcon size={17}/><div><span>FIO Equipe</span><small>{links.equipe}</small></div><Copy size={16}/></button>}
+       <button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>Site público / link dos clientes</span><small>{links.clientes}</small></div><Copy size={16}/></button>
       </div>
      </section>
-     {owner&&<section className="settings-card">
+     {owner&&!solo&&<section className="settings-card">
       <div className="section-title"><h2>Equipe e permissões</h2><span className="muted">Controle quem trabalha no espaço.</span></div>
       <p className="muted">Os acessos da equipe continuam separados do acesso do responsável. Adicione e consulte profissionais na área Equipe.</p>
       <button className="secondary" onClick={()=>navigate(`${p.base}/equipe`)}><Users size={16}/>Abrir equipe</button>
@@ -285,7 +279,7 @@ export function Settings(p:WorkspaceProps){
    </div>
   </div>
   <section className="settings-card settings-meta">
-   <div><span>Barbearia</span><strong>{p.data.shop.name}</strong></div>
+   <div><span>{solo?'Perfil':'Barbearia'}</span><strong>{p.data.shop.name}</strong></div>
    <div><span>Plano FIO</span><strong>{p.data.plan}</strong></div>
    <div><span>Assistente</span><strong>{p.data.aiEnabled?'Incluído':'Indisponível'}</strong></div>
   </section>

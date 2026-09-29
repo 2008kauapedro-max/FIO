@@ -41,7 +41,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.get('/api/health',rateLimit('health',{windowMs:60_000,max:30}), (_req, res) =>res.set('Cache-Control','no-store').json({status:'ok'}));
  app.get('/api/public/shop/:slug',rateLimit('public-shop',{windowMs:60_000,max:60}),async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
-  const shop=await db.from('barbershops').select('id,name,slug,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
+  const shop=await db.from('barbershops').select('id,name,slug,operation_mode,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
   if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
   const [services,team,palette,billing]=await Promise.all([
    db.from('services').select('id,name,description,duration_minutes,price_cents').eq('barbershop_id',shop.data.id).eq('active',true).order('name'),
@@ -76,19 +76,19 @@ export function createApp(authenticator: Authenticator=authenticate) {
  });
  app.post('/api/onboarding',rateLimitByUser('onboarding',600_000,8),async(req,res)=>{
   const v=z.discriminatedUnion('mode',[
-   z.object({mode:z.literal('create'),name:z.string().trim().min(2).max(100),slug:z.string().regex(/^[a-z0-9-]{3,60}$/),displayName:z.string().trim().min(2).max(100)}).strict(),
+   z.object({mode:z.literal('create'),name:z.string().trim().min(2).max(100),slug:z.string().regex(/^[a-z0-9-]{3,60}$/),displayName:z.string().trim().min(2).max(100),operationMode:z.enum(['SHOP','SOLO']).default('SHOP')}).strict(),
    z.object({mode:z.literal('join'),slug:z.string().min(3).max(60),displayName:z.string().trim().min(2).max(100)}).strict(),
    z.object({mode:z.literal('invite'),token:z.uuid(),displayName:z.string().trim().min(2).max(100)}).strict()
   ]).parse(req.body);
   const a=res.locals.auth as AuthContext;
-  const result=v.mode==='create'?await a.db.rpc('create_barbershop',{p_name:v.name,p_slug:v.slug,p_display_name:v.displayName}):v.mode==='join'?await a.db.rpc('join_barbershop',{p_slug:v.slug,p_name:v.displayName}):await a.db.rpc('accept_invitation',{p_token:v.token,p_name:v.displayName});
+  const result=v.mode==='create'?await a.db.rpc('create_workspace',{p_name:v.name,p_slug:v.slug,p_display_name:v.displayName,p_operation_mode:v.operationMode}):v.mode==='join'?await a.db.rpc('join_barbershop',{p_slug:v.slug,p_name:v.displayName}):await a.db.rpc('accept_invitation',{p_token:v.token,p_name:v.displayName});
   dbError(result.error);res.status(201).json({barbershopId:result.data});
  });
  app.get('/api/onboarding/progress',async(req,res)=>{
   const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);
   const [progress,shop,services,hours,amenities,palettes]=await Promise.all([
    a.db.from('onboarding_progress').select('*').eq('barbershop_id',c.shopId).maybeSingle(),
-   a.db.from('barbershops').select('id,name,slug,timezone,public_title,public_description,logo_url,cover_url,background_url,accent_color,onboarding_step,onboarding_completed,whatsapp,instagram,address,theme_mode,palette_key,custom_accent,logo_asset_path,cover_asset_path,background_asset_path').eq('id',c.shopId).single(),
+   a.db.from('barbershops').select('id,name,slug,timezone,operation_mode,public_title,public_description,logo_url,cover_url,background_url,accent_color,onboarding_step,onboarding_completed,whatsapp,instagram,address,theme_mode,palette_key,custom_accent,logo_asset_path,cover_asset_path,background_asset_path').eq('id',c.shopId).single(),
    a.db.from('services').select('id,name,description,duration_minutes,price_cents,active').eq('barbershop_id',c.shopId).order('name'),
    a.db.from('business_hours').select('weekday,opens_at,closes_at').eq('barbershop_id',c.shopId).order('weekday'),
    a.db.from('shop_amenities').select('amenity_key,enabled').eq('barbershop_id',c.shopId).eq('enabled',true),

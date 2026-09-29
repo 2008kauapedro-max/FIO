@@ -121,7 +121,7 @@ export default function App(){
  if(!data)return <AppLoading/>;
  if(location.pathname==='/')return <Navigate replace to={roleHome(data.membership.role)+location.search}/>;
 
- const role=data.membership.role,base=roleHome(role),page=location.pathname.slice(base.length),items=navItems.filter(n=>n.roles.includes(role)&&(!n.feature||planAllows(data.plan,n.feature)));
+ const role=data.membership.role,base=roleHome(role),page=location.pathname.slice(base.length),solo=data.shop.operation_mode==='SOLO',items=navItems.filter(n=>n.roles.includes(role)&&(!n.feature||planAllows(data.plan,n.feature))&&!(solo&&n.path==='/equipe'));
  if(!location.pathname.startsWith(base+'/')&&location.pathname!==base)return <Navigate replace to={base}/>;
  if(page!==''&&page!=='/configuracoes'&&!items.some(n=>n.path===page))return <Navigate replace to={base}/>;
  const props:WorkspaceProps={data,demo,base,refresh,notify:setToast,updateDemo:fn=>setData(d=>d?fn(d):d),canInstall:Boolean(installPrompt),installApp:async()=>{if(!installPrompt){setToast('No navegador do celular, use “Adicionar à tela inicial”.');return;}await installPrompt.prompt();await installPrompt.userChoice;setInstallPrompt(null);}};
@@ -151,7 +151,7 @@ export default function App(){
      </span>
      <span className="sidebar-shop-copy">
       <strong>{data.shop.public_title||data.shop.name}</strong>
-      <small>{role==='OWNER'?'FIO Gestão':role==='BARBER'?'FIO Equipe':'Área do cliente'}</small>
+      <small>{role==='OWNER'?(solo?'FIO Solo':'FIO Gestão'):role==='BARBER'?'FIO Equipe':'Área do cliente'}</small>
      </span>
     </Link>
     <button className="icon-button close-menu" aria-label="Fechar navegação" onClick={()=>setMenu(false)}><X size={20}/></button>
@@ -164,7 +164,7 @@ export default function App(){
     <div className="profile">
      <NavLink data-tour="profile" className="profile-account" to={`${base}/configuracoes`} aria-label="Abrir perfil e configurações">
       <span className="avatar small">{data.membership.avatar_url?<img src={data.membership.avatar_url} alt=""/>:data.membership.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>
-      <span className="profile-copy"><strong>{data.membership.display_name}</strong><small>{role==='OWNER'?'Responsável':role==='BARBER'?'Barbeiro':'Cliente'} · Configurações</small></span>
+      <span className="profile-copy"><strong>{data.membership.display_name}</strong><small>{role==='OWNER'?(solo?'Barbeiro solo':'Responsável'):role==='BARBER'?'Barbeiro':'Cliente'} · Configurações</small></span>
      </NavLink>
      <button className="icon-button" aria-label="Sair" title="Sair" onClick={()=>{if(demo)navigate('/login');else void supabase?.auth.signOut();}}><LogOut size={17}/></button>
     </div>
