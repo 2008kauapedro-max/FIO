@@ -6,6 +6,7 @@ export type BillingState = {
  provider:'syncpay'; providerStatus:string; plan:PaidPlan; cycle:BillingCycle;
  amountCents:number; nextChargeAt:string|null;
  payment:{pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null}|null;
+ refund?:{eligible:boolean;deadline:string|null}|null;
 };
 
 export function billingLocksNewSubscription(billing:BillingState|null){
@@ -36,6 +37,11 @@ export function billingErrorMessage(code?:string){
   SYNCPAY_ENROLLMENT_UNCERTAIN:'Uma tentativa está em verificação. Não gere outra cobrança; aguarde e procure o suporte se ela não aparecer.',
   SYNCPAY_ENROLLMENT_IN_PROGRESS:'Há uma tentativa de assinatura em verificação. Aguarde antes de escolher outro plano.',
   SYNCPAY_SUBSCRIPTION_EXISTS:'Já existe uma assinatura ou cobrança em andamento. Consulte a cobrança atual.',
+  SYNCPAY_REFUND_WINDOW_EXPIRED:'O prazo de 7 dias desta primeira contratação terminou. Você ainda pode cancelar cobranças futuras.',
+  SYNCPAY_REFUND_MANUAL_REQUIRED:'Não foi possível identificar automaticamente a transação paga. Fale com o suporte FIO para solicitar o reembolso.',
+  SYNCPAY_REFUND_NOT_READY:'O pagamento ainda não está pronto para reembolso. Atualize o status e tente novamente.',
+  SYNCPAY_REFUND_IN_PROGRESS:'Já existe um reembolso em andamento para esta cobrança.',
+  SYNCPAY_REFUND_UNAVAILABLE:'Esta cobrança não está elegível para reembolso automático. Fale com o suporte FIO.',
   SYNCPAY_NOT_CONFIGURED:'A assinatura está temporariamente indisponível. Fale com o suporte.',
   SYNCPAY_AUTH_ERROR:'A assinatura está temporariamente indisponível. Fale com o suporte.',
   SYNCPAY_ACCOUNT_PENDING:'A assinatura está temporariamente indisponível. Fale com o suporte.',

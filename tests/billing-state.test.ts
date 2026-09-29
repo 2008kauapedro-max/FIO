@@ -16,7 +16,7 @@ describe('billing UI safety',()=>{
   expect(usablePix({...billing,payment:null},now)).toBe(false);
  });
  it('errors are actionable without credentials or server configuration details',()=>{
-  for(const code of ['SYNCPAY_AUTH_ERROR','SYNCPAY_NOT_CONFIGURED','unexpected'])expect(billingErrorMessage(code)).not.toMatch(/secret|client id|variáveis|servidor/i);
+  for(const code of ['SYNCPAY_AUTH_ERROR','SYNCPAY_NOT_CONFIGURED','SYNCPAY_REFUND_WINDOW_EXPIRED','SYNCPAY_REFUND_MANUAL_REQUIRED','unexpected'])expect(billingErrorMessage(code)).not.toMatch(/secret|client id|variáveis|servidor/i);
   expect(billingStatusLabel('suspended')).toContain('suspensa');
   expect(billingStatusLabel('pending_first_payment')).toBe('Contratação não finalizada');
   expect(billingStatusLabel('unknown')).not.toContain('ativa');

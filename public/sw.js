@@ -1,4 +1,4 @@
-const CACHE='fio-shell-v6';
+const CACHE='fio-shell-v7';
 function pushTarget(value){
  try{const u=new URL(value,self.location.origin);if(u.origin===self.location.origin&&(/^\/(owner|barber|client)\/agenda$/.test(u.pathname)||u.pathname==='/platform/alertas'))return u.href;}catch{}
  return new URL('/',self.location.origin).href;
@@ -28,5 +28,5 @@ self.addEventListener('fetch',event=>{
   event.respondWith(fetch(request).then(response=>{if(response.ok&&response.headers.get('content-type')?.includes('text/html')){const copy=response.clone();void caches.open(CACHE).then(cache=>cache.put('/',copy)).catch(()=>undefined);}return response;}).catch(async()=>await caches.match('/')||new Response('Sem conexão. Reconecte e tente novamente.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}})));
   return;
  }
- event.respondWith(caches.match(request).then(cached=>cached||fetch(request).then(response=>{if(response.ok&&['script','style','image','font'].includes(request.destination)){const copy=response.clone();caches.open(CACHE).then(cache=>cache.put(request,copy));}return response;})));
+ event.respondWith(caches.match(request).then(cached=>cached||fetch(request).then(response=>{if(response.ok&&['script','style','image','font'].includes(request.destination)){const copy=response.clone();void caches.open(CACHE).then(cache=>cache.put(request,copy)).catch(()=>undefined);}return response;})).catch(()=>new Response('',{status:503,statusText:'Offline'})));
 });

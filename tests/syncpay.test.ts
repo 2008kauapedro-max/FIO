@@ -72,6 +72,25 @@ describe('SyncPay billing boundary',()=>{
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{\"message\":\"This is a test webhook payload.\",\"event\":\"assinatura_ativada\"}'))).toBe(false);
   expect(syncpayInternals.isSyncpayDashboardTest(Buffer.from('{"message":"This is a test webhook payload.","ev\\u0065nt":"assinatura_ativada"}'))).toBe(false);
  });
+
+ it('offers the 7-day refund window only for the first paid cycle',()=>{
+  const base={status:'active',next_charge_at:'2026-10-30T12:00:00Z',plan:{grace_period_days:5},charges:[{cycle_number:1,status:'paid',paid_at:'2026-09-29T12:00:00Z',payment:{identifier:'tx_first'}}]} as Parameters<typeof syncpayInternals.refundWindow>[0];
+  expect(syncpayInternals.refundWindow(base,Date.parse('2026-10-05T11:59:59Z'))).toMatchObject({eligible:true,identifier:'tx_first'});
+  expect(syncpayInternals.refundWindow(base,Date.parse('2026-10-06T12:00:01Z')).eligible).toBe(false);
+  const renewal={...base,charges:[{cycle_number:2,status:'paid',paid_at:'2026-09-29T12:00:00Z',payment:{identifier:'tx_second'}}]} as Parameters<typeof syncpayInternals.refundWindow>[0];
+  expect(syncpayInternals.refundWindow(renewal,Date.parse('2026-09-30T12:00:00Z')).eligible).toBe(false);
+ });
+
+ it('recovers only the recent subscriber with the same email',()=>{
+  const created=new Date(Date.now()-60_000).toISOString();
+  const picked=syncpayInternals.pickRecoverableSubscriber([
+   {token:'sub_old_12345678',subscriber_email:'owner@example.com',status:'active',started_at:new Date(Date.now()-86_400_000).toISOString()},
+   {token:'sub_recent_12345678',subscriber_email:'OWNER@example.com',status:'pending_first_payment',started_at:new Date(Date.now()-30_000).toISOString()},
+   {token:'sub_other_12345678',subscriber_email:'other@example.com',status:'pending_first_payment',started_at:new Date().toISOString()}
+  ],'owner@example.com',created);
+  expect(picked?.token).toBe('sub_recent_12345678');
+ });
+
  it('rejects a provider response for a different subscription',()=>{
   expect(()=>syncpayInternals.normalizeProviderDetail({token:'sub_someone_else',status:'active'},{token:'sub_expected_123',planToken:'plan_12345678',gracePeriodDays:5})).toThrow();
  });

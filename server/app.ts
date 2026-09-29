@@ -8,7 +8,7 @@ import { authenticate, tenant, requireOwner, requireFioFeature, bootstrap, type 
 import { ApiError,dbError } from './errors.js';
 import { askAssistant } from './assistant.js';
 import { bookingSchema } from '../shared/domain.js';
-import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook } from './syncpay.js';
+import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment } from './syncpay.js';
 import { randomUUID } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
 import {publicPushConfig,validPushEndpoint} from './platform-push.js';
@@ -23,7 +23,7 @@ function cleanPhone(value:string){return value.trim().replace(/\s+/g,' ');}
 function normalizeAccountPhone(value:string){
  const digits=value.replace(/\D/g,'');
  const normalized=digits.length===10||digits.length===11?`55${digits}`:digits;
- if(!/^55\d{10,11}$/.test(normalized))throw new ApiError(400,'INVALID_PHONE','Informe um telefone válido.');
+ if(!/^55\d{10,11}$/.test(normalized))throw new ApiError(400,'INVALID_PHONE','Confira o telefone informado.');
  return normalized;
 }
 function publicStorageUrl(bucket:string,path:string){
@@ -83,11 +83,11 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/onboarding',rateLimitByUser('onboarding',600_000,8),async(req,res)=>{
   const v=z.discriminatedUnion('mode',[
    z.object({mode:z.literal('create'),name:z.string().trim().min(2).max(100),slug:z.string().regex(/^[a-z0-9-]{3,60}$/),displayName:z.string().trim().min(2).max(100),phone:z.string().trim().min(8).max(24),operationMode:z.enum(['SHOP','SOLO']).default('SHOP')}).strict(),
-   z.object({mode:z.literal('join'),slug:z.string().min(3).max(60),displayName:z.string().trim().min(2).max(100),phone:z.string().trim().min(8).max(24)}).strict(),
-   z.object({mode:z.literal('invite'),token:z.uuid(),displayName:z.string().trim().min(2).max(100),phone:z.string().trim().min(8).max(24)}).strict()
+   z.object({mode:z.literal('join'),slug:z.string().min(3).max(60),displayName:z.string().trim().min(2).max(100)}).strict(),
+   z.object({mode:z.literal('invite'),token:z.uuid(),displayName:z.string().trim().min(2).max(100)}).strict()
   ]).parse(req.body);
   const a=res.locals.auth as AuthContext;
-  const claimed=await a.db.rpc('claim_account_phone',{p_phone:v.phone});dbError(claimed.error);
+   if(v.mode==='create'){const claimed=await a.db.rpc('claim_account_phone',{p_phone:v.phone});dbError(claimed.error);}
   const result=v.mode==='create'?await a.db.rpc('create_workspace',{p_name:v.name,p_slug:v.slug,p_display_name:v.displayName,p_operation_mode:v.operationMode}):v.mode==='join'?await a.db.rpc('join_barbershop',{p_slug:v.slug,p_name:v.displayName}):await a.db.rpc('accept_invitation',{p_token:v.token,p_name:v.displayName});
   dbError(result.error);res.status(201).json({barbershopId:result.data});
  });
@@ -143,8 +143,10 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/saas/subscribe',rateLimitByUser('billing-subscribe',600_000,8),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
  });
+ app.post('/api/saas/recover-enrollment',rateLimitByUser('billing-recover',300_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await recoverSyncpayEnrollment(c,req.body));});
  app.post('/api/saas/change-plan',rateLimitByUser('billing-change',600_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await changeSyncpayPlan(c,req.body));});
  app.post('/api/saas/charge',rateLimitByUser('billing-charge',600_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await manageSyncpayCharge(c,req.body));});
+ app.post('/api/saas/refund',rateLimitByUser('billing-refund',3_600_000,2),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await requestSyncpayRefund(c,req.body));});
  app.get('/api/saas/billing',async(_req,res)=>{
   const c=ctx(res);requireOwner(c);res.json(await getSyncpayBilling(c));
  });
@@ -193,12 +195,12 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const created=await admin.auth.admin.createUser({email:v.email,password:v.temporaryPassword,email_confirm:true,user_metadata:{display_name:v.name}});
   if(created.error||!created.data.user) throw new ApiError(400,'STAFF_CREATE_FAILED','Não foi possível criar o acesso. Confira se o e-mail já está em uso.');
   const userId=created.data.user.id;
-  const phoneClaim=await admin.from('account_phone_registry').insert({user_id:userId,phone_e164:normalizeAccountPhone(v.phone)});
-  if(phoneClaim.error){
-   await admin.auth.admin.deleteUser(userId);
-   if(phoneClaim.error.code==='23505')throw new ApiError(409,'PHONE_ALREADY_IN_USE','Este telefone já está vinculado a outra conta FIO.');
-   dbError(phoneClaim.error);
-  }
+   const phoneClaim=await admin.from('account_phone_registry').insert({user_id:userId,phone_e164:normalizeAccountPhone(v.phone)});
+   if(phoneClaim.error){
+    await admin.auth.admin.deleteUser(userId);
+    if(phoneClaim.error.code==='23505')throw new ApiError(409,'PHONE_ALREADY_IN_USE','Este telefone já está vinculado a outra conta FIO.');
+    dbError(phoneClaim.error);
+   }
   const membership=await admin.rpc('platform_attach_provisioned_staff',{p_shop:c.shopId,p_user:userId,p_name:v.name,p_phone:cleanPhone(v.phone),p_actor:c.userId});
   if(membership.error){await admin.auth.admin.deleteUser(userId);dbError(membership.error);}
   res.status(201).json({userId});

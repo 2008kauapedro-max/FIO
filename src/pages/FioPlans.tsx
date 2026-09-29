@@ -25,6 +25,7 @@ export function FioPlans(p:WorkspaceProps){
  const [billingLoaded,setBillingLoaded]=useState(false);
  const [billingConfigured,setBillingConfigured]=useState(false);
  const [checkoutError,setCheckoutError]=useState('');
+ const [checkoutCode,setCheckoutCode]=useState('');
  const sub=p.data.fioSubscription;
  const trialUsed=Boolean(sub.trial_ends_at);
  const trialActive=sub.status==='trialing'&&Boolean(sub.trial_ends_at)&&new Date(sub.trial_ends_at!)>new Date();
@@ -40,7 +41,7 @@ export function FioPlans(p:WorkspaceProps){
  },[p.data.shop.id]);
 
  async function startTrial(){
-  setBusy(true);setCheckoutError('');
+  setBusy(true);setCheckoutError('');setCheckoutCode('');
   try{
    await api('/saas/trial',p.data.shop.id,{confirmed:true});
    await p.refresh();setChoiceOpen(false);
@@ -50,9 +51,9 @@ export function FioPlans(p:WorkspaceProps){
  }
  function selectPaid(code:PaidPlan){
   if(!billingLoaded||!billingConfigured||billingLocked){setCheckoutError('Consulte a cobrança atual antes de iniciar outra assinatura.');return;}
-  setChoiceOpen(false);setCheckoutPlan(code);setDocument('');setAcceptedTerms(false);setBilling(null);setCheckoutError('');
+  setChoiceOpen(false);setCheckoutPlan(code);setDocument('');setAcceptedTerms(false);setBilling(null);setCheckoutError('');setCheckoutCode('');
  }
- function closeCheckout(){if(busy)return;setCheckoutPlan(null);setCheckoutError('');}
+ function closeCheckout(){if(busy)return;setCheckoutPlan(null);setCheckoutError('');setCheckoutCode('');}
  async function subscribe(){
   if(!checkoutPlan||!acceptedTerms||busy||billingLocked)return;
   setBusy(true);setCheckoutError('');
@@ -61,7 +62,16 @@ export function FioPlans(p:WorkspaceProps){
    setBilling(result);
    if(result.providerStatus==='active'||result.providerStatus==='overdue')await p.refresh();
    p.notify(result.providerStatus==='active'?'Assinatura confirmada com sucesso.':'Cobrança criada. Finalize o pagamento para liberar o plano.');
-  }catch(error){setCheckoutError(checkoutMessage(error));}
+  }catch(error){setCheckoutError(checkoutMessage(error));setCheckoutCode(error instanceof RequestError?error.code:'');}
+  finally{setBusy(false);}
+ }
+ async function recoverEnrollment(){
+  if(busy)return;setBusy(true);setCheckoutError('');setCheckoutCode('');
+  try{
+   const result=await api<{configured:boolean;subscription:BillingState|null;cleared:boolean}>('/saas/recover-enrollment',p.data.shop.id,{confirmed:true});
+   if(result.subscription){setBilling(result.subscription);setCheckoutPlan(result.subscription.plan);p.notify('A cobrança existente foi recuperada. Confira o Pix e o status.');}
+   else{setBilling(null);p.notify('Tentativa anterior liberada. Agora clique em Gerar Pix novamente.');}
+  }catch(error){setCheckoutError(checkoutMessage(error));setCheckoutCode(error instanceof RequestError?error.code:'');}
   finally{setBusy(false);}
  }
  async function refreshBilling(){
@@ -78,10 +88,27 @@ export function FioPlans(p:WorkspaceProps){
   }catch(error){setCheckoutError(checkoutMessage(error));}
   finally{setBusy(false);}
  }
- async function manageCharge(action:'cancel_pending'|'resend'){
-  const question=action==='cancel_pending'?'Cancelar esta contratação antes do primeiro pagamento? O teste grátis continua até sua data original. Não pague o Pix antigo.':'Solicitar um novo Pix para a cobrança atual? Confira o novo código antes de pagar.';
+ async function manageCharge(action:'cancel_pending'|'resend'|'cancel_active'){
+  const question=action==='cancel_pending'?'Cancelar esta contratação antes do primeiro pagamento? O teste grátis continua até sua data original. Não pague o Pix antigo.':action==='cancel_active'?'Cancelar a assinatura e impedir novas cobranças? Após o prazo de reembolso aplicável, o período já pago não é devolvido automaticamente.':'Solicitar um novo Pix para a cobrança atual? Confira o novo código antes de pagar.';
   if(!window.confirm(question))return;setBusy(true);setCheckoutError('');
-  try{const result=await api<{subscription:BillingState|null}>('/saas/charge',p.data.shop.id,{action,confirmed:true});setBilling(action==='cancel_pending'?null:result.subscription);await p.refresh();if(action==='cancel_pending'){setCheckoutPlan(null);p.notify('Contratação pendente cancelada. Você já pode escolher outro plano.');}else p.notify('Novo Pix consultado. Use somente o código válido exibido.');}catch(e){setCheckoutError(checkoutMessage(e));}finally{setBusy(false);}
+  try{
+   const result=await api<{subscription:BillingState|null}>('/saas/charge',p.data.shop.id,{action,confirmed:true});
+   if(action==='cancel_pending'){setBilling(null);setCheckoutPlan(null);p.notify('Contratação pendente cancelada. Você já pode escolher outro plano.');}
+   else if(action==='cancel_active'){setBilling(result.subscription);await p.refresh();p.notify('Assinatura cancelada. Não serão geradas novas cobranças.');}
+   else{setBilling(result.subscription);p.notify('Novo Pix consultado. Use somente o código válido exibido.');}
+  }catch(e){setCheckoutError(checkoutMessage(e));}finally{setBusy(false);}
+ }
+ async function requestRefund(){
+  if(!billing?.refund?.eligible||busy)return;
+  const deadline=billing.refund.deadline?date(billing.refund.deadline):'7 dias da primeira contratação';
+  if(!window.confirm(`Cancelar a assinatura e solicitar o reembolso desta primeira contratação? Prazo exibido: ${deadline}.`))return;
+  setBusy(true);setCheckoutError('');
+  try{
+   const result=await api<{subscription:BillingState|null;refund:{code:string;status:string;requestedAt:string};cancellation:'cancelled'|'needs_attention'|'already_requested'}>('/saas/refund',p.data.shop.id,{confirmed:true});
+   setBilling(result.subscription);await p.refresh();
+   if(result.cancellation==='needs_attention')p.notify('Reembolso solicitado. A renovação precisa de conferência do suporte FIO.');
+   else p.notify('Solicitação de reembolso enviada e renovação cancelada.');
+  }catch(e){setCheckoutError(checkoutMessage(e));}finally{setBusy(false);}
  }
  async function confirmChange(){
   if(!changePlan||!changeAccepted||busy)return;setBusy(true);setCheckoutError('');
@@ -148,8 +175,10 @@ export function FioPlans(p:WorkspaceProps){
     <p className="muted">Assinatura <strong>{BILLING_LABELS[cycle].toLowerCase()}</strong>. O acesso pago só é liberado quando o pagamento for confirmado.</p>
     <div className="fio-checkout-summary"><div><span>Plano</span><strong>FIO {checkoutPlan}</strong></div><div><span>Período</span><strong>{BILLING_LABELS[cycle]}</strong></div><div><span>Valor</span><strong>{money(FIO_PLAN_CATALOG.find(x=>x.code===checkoutPlan)!.prices[cycle]!)}</strong></div></div>
     <label className="field fio-document-field"><span>CPF ou CNPJ do responsável</span><input value={document} inputMode="numeric" autoComplete="off" placeholder="Somente números ou formatado" maxLength={24} onChange={e=>setDocument(e.target.value)}/><small>Enviado à SyncPay para identificar o titular pagador e processar a assinatura. O FIO não salva esse número.</small></label>
-    <label className="fio-terms"><input type="checkbox" checked={acceptedTerms} onChange={e=>setAcceptedTerms(e.target.checked)}/><span>Li e aceito a contratação recorrente no período e valor acima. O acesso será ativado somente após a confirmação do pagamento.</span></label>
+    <div className="fio-plan-explainer"><ShieldCheck size={18}/><div><strong>Cancelamento e reembolso</strong><p>Nas contratações online em que o direito de arrependimento for aplicável, o pedido feito em até 7 dias da primeira contratação terá devolução integral. Depois desse prazo, o cancelamento impede novas cobranças, mas não gera reembolso automático do período já pago, sem prejuízo de outros direitos previstos em lei.</p></div></div>
+    <label className="fio-terms"><input type="checkbox" checked={acceptedTerms} onChange={e=>setAcceptedTerms(e.target.checked)}/><span>Li e aceito a contratação recorrente no período e valor acima, incluindo a política de cancelamento. O acesso será ativado somente após a confirmação do pagamento.</span></label>
     {checkoutError&&<div className="fio-checkout-error">{checkoutError}</div>}
+    {['SYNCPAY_ENROLLMENT_IN_PROGRESS','SYNCPAY_ENROLLMENT_UNCERTAIN'].includes(checkoutCode)&&<button className="secondary full" disabled={busy} onClick={()=>void recoverEnrollment()}><RefreshCw size={16}/>Verificar tentativa anterior</button>}
     <button className="primary full" disabled={busy||!acceptedTerms||document.replace(/\D/g,'').length<11} onClick={()=>void subscribe()}>{busy?'Preparando Pix…':'Gerar Pix'}<ArrowRight size={17}/></button>
     <button className="secondary full" disabled={busy} onClick={closeCheckout}>Cancelar</button>
    </>:<>
@@ -160,6 +189,9 @@ export function FioPlans(p:WorkspaceProps){
     {(billing.providerStatus!=='active'||billing.change)&&<button className="primary full" disabled={busy} onClick={()=>void refreshBilling()}><RefreshCw size={16}/>{busy?'Atualizando…':'Já paguei · atualizar status'}</button>}
     {['pending_first_payment','overdue'].includes(billing.providerStatus)&&!billing.change&&!usablePix(billing)&&<button className="secondary full" disabled={busy} onClick={()=>void manageCharge('resend')}>Gerar novo Pix da cobrança</button>}
     {billing.providerStatus==='pending_first_payment'&&!billing.change&&<button className="secondary full" disabled={busy} onClick={()=>void manageCharge('cancel_pending')}>Cancelar contratação pendente e escolher outro plano</button>}
+    {billing.providerStatus==='active'&&!billing.change&&billing.refund?.eligible&&<button className="danger full" disabled={busy} onClick={()=>void requestRefund()}>Cancelar e solicitar reembolso</button>}
+    {['active','overdue','suspended'].includes(billing.providerStatus)&&!billing.change&&!billing.refund?.eligible&&<button className="secondary full" disabled={busy} onClick={()=>void manageCharge('cancel_active')}>Cancelar assinatura</button>}
+    {billing.providerStatus==='active'&&!billing.change&&<p className="muted">{billing.refund?.eligible?`Primeira contratação dentro da janela de 7 dias${billing.refund.deadline?` · até ${date(billing.refund.deadline)}`:''}.`:'Após o prazo de 7 dias, o cancelamento encerra cobranças futuras e não gera reembolso automático do período já pago, sem prejuízo dos direitos previstos em lei.'}</p>}
     <p className="muted">Antes de pagar, confira valor e recebedor no aplicativo do seu banco. Se aparecer um alerta de segurança, interrompa o pagamento e fale com o suporte.</p>
     <button className="secondary full" disabled={busy} onClick={closeCheckout}>{billing.providerStatus==='active'?'Concluir':'Fechar e pagar depois'}</button>
    </>}
