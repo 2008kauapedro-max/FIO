@@ -1,6 +1,6 @@
 import { useEffect,useMemo,useState,type CSSProperties } from 'react';
 import { useLocation } from 'react-router-dom';
-import { ArrowRight,CalendarDays,Clock3,Download,ExternalLink,Info,MapPin,MessageCircle,Search,Scissors,Share2,Smartphone,SquarePlus,Users,X } from 'lucide-react';
+import { ArrowRight,Clock3,Download,ExternalLink,Info,MapPin,MessageCircle,Search,Scissors,Share2,Smartphone,SquarePlus,Users,X } from 'lucide-react';
 import { money } from '../../shared/domain';
 import { whatsappUrl } from '../../shared/phone';
 import { InAppBrowserBanner } from '../components/InAppBrowserBanner';
@@ -10,6 +10,8 @@ type PublicPalette={light_background:string;light_surface:string;light_text:stri
 type PublicData={shop:PublicShop;palette?:PublicPalette|null;services:{id:string;name:string;description?:string|null;duration_minutes:number;price_cents:number}[];team:{user_id:string;display_name:string;role:'OWNER'|'BARBER';avatar_url?:string|null}[];subscriptionPlans:{id:string;name:string;description?:string|null;cuts:number;validity_days:number;price_cents:number;active:boolean}[]};
 type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:'accepted'|'dismissed'}>};
 type PortalTab='services'|'details'|'team';
+type InstallPlatform='android'|'windows'|'mac'|'iphone';
+type ClientPlatform=InstallPlatform|'other';
 
 function pathSlug(pathname:string){
  const parts=pathname.split('/').filter(Boolean);
@@ -21,6 +23,43 @@ function standaloneMode(){
  return typeof window!=='undefined'&&(window.matchMedia?.('(display-mode: standalone)').matches||(navigator as Navigator&{standalone?:boolean}).standalone===true);
 }
 
+function detectClientPlatform():ClientPlatform{
+ if(typeof navigator==='undefined')return 'other';
+ const ua=navigator.userAgent.toLowerCase();
+ const iPadDesktop=navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
+ if(/iphone|ipad|ipod/.test(ua)||iPadDesktop)return 'iphone';
+ if(/android/.test(ua))return 'android';
+ if(/windows/.test(ua))return 'windows';
+ if(/macintosh|mac os x/.test(ua))return 'mac';
+ return 'other';
+}
+
+
+function publicMapsUrl(address:string){
+ const value=address.trim();
+ return value?`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(value)}`:null;
+}
+
+function publicInstagramUrl(instagram:string){
+ const raw=instagram.trim();
+ if(!raw)return null;
+ try{
+  if(/^https?:\/\//i.test(raw)){
+   const url=new URL(raw);
+   if(/(^|\.)instagram\.com$/i.test(url.hostname))return url.toString();
+  }
+ }catch{/* usa o identificador abaixo */}
+ const handle=raw.replace(/^@+/, '').replace(/^(?:https?:\/\/)?(?:www\.)?instagram\.com\//i,'').split(/[/?#]/)[0]?.trim();
+ return handle?`https://www.instagram.com/${encodeURIComponent(handle)}/`:null;
+}
+
+function publicWhatsappUrl(phone:string|undefined|null,title:string){
+ const base=whatsappUrl(phone);
+ if(!base)return null;
+ const message=`Olá! Vim pelo site da ${title} no FIO e gostaria de mais informações.`;
+ return `${base}${base.includes('?')?'&':'?'}text=${encodeURIComponent(message)}`;
+}
+
 function accentContrast(hex:string){
  const value=hex.replace('#','');
  if(!/^[0-9a-f]{6}$/i.test(value))return '#080808';
@@ -30,10 +69,9 @@ function accentContrast(hex:string){
 
 export function PublicPortal(){
  const {pathname}=useLocation(),slug=pathSlug(pathname);
- const [data,setData]=useState<PublicData|null>(null),[error,setError]=useState(''),[installEvent,setInstallEvent]=useState<InstallPromptEvent|null>(null),[installGuide,setInstallGuide]=useState(false),[installGate,setInstallGate]=useState(false),[installReason,setInstallReason]=useState(''),[installing,setInstalling]=useState(false),[tab,setTab]=useState<PortalTab>('services'),[query,setQuery]=useState('');
+ const [data,setData]=useState<PublicData|null>(null),[error,setError]=useState(''),[installEvent,setInstallEvent]=useState<InstallPromptEvent|null>(null),[installGuide,setInstallGuide]=useState(false),[installGate,setInstallGate]=useState(false),[installReason,setInstallReason]=useState(''),[installing,setInstalling]=useState(false),[installMessage,setInstallMessage]=useState(''),[tab,setTab]=useState<PortalTab>('services'),[query,setQuery]=useState('');
  const standalone=standaloneMode();
- const ios=typeof navigator!=='undefined'&&/iphone|ipad|ipod/i.test(navigator.userAgent);
- const android=typeof navigator!=='undefined'&&/android/i.test(navigator.userAgent);
+ const clientPlatform=detectClientPlatform();
 
  useEffect(()=>{
   if(!slug){setError('Este endereço não identifica uma barbearia.');return;}
@@ -68,11 +106,29 @@ export function PublicPortal(){
  const goClient=()=>window.location.assign(`/login?shop=${encodeURIComponent(slug)}&audience=client`);
  function requireApp(reason:string){
   if(standalone){goClient();return;}
+  setInstallMessage('');
   setInstallReason(reason);setInstallGate(true);
  }
- async function installAndroid(){
+ async function installPlatform(platform:InstallPlatform){
+  if(standalone){goClient();return;}
+  setInstallMessage('');
+  if(platform==='iphone'){
+   setInstallGate(false);
+   setInstallGuide(true);
+   return;
+  }
+  if(clientPlatform!=='other'&&clientPlatform!==platform){
+   const labels:Record<InstallPlatform,string>={android:'Android',windows:'Windows',mac:'Mac',iphone:'iPhone'};
+   setInstallMessage(`Abra este mesmo link em um ${labels[platform]} para instalar o app nesse aparelho.`);
+   setInstallGate(true);
+   return;
+  }
   if(installing)return;
-  if(!installEvent){setInstallGuide(true);return;}
+  if(!installEvent){
+   setInstallMessage(platform==='mac'?'Abra este link no Chrome. Quando o navegador liberar a instalação, toque novamente em Baixar no Mac.':'Abra este link no Chrome ou Edge. Quando o navegador liberar a instalação, toque novamente no botão de baixar.');
+   setInstallGate(true);
+   return;
+  }
   setInstalling(true);
   try{
    await installEvent.prompt();
@@ -81,10 +137,11 @@ export function PublicPortal(){
    if(choice.outcome==='accepted')setInstallGate(false);
   }finally{setInstalling(false);}
  }
- function installAction(){
+ function openInstallChooser(reason='Escolha seu aparelho para instalar o app desta barbearia.'){
   if(standalone){goClient();return;}
-  if(ios){setInstallGuide(true);return;}
-  void installAndroid();
+  setInstallMessage('');
+  setInstallReason(reason);
+  setInstallGate(true);
  }
 
  if(error)return <div className="public-portal centered-state"><img src="/FIOlogo/FIObranco.png" alt="FIO"/><h1>Não foi possível abrir.</h1><p>{error}</p></div>;
@@ -93,13 +150,16 @@ export function PublicPortal(){
  const dark=data.shop.theme_mode!=='light',p=data.palette;const accent=data.shop.custom_accent||data.shop.accent_color||(dark?p?.dark_accent:p?.light_accent)||'#ff8a00';
  const portalStyle={'--shop-accent':accent,'--shop-accent-contrast':accentContrast(accent),'--public-bg':dark?p?.dark_background||'#080808':p?.light_background||'#f5f5f2','--public-surface':dark?p?.dark_surface||'#111111':p?.light_surface||'#ffffff','--public-text':dark?p?.dark_text||'#f5f5f5':p?.light_text||'#111111','--public-muted':dark?p?.dark_text_muted||'#8d8d8d':p?.light_text_muted||'#666666',backgroundImage:data.shop.background_url?`linear-gradient(${dark?'rgba(0,0,0,.82),rgba(0,0,0,.9)':'rgba(245,245,242,.88),rgba(245,245,242,.94)'}),url(${data.shop.background_url})`:undefined,backgroundSize:data.shop.background_url?'460px auto':undefined,backgroundAttachment:data.shop.background_url?'fixed':undefined} as CSSProperties;
  const providerLabel=data.shop.operation_mode==='SOLO'?'Profissional':'Barbearia';
+ const mapsHref=data.shop.address?publicMapsUrl(data.shop.address):null;
+ const instagramHref=data.shop.instagram?publicInstagramUrl(data.shop.instagram):null;
+ const contactHref=publicWhatsappUrl(data.shop.whatsapp,title);
 
  return <div className="public-portal branded-portal booking-showcase" style={portalStyle}>
   <InAppBrowserBanner/>
   <header className="booking-showcase-hero" style={data.shop.cover_url?{backgroundImage:`linear-gradient(180deg,rgba(0,0,0,.16),rgba(0,0,0,.84)),url(${data.shop.cover_url})`}:undefined}>
    <div className="booking-showcase-top">
     <span className="booking-showcase-badge">{providerLabel}</span>
-    <button type="button" className="booking-install-top" onClick={installAction}><Download size={15}/>{standalone?'Abrir app':'Baixar app'}</button>
+    <button type="button" className="booking-install-top" onClick={()=>openInstallChooser()}><Download size={15}/>{standalone?'Abrir app':'Baixar app'}</button>
    </div>
    <div className="booking-showcase-identity">
     <div className="booking-showcase-logo">{data.shop.logo_url?<img src={data.shop.logo_url} alt={title}/>:<Scissors size={34}/>}</div>
@@ -114,10 +174,15 @@ export function PublicPortal(){
   </nav>
 
   <main className="booking-showcase-content">
-   {!standalone&&<section className="booking-app-card">
+   {!standalone&&<section className="booking-app-card booking-app-card-platforms">
     <span className="booking-app-icon">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Smartphone size={20}/>}</span>
-    <div><strong>Tenha {title} no celular</strong><small>Para acessar sua área e agendar, instale o app desta {data.shop.operation_mode==='SOLO'?'agenda':'barbearia'}.</small></div>
-    <button className="brand-button" onClick={installAction}>{ios?'Como instalar':'Baixar app'}</button>
+    <div><strong>Tenha {title} no seu aparelho</strong><small>Escolha onde você quer instalar o app desta {data.shop.operation_mode==='SOLO'?'agenda':'barbearia'}.</small></div>
+    <div className="booking-platform-buttons" aria-label="Escolha a plataforma">
+     <button className={clientPlatform==='android'?'brand-button recommended':''} onClick={()=>void installPlatform('android')}><Download size={14}/>Android</button>
+     <button className={clientPlatform==='windows'?'brand-button recommended':''} onClick={()=>void installPlatform('windows')}><Download size={14}/>Windows</button>
+     <button className={clientPlatform==='mac'?'brand-button recommended':''} onClick={()=>void installPlatform('mac')}><Download size={14}/>Mac</button>
+     <button className={clientPlatform==='iphone'?'brand-button recommended':''} onClick={()=>void installPlatform('iphone')}><Smartphone size={14}/>iPhone</button>
+    </div>
    </section>}
 
    {tab==='services'&&<section className="booking-services-section">
@@ -133,9 +198,9 @@ export function PublicPortal(){
    </section>}
 
    {tab==='details'&&<section className="booking-details-grid">
-    <article><span><MapPin size={17}/></span><div><small>LOCAL</small><strong>{data.shop.address||'Endereço informado no atendimento'}</strong></div></article>
-    {data.shop.instagram&&<article><span>@</span><div><small>INSTAGRAM</small><strong>@{String(data.shop.instagram).replace(/^@+/,'')}</strong></div></article>}
-    {whatsappUrl(data.shop.whatsapp)&&<a href={whatsappUrl(data.shop.whatsapp)!} target="_blank" rel="noreferrer"><span><MessageCircle size={17}/></span><div><small>CONTATO</small><strong>Falar pelo WhatsApp</strong></div><ExternalLink size={15}/></a>}
+    {mapsHref?<a href={mapsHref} target="_blank" rel="noreferrer" aria-label={`Abrir localização de ${title} no mapa`}><span><MapPin size={17}/></span><div><small>LOCAL</small><strong>{data.shop.address}</strong></div><ExternalLink size={15}/></a>:<article><span><MapPin size={17}/></span><div><small>LOCAL</small><strong>Endereço informado no atendimento</strong></div></article>}
+    {instagramHref&&<a href={instagramHref} target="_blank" rel="noreferrer" aria-label={`Abrir Instagram de ${title}`}><span>@</span><div><small>INSTAGRAM</small><strong>@{String(data.shop.instagram).replace(/^@+/,'').replace(/^(?:https?:\/\/)?(?:www\.)?instagram\.com\//i,'').split(/[/?#]/)[0]}</strong></div><ExternalLink size={15}/></a>}
+    {contactHref&&<a href={contactHref} target="_blank" rel="noreferrer" aria-label={`Falar com ${title} pelo WhatsApp`}><span><MessageCircle size={17}/></span><div><small>CONTATO</small><strong>Falar pelo WhatsApp</strong></div><ExternalLink size={15}/></a>}
     <article className="booking-details-about"><div><small>SOBRE</small><strong>{title}</strong><p>{data.shop.public_description||'Serviços e horários organizados para você agendar com poucos toques.'}</p></div></article>
    </section>}
 
@@ -148,7 +213,7 @@ export function PublicPortal(){
 
   <footer className="booking-powered">
    <div className="booking-powered-card">
-    <span className="booking-powered-kicker">TECNOLOGIA POR FIO</span>
+    <span className="booking-powered-kicker">Tecnologia por FIO</span>
     <strong>Crie sua barbearia com o FIO.</strong>
     <p>Tenha seu próprio link, agenda online e app personalizado para seus clientes. Também funciona para barbeiro solo.</p>
     <a href="/login?audience=owner&mode=signup">Começar agora <ArrowRight size={15}/></a>
@@ -159,14 +224,21 @@ export function PublicPortal(){
    <button className="client-app-gate-close" aria-label="Fechar" onClick={()=>setInstallGate(false)}><X size={18}/></button>
    <span className="client-app-gate-logo">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Download size={23}/>}</span>
    <p className="eyebrow">APP DO CLIENTE</p><h2>Baixe {title} para continuar.</h2><p>{installReason||'Sua conta, seus agendamentos e seus horários ficam no app desta barbearia.'}</p>
-   <button className="primary brand-button" onClick={installAction}>{installing?'Abrindo instalação…':ios?'Ver tutorial no iPhone':installEvent?'Instalar agora':'Como instalar no Android'}</button>
-   <small>O app usa o nome e a logo deste estabelecimento.</small>
+   <div className="client-platform-grid" aria-label="Escolha o seu aparelho">
+    <button className={clientPlatform==='android'?'brand-button recommended':''} onClick={()=>void installPlatform('android')} disabled={installing}><Download size={16}/><span>Android</span>{clientPlatform==='android'&&<small>Este aparelho</small>}</button>
+    <button className={clientPlatform==='windows'?'brand-button recommended':''} onClick={()=>void installPlatform('windows')} disabled={installing}><Download size={16}/><span>Windows</span>{clientPlatform==='windows'&&<small>Este aparelho</small>}</button>
+    <button className={clientPlatform==='mac'?'brand-button recommended':''} onClick={()=>void installPlatform('mac')} disabled={installing}><Download size={16}/><span>Mac</span>{clientPlatform==='mac'&&<small>Este aparelho</small>}</button>
+    <button className={clientPlatform==='iphone'?'brand-button recommended':''} onClick={()=>void installPlatform('iphone')} disabled={installing}><Smartphone size={16}/><span>iPhone</span>{clientPlatform==='iphone'&&<small>Este aparelho</small>}</button>
+   </div>
+   {installing&&<p className="client-install-status">Abrindo instalação…</p>}
+   {installMessage&&<p className="client-install-status warning">{installMessage}</p>}
+   <small>Android, Windows e Mac usam a instalação do navegador. No iPhone, mostramos o passo a passo da Tela de Início.</small>
   </div></div>}
 
   {installGuide&&<div className="install-guide-overlay" role="dialog" aria-modal="true"><div className="install-guide-card client-install-guide"><button className="install-guide-close" aria-label="Fechar" onClick={()=>setInstallGuide(false)}><X size={18}/></button>
    <span className="client-guide-logo">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Download size={23}/>}</span>
-   <h2>{ios?'Instale no seu iPhone':android?'Instale no seu Android':'Adicione à tela inicial'}</h2>
-   {ios?<><div className="install-guide-step"><Share2 size={20}/><span>1. No Safari, toque em <strong>Compartilhar</strong>.</span></div><div className="install-guide-step"><SquarePlus size={20}/><span>2. Escolha <strong>Adicionar à Tela de Início</strong>.</span></div><div className="install-guide-step"><Download size={20}/><span>3. Confirme em <strong>Adicionar</strong>. A logo de {title} aparecerá no celular.</span></div></>:<><div className="install-guide-step"><Download size={20}/><span>1. Abra esta página no Chrome.</span></div><div className="install-guide-step"><Smartphone size={20}/><span>2. Use <strong>Instalar app</strong> ou <strong>Adicionar à tela inicial</strong> no menu do navegador.</span></div><div className="install-guide-step"><CalendarDays size={20}/><span>3. Abra o novo ícone para acessar sua conta e agendar.</span></div></>}
+   <h2>Instale no seu iPhone</h2>
+   <div className="install-guide-step"><Share2 size={20}/><span>1. No Safari, toque em <strong>Compartilhar</strong>.</span></div><div className="install-guide-step"><SquarePlus size={20}/><span>2. Escolha <strong>Adicionar à Tela de Início</strong>.</span></div><div className="install-guide-step"><Download size={20}/><span>3. Confirme em <strong>Adicionar</strong>. A logo de {title} aparecerá no celular.</span></div>
    <p>O aplicativo instalado fica personalizado com o nome e a logo deste estabelecimento.</p>
   </div></div>}
  </div>;

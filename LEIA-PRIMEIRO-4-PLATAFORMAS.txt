@@ -1,0 +1,29 @@
+FIO — INSTALAÇÃO POR PLATAFORMA (29/09/2026)
+
+Este patch deve ser aplicado DEPOIS de FIO-CORRECAO-BRANDING-PWA-LOGIN-20260929.
+
+ALTERAÇÕES
+- Mostra botões separados para Android, Windows, Mac e iPhone no mini site.
+- Android/Windows/Mac tentam abrir diretamente o prompt nativo de instalação do PWA.
+- iPhone abre somente o tutorial Safari > Compartilhar > Adicionar à Tela de Início.
+- O aparelho atual fica destacado.
+- Se a pessoa escolher outra plataforma, o sistema explica que deve abrir o mesmo link naquele aparelho.
+- Remove o tutorial genérico de Android/Windows/Mac.
+- Mantém logo/nome dinâmicos da barbearia no PWA.
+
+ARQUIVOS
+src/pages/PublicPortal.tsx
+src/styles.css
+tests/solo-client-app.test.ts
+
+APÓS EXTRAIR NA RAIZ DO PROJETO
+npm run typecheck
+npm test
+npm run build
+npx vercel --prod
+
+
+ATUALIZAÇÃO DE CONTATO:
+- Localização: clicável e abre no Google Maps.
+- Instagram: clicável e abre o perfil configurado.
+- WhatsApp: abre a conversa com mensagem automática mencionando a barbearia/profissional e o FIO.

@@ -1,0 +1,12 @@
+FIO - CORRECAO FINAL UTF-8 + INSTALACAO 4 PLATAFORMAS + LINKS
+
+Este pacote substitui o anterior e restaura src/pages/PublicPortal.tsx em UTF-8 correto.
+Ele mantém:
+- Android, Windows, Mac e iPhone
+- localização clicável
+- Instagram clicável
+- WhatsApp com mensagem automática
+- branding/app por barbearia
+- rodapé "Tecnologia por FIO" + "Começar agora"
+
+Não use Get-Content/Set-Content do Windows PowerShell 5.1 para alterar acentos neste arquivo, pois isso pode converter UTF-8 e gerar textos como "ComeÃ§ar".

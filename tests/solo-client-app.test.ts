@@ -29,8 +29,17 @@ describe('site e app do cliente',()=>{
   const server=readFileSync(resolve('server/app.ts'),'utf8');
   expect(portal).toContain('Baixe {title} para continuar.');
   expect(portal).toContain('beforeinstallprompt');
+  expect(portal).toContain("installPlatform('android')");
+  expect(portal).toContain("installPlatform('windows')");
+  expect(portal).toContain("installPlatform('mac')");
+  expect(portal).toContain("installPlatform('iphone')");
+  expect(portal).toContain('Instale no seu iPhone');
   expect(portal).toContain('apple-touch-icon');
   expect(portal).toContain('Tecnologia por');
+  expect(portal).toContain('publicMapsUrl');
+  expect(portal).toContain('publicInstagramUrl');
+  expect(portal).toContain('publicWhatsappUrl');
+  expect(portal).toContain('Vim pelo site da ${title} no FIO');
   expect(server).toContain("/api/public/manifest/:slug");
   expect(server).toContain('operation_mode');
  });
