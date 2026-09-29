@@ -56,7 +56,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
    db.from('saas_subscriptions').select('plan,status,expires_at').eq('barbershop_id',shop.data.id).maybeSingle()
   ]);dbError(services.error);dbError(team.error);dbError(palette.error);dbError(billing.error);
   const entitlement=billing.data&&['active','trialing','past_due'].includes(billing.data.status)&&(!billing.data.expires_at||new Date(billing.data.expires_at)>new Date());
-  const publicPlans=entitlement&&['PRO','PREMIUM'].includes(billing.data?.plan??'')
+  const publicPlans=entitlement&&['PRO','PLUS','PREMIUM'].includes(billing.data?.plan??'')
    ?await db.from('subscription_plans').select('id,name,description,cuts,validity_days,price_cents,active').eq('barbershop_id',shop.data.id).eq('active',true).order('name')
    :{data:[],error:null};
   dbError(publicPlans.error);

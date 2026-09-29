@@ -2,7 +2,7 @@ import type { Plan } from './domain.js';
 
 export type BillingCycle = 'weekly'|'monthly'|'annual';
 export interface FioPlanDefinition {
- code: Plan|'PLUS';
+ code: Plan;
  name: string;
  eyebrow: string;
  description: string;
@@ -25,9 +25,9 @@ export const FIO_PLAN_CATALOG: FioPlanDefinition[] = [
   highlights:['Até 1.500 clientes','Até 5 profissionais + responsável','Até 40 serviços','Até 3 pacotes de cortes','Feed e comunicação','IA: padrão de 100 consultas/dia por usuário']
  },
  {
-  code:'PLUS',name:'FIO PLUS',eyebrow:'EM PREPARAÇÃO',description:'Opção intermediária em preparação.',proposal:true,
+  code:'PLUS',name:'FIO PLUS',eyebrow:'PARA CRESCER',description:'Mais capacidade para equipes em crescimento.',
   prices:{weekly:4990,monthly:14990,annual:159990},
-  highlights:['Proposta: até 3.000 clientes','Até 10 profissionais + responsável','Até 80 serviços','Até 8 pacotes de cortes','Proposta de IA: 250 consultas/dia por usuário (não ativa)']
+  highlights:['Até 3.000 clientes','Até 10 profissionais + responsável','Até 80 serviços','Até 8 pacotes de cortes','IA: padrão de 250 consultas/dia por usuário']
  },
  {
   code:'PREMIUM',name:'FIO PREMIUM',eyebrow:'MAIS CAPACIDADE',description:'Mais capacidade para crescer.',

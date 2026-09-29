@@ -312,7 +312,7 @@ export function Settings(p:WorkspaceProps){
      <section className="settings-card">
       <div className="section-title"><h2>Assinatura FIO</h2><span className="muted">{p.data.plan}</span></div>
       <div className="settings-plan-summary"><span className="settings-plan-icon"><Crown size={20}/></span><div><strong>FIO {p.data.plan}</strong><small>{p.data.fioSubscription.status==='trialing'&&p.data.fioSubscription.trial_ends_at?`Teste grátis até ${new Date(p.data.fioSubscription.trial_ends_at).toLocaleDateString('pt-BR')}`:p.data.fioSubscription.current_period_end?`Período atual até ${new Date(p.data.fioSubscription.current_period_end).toLocaleDateString('pt-BR')}`:'Plano atual da barbearia'}</small></div></div>
-      <p className="muted">Compare FREE, PRO e PREMIUM, escolha entre semanal, mensal ou anual e acompanhe o período ativo.</p>
+      <p className="muted">Compare FREE, PRO, PLUS e PREMIUM, escolha entre semanal, mensal ou anual e acompanhe o período ativo.</p>
       <button className="primary" onClick={()=>navigate(`${p.base}/plano-fio`)}><Crown size={16}/>Ver planos do FIO</button>
      </section>
     </>}
