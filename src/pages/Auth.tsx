@@ -17,6 +17,16 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  const shop=clientContext(location.pathname,location.search);
  const audience=params.get('audience')||(shop?'client':'');
  useEffect(()=>{if(shop)rememberClientShop(shop);},[shop]);
+ const [clientShopName,setClientShopName]=useState('');
+ useEffect(()=>{
+  if(audience!=='client'||!shop){setClientShopName('');return;}
+  const controller=new AbortController();let active=true;
+  fetch(`/api/public/shop/${encodeURIComponent(shop)}`,{signal:controller.signal,cache:'no-store'})
+   .then(async r=>{if(!r.ok)throw Error();return r.json();})
+   .then(body=>{if(active)setClientShopName(body?.shop?.public_title||body?.shop?.name||'');})
+   .catch(()=>undefined);
+  return()=>{active=false;controller.abort();};
+ },[audience,shop]);
  const requestedMode=params.get('mode');
  const initialMode:AuthMode=requestedMode==='forgot'?'forgot':requestedMode==='signup'?'signup':'login';
 
@@ -234,23 +244,32 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   }
  }
 
+ const clientBrand=clientShopName||'esta barbearia';
  const heading=reset
   ?'Crie sua nova senha.'
   :mode==='signup'
-   ?(audience==='client'?'Crie sua conta de cliente.':'Seu próximo capítulo.')
+   ?audience==='client'
+    ?`Faça parte da ${clientBrand}.`
+    :(audience==='owner'||!audience)
+     ?'Crie sua barbearia com o FIO.'
+     :'Crie sua conta no FIO.'
    :mode==='forgot'
     ?'Recupere seu acesso.'
     :audience==='client'
-     ?'Seu espaço está pronto.'
-     :'Tudo começa aqui.';
+     ?`Acesse a ${clientBrand}.`
+     :(audience==='owner'||!audience)
+      ?'Sua barbearia começa aqui.'
+      :'Tudo começa aqui.';
 
  const description=reset
   ?'Digite a nova senha duas vezes para confirmar.'
   :mode==='forgot'
    ?'Informe seu e-mail e enviaremos um link seguro para você criar uma nova senha.'
    :audience==='client'
-    ?'Entre e cuide dos seus horários sem complicação.'
-    :'Sua barbearia. Seu tempo. Em sintonia.';
+    ?`Entre ou crie sua conta para acompanhar seus horários e agendar na ${clientBrand}.`
+    :(audience==='owner'||!audience)
+     ?'Entre para continuar ou crie agora seu espaço, sua agenda e o app dos seus clientes.'
+     :'Sua rotina. Seu tempo. Em sintonia.';
 
  if(reset&&!supabase){
   return <div className="auth-page">
@@ -291,7 +310,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   {shop?<ShopIdentity slug={shop}/>:<Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>}
 
   <div className="auth-card auth-card--login">
-   <p className="eyebrow">{reset?'RECUPERAÇÃO DE SENHA':audience==='client'?'ACESSO DO CLIENTE':'BEM-VINDO AO FIO'}</p>
+   <p className="eyebrow">{reset?'RECUPERAÇÃO DE SENHA':audience==='client'?'ACESSO DO CLIENTE':(audience==='owner'||!audience)?(mode==='signup'?'CRIE SUA BARBEARIA':'FIO PARA BARBEARIAS'):'BEM-VINDO AO FIO'}</p>
    <h1>{heading}</h1>
    <p className="muted">{description}</p>
 
@@ -357,7 +376,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
      ?<button type="button" className="text-button" onClick={()=>{setMode('login');setMessage('');}}>Voltar para entrar</button>
      :<>
        <button type="button" className="text-button" onClick={()=>{setMode(mode==='signup'?'login':'signup');setMessage('');}}>
-        {mode==='signup'?'Já tenho uma conta':'Criar uma conta'}
+        {mode==='signup'?'Já tenho uma conta':audience==='client'?`Criar conta na ${clientBrand}`:(audience==='owner'||!audience)?'Criar minha barbearia':'Criar uma conta'}
        </button>
        <button type="button" className="text-button" onClick={()=>{setMode('forgot');setMessage('');}}>Esqueci minha senha</button>
       </>}

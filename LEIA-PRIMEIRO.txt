@@ -1,0 +1,19 @@
+FIO — correção final de branding público / PWA / login
+
+O que este patch corrige:
+1. O mini site deixa de reaproveitar branding antigo em cache depois de salvar.
+2. A cor principal salva passa a ser também a cor customizada usada pelo mini site.
+3. O fundo configurado passa a aparecer no mini site público.
+4. Botões escolhem automaticamente texto claro/escuro para não sumir quando a cor principal for preta.
+5. O manifest da barbearia é escolhido ANTES do React carregar, evitando instalar "FIO Gestão" no link do cliente.
+6. O manifest do cliente tem identidade própria por slug e usa nome/logo da barbearia.
+7. A página pública não deixa a sessão de OWNER/BARBER sobrescrever o manifest do cliente.
+8. O rodapé agora explica o FIO e possui CTA "Começar agora" para criar uma barbearia.
+9. Login/cadastro de responsável explicam que o usuário está criando/gerenciando uma barbearia.
+10. Login/cadastro do cliente identifica dinamicamente a barbearia: "Faça parte da NOME".
+11. Inclui teste de regressão branding-pwa-public.test.ts.
+
+Não há migration nova neste patch.
+
+IMPORTANTE PARA TESTAR O APP:
+Se você instalou o app errado "FIO Gestão" a partir do link público antes deste patch, desinstale esse app uma vez antes do novo teste. Depois abra o link público novamente e instale. Um app já instalado pode manter nome/ícone antigos por cache do navegador/sistema.

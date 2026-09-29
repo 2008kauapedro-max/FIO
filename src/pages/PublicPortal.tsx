@@ -21,6 +21,13 @@ function standaloneMode(){
  return typeof window!=='undefined'&&(window.matchMedia?.('(display-mode: standalone)').matches||(navigator as Navigator&{standalone?:boolean}).standalone===true);
 }
 
+function accentContrast(hex:string){
+ const value=hex.replace('#','');
+ if(!/^[0-9a-f]{6}$/i.test(value))return '#080808';
+ const r=parseInt(value.slice(0,2),16),g=parseInt(value.slice(2,4),16),b=parseInt(value.slice(4,6),16);
+ return (r*299+g*587+b*114)/1000<145?'#ffffff':'#080808';
+}
+
 export function PublicPortal(){
  const {pathname}=useLocation(),slug=pathSlug(pathname);
  const [data,setData]=useState<PublicData|null>(null),[error,setError]=useState(''),[installEvent,setInstallEvent]=useState<InstallPromptEvent|null>(null),[installGuide,setInstallGuide]=useState(false),[installGate,setInstallGate]=useState(false),[installReason,setInstallReason]=useState(''),[installing,setInstalling]=useState(false),[tab,setTab]=useState<PortalTab>('services'),[query,setQuery]=useState('');
@@ -32,12 +39,12 @@ export function PublicPortal(){
   if(!slug){setError('Este endereço não identifica uma barbearia.');return;}
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
   const previous=manifest?.href;
-  if(manifest)manifest.href=`/api/public/manifest/${encodeURIComponent(slug)}`;
+  if(manifest)manifest.href=`/api/public/manifest/${encodeURIComponent(slug)}?v=client-brand-v2`;
   const listener=(event:Event)=>{event.preventDefault();setInstallEvent(event as InstallPromptEvent);};
   window.addEventListener('beforeinstallprompt',listener);
   let active=true;const controller=new AbortController();
   setData(null);setError('');
-  fetch(`/api/public/shop/${encodeURIComponent(slug)}`,{signal:controller.signal}).then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.message||'Não foi possível abrir este espaço.');return body as PublicData;}).then(result=>{if(active)setData(result);}).catch(()=>{if(active)setError('Não foi possível abrir este espaço agora.');});
+  fetch(`/api/public/shop/${encodeURIComponent(slug)}`,{signal:controller.signal,cache:'no-store'}).then(async r=>{const body=await r.json();if(!r.ok)throw new Error(body.message||'Não foi possível abrir este espaço.');return body as PublicData;}).then(result=>{if(active)setData(result);}).catch(()=>{if(active)setError('Não foi possível abrir este espaço agora.');});
   return()=>{active=false;controller.abort();window.removeEventListener('beforeinstallprompt',listener);if(manifest&&previous)manifest.href=previous;};
  },[slug]);
 
@@ -49,8 +56,12 @@ export function PublicPortal(){
   const created=!apple;
   const oldHref=apple?.href;
   if(!apple){apple=document.createElement('link');apple.rel='apple-touch-icon';document.head.appendChild(apple);}
-  if(data.shop.logo_url)apple.href=data.shop.logo_url;
-  return()=>{document.title=oldTitle;if(created)apple?.remove();else if(apple&&oldHref)apple.href=oldHref;};
+  let favicon=document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  const faviconCreated=!favicon;
+  const oldFavicon=favicon?.href;
+  if(!favicon){favicon=document.createElement('link');favicon.rel='icon';document.head.appendChild(favicon);}
+  if(data.shop.logo_url){apple.href=data.shop.logo_url;favicon.href=data.shop.logo_url;}
+  return()=>{document.title=oldTitle;if(created)apple?.remove();else if(apple&&oldHref)apple.href=oldHref;if(faviconCreated)favicon?.remove();else if(favicon&&oldFavicon)favicon.href=oldFavicon;};
  },[data,title]);
 
  const filteredServices=useMemo(()=>{const q=query.trim().toLocaleLowerCase('pt-BR');return !q?data?.services??[]:(data?.services??[]).filter(service=>`${service.name} ${service.description??''}`.toLocaleLowerCase('pt-BR').includes(q));},[data?.services,query]);
@@ -80,7 +91,7 @@ export function PublicPortal(){
  if(!data)return <div className="public-portal centered-state"><img className="pulse-mark" src="/FIOlogo/FIObranco.png" alt="FIO"/><p>Preparando seu espaço…</p></div>;
 
  const dark=data.shop.theme_mode!=='light',p=data.palette;const accent=data.shop.custom_accent||data.shop.accent_color||(dark?p?.dark_accent:p?.light_accent)||'#ff8a00';
- const portalStyle={'--shop-accent':accent,'--public-bg':dark?p?.dark_background||'#080808':p?.light_background||'#f5f5f2','--public-surface':dark?p?.dark_surface||'#111111':p?.light_surface||'#ffffff','--public-text':dark?p?.dark_text||'#f5f5f5':p?.light_text||'#111111','--public-muted':dark?p?.dark_text_muted||'#8d8d8d':p?.light_text_muted||'#666666'} as CSSProperties;
+ const portalStyle={'--shop-accent':accent,'--shop-accent-contrast':accentContrast(accent),'--public-bg':dark?p?.dark_background||'#080808':p?.light_background||'#f5f5f2','--public-surface':dark?p?.dark_surface||'#111111':p?.light_surface||'#ffffff','--public-text':dark?p?.dark_text||'#f5f5f5':p?.light_text||'#111111','--public-muted':dark?p?.dark_text_muted||'#8d8d8d':p?.light_text_muted||'#666666',backgroundImage:data.shop.background_url?`linear-gradient(${dark?'rgba(0,0,0,.82),rgba(0,0,0,.9)':'rgba(245,245,242,.88),rgba(245,245,242,.94)'}),url(${data.shop.background_url})`:undefined,backgroundSize:data.shop.background_url?'460px auto':undefined,backgroundAttachment:data.shop.background_url?'fixed':undefined} as CSSProperties;
  const providerLabel=data.shop.operation_mode==='SOLO'?'Profissional':'Barbearia';
 
  return <div className="public-portal branded-portal booking-showcase" style={portalStyle}>
@@ -135,7 +146,14 @@ export function PublicPortal(){
    {data.subscriptionPlans?.length>0&&tab==='details'&&<section className="booking-plans"><h2>Planos</h2>{data.subscriptionPlans.map(plan=><article key={plan.id}><div><strong>{plan.name}</strong><small>{plan.cuts} corte{plan.cuts===1?'':'s'} · {plan.validity_days} dias</small></div><b>{money(plan.price_cents)}</b></article>)}</section>}
   </main>
 
-  <footer className="booking-powered"><a href="/acesso/gestao" target="_blank" rel="noreferrer"><span>Tecnologia por</span><strong>FIO</strong><small>Plataforma para barbearias e barbeiros</small></a></footer>
+  <footer className="booking-powered">
+   <div className="booking-powered-card">
+    <span className="booking-powered-kicker">TECNOLOGIA POR FIO</span>
+    <strong>Crie sua barbearia com o FIO.</strong>
+    <p>Tenha seu próprio link, agenda online e app personalizado para seus clientes. Também funciona para barbeiro solo.</p>
+    <a href="/login?audience=owner&mode=signup">Começar agora <ArrowRight size={15}/></a>
+   </div>
+  </footer>
 
   {installGate&&<div className="client-app-gate" role="dialog" aria-modal="true" aria-label="Instalar aplicativo"><div className="client-app-gate-card">
    <button className="client-app-gate-close" aria-label="Fechar" onClick={()=>setInstallGate(false)}><X size={18}/></button>

@@ -5,7 +5,7 @@ export function ShopIdentity({slug}:{slug:string}){
  const [shop,setShop]=useState<{name:string;public_title?:string;logo_url?:string}|null>(null);
  useEffect(()=>{
   const controller=new AbortController();let active=true;setShop(null);
-  fetch(`/api/public/shop/${encodeURIComponent(slug)}`,{signal:controller.signal})
+  fetch(`/api/public/shop/${encodeURIComponent(slug)}`,{signal:controller.signal,cache:'no-store'})
    .then(async r=>{if(!r.ok)throw Error();return r.json();})
    .then(data=>{if(active)setShop(data.shop);}).catch(()=>undefined);
   return()=>{active=false;controller.abort();};

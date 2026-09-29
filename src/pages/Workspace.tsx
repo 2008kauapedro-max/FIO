@@ -15,6 +15,7 @@ export interface WorkspaceProps {data:Bootstrap;demo:boolean;base:string;refresh
 const statusLabels={scheduled:'Agendado',confirmed:'Confirmado',in_service:'Em atendimento',completed:'Concluído',cancelled:'Cancelado',no_show:'Falta'};
 const time=(date:string,zone:string)=>new Date(date).toLocaleTimeString('pt-BR',{timeZone:zone,hour:'2-digit',minute:'2-digit'});
 const whats=(phone?:string|null)=>{const digits=(phone??'').replace(/\D/g,'');if(!digits)return '';return `https://wa.me/${digits.startsWith('55')?digits:`55${digits}`}`;};
+const accentContrast=(hex:string)=>{const value=hex.replace('#','');if(!/^[0-9a-f]{6}$/i.test(value))return '#050505';const r=parseInt(value.slice(0,2),16),g=parseInt(value.slice(2,4),16),b=parseInt(value.slice(4,6),16);return (r*299+g*587+b*114)/1000<145?'#ffffff':'#050505';};
 export const dayKey=(date:string,zone:string)=>new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(date));
 function MemberAvatar({member,className=''}:{member:{display_name:string;avatar_url?:string|null};className?:string}){return <span className={`avatar ${className}`}>{member.avatar_url?<img src={member.avatar_url} alt=""/>:member.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>;}
 export function Dashboard(p:WorkspaceProps){
@@ -128,7 +129,7 @@ export function Settings(p:WorkspaceProps){
  const [logoUrl,setLogoUrl]=useState(p.data.shop.logo_url??'');
  const [coverUrl,setCoverUrl]=useState(p.data.shop.cover_url??'');
  const [backgroundUrl,setBackgroundUrl]=useState(p.data.shop.background_url??'');
- const [accentColor,setAccentColor]=useState(p.data.shop.accent_color??'#ffffff');
+ const [accentColor,setAccentColor]=useState(p.data.shop.custom_accent??p.data.shop.accent_color??'#ffffff');
  const [busy,setBusy]=useState(false),[accountEmail,setAccountEmail]=useState('');
  const origin=typeof window==='undefined'?'':window.location.origin;
  const links={gestao:`${origin}/acesso/gestao`,equipe:`${origin}/acesso/equipe`,clientes:`${origin}/${p.data.shop.slug}`};
@@ -218,7 +219,7 @@ export function Settings(p:WorkspaceProps){
        <label className="branding-upload"><span>Fundo</span>{backgroundUrl&&<img className="branding-thumbnail" src={backgroundUrl} alt="Prévia: Fundo"/>}<small>{backgroundUrl?'Imagem selecionada':'Escolher da galeria'}</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e=>void uploadBrand(e.target.files?.[0],'background')}/></label>
       </div>
       <Field label="Cor principal"><div className="color-field"><input type="color" value={accentColor} onChange={e=>setAccentColor(e.target.value)}/><input value={accentColor} maxLength={7} pattern="#[0-9A-Fa-f]{6}" onChange={e=>setAccentColor(e.target.value)}/></div></Field>
-      <div className="branding-preview" style={{'--preview-accent':accentColor,backgroundImage:backgroundUrl?`linear-gradient(#0009,#000b),url(${backgroundUrl})`:undefined} as CSSProperties}>
+      <div className="branding-preview" style={{'--preview-accent':accentColor,'--preview-accent-contrast':accentContrast(accentColor),backgroundImage:backgroundUrl?`linear-gradient(#0009,#000b),url(${backgroundUrl})`:undefined} as CSSProperties}>
        <span style={{backgroundImage:logoUrl?`url(${logoUrl})`:undefined}}>{!logoUrl?'LOGO':''}</span>
        <div><strong>{title||p.data.shop.name}</strong><small>{description||'Prévia da experiência do cliente.'}</small></div>
        <button type="button">Agendar</button>

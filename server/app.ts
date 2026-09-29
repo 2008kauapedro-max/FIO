@@ -56,7 +56,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   dbError(publicPlans.error);
   const asset=(path:string|null)=>path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:null;
   const instagram=shop.data.instagram?`@${String(shop.data.instagram).replace(/^@+/,'').trim()}`:null;
-  res.set('Cache-Control','public, max-age=60').json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:publicPlans.data??[]});
+  res.set('Cache-Control','no-store').json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:publicPlans.data??[]});
  });
  app.get('/api/public/manifest/:slug',rateLimit('public-manifest',{windowMs:60_000,max:30}),async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
@@ -66,7 +66,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const icon=shop.data.logo_url||(shop.data.logo_asset_path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${shop.data.logo_asset_path}`:null);
   if(!icon) throw new ApiError(409,'SHOP_LOGO_REQUIRED','A barbearia precisa de uma logo antes de disponibilizar o aplicativo.');
   const theme=shop.data.custom_accent||shop.data.accent_color||'#000000';
-  res.type('application/manifest+json').set('Cache-Control','public, max-age=300').send(JSON.stringify({id:`/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/login?shop=${encodeURIComponent(slug)}&audience=client`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
+  res.type('application/manifest+json').set('Cache-Control','no-store').send(JSON.stringify({id:`/client-app/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/login?shop=${encodeURIComponent(slug)}&audience=client`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
  });
  app.use('/api',async(req,res,next)=>{res.locals.auth=await authenticator(req);res.set('Cache-Control','private, no-store');next();});
  app.use('/api',rateLimitByUser('authenticated-api',60_000,180));
@@ -167,7 +167,9 @@ export function createApp(authenticator: Authenticator=authenticate) {
  });
  app.patch('/api/shop/branding',async(req,res)=>{
   const c=ctx(res);requireOwner(c);const v=z.object({title:z.string().trim().max(100).default(''),description:z.string().trim().max(280).default(''),logoUrl:z.string().trim().max(500).default(''),coverUrl:z.string().trim().max(500).default(''),backgroundUrl:z.string().trim().max(500).default(''),accentColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#ffffff')}).strict().parse(req.body);
-  const r=await c.db.rpc('update_shop_branding',{p_shop:c.shopId,p_title:v.title,p_description:v.description,p_logo_url:v.logoUrl,p_cover_url:v.coverUrl,p_background_url:v.backgroundUrl,p_accent_color:v.accentColor});dbError(r.error);res.json({ok:true});
+  const r=await c.db.rpc('update_shop_branding',{p_shop:c.shopId,p_title:v.title,p_description:v.description,p_logo_url:v.logoUrl,p_cover_url:v.coverUrl,p_background_url:v.backgroundUrl,p_accent_color:v.accentColor});dbError(r.error);
+  const theme=await c.db.rpc('save_owner_setup',{p_shop:c.shopId,p_setup:{customAccent:v.accentColor}});dbError(theme.error);
+  res.set('Cache-Control','no-store').json({ok:true});
  });
  app.get('/api/staff/:id/access',rateLimitByUser('staff-access',60_000,15),async(req,res)=>{
   const c=ctx(res);requireOwner(c);const id=z.uuid().parse(req.params.id);

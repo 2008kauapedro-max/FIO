@@ -48,6 +48,7 @@ export default function App(){
  const reservedPublicSlugs=new Set(['owner','barber','client','login','reset-password','confirm-email','acesso','b','barbearia','platform','api']);
  const singleSlug=location.pathname.match(/^\/([a-z0-9-]{3,60})\/?$/)?.[1]??'';
  const isCleanPublicSlug=Boolean(singleSlug&&!reservedPublicSlugs.has(singleSlug));
+ const isPublicPortal=location.pathname.startsWith('/b/')||location.pathname.startsWith('/barbearia/')||isCleanPublicSlug;
  const demo=false,demoRole='OWNER' as Role;
  const [session,setSession]=useState<Session|null>(null),[authReady,setAuthReady]=useState(!supabase),[memberships,setMemberships]=useState<Membership[]|null>(null),[onboardingShopId,setOnboardingShopId]=useState(''),[clientJoinPending,setClientJoinPending]=useState(false),[shopId,setShopId]=useState(sessionStorage.getItem('fio-shop')??''),[data,setData]=useState<Bootstrap|null>(null),[error,setError]=useState(''),[toast,setToast]=useState(''),[menu,setMenu]=useState(false);
  const [theme,setTheme]=useState<Theme>(()=>(localStorage.getItem('fio-theme')==='light'?'light':'dark'));
@@ -78,11 +79,11 @@ export default function App(){
   if(owner&&!clientSlug){try{const snapshot=await api<{shop:{onboarding_completed:boolean}}>('/onboarding/progress',owner.barbershop_id);setOnboardingShopId(snapshot.shop.onboarding_completed?'':owner.barbershop_id);}catch{setOnboardingShopId('');}}else setOnboardingShopId('');
   setShopId(prev=>{const next=preferredShop||(m.some(x=>x.barbershop_id===prev)?prev:m[0]?.barbershop_id??'');if(next)sessionStorage.setItem('fio-shop',next);return next;});setError('');
  }catch(e){setError((e as Error).message);}},[]);
- useEffect(()=>{if(session&&!demo&&!isPlatform)void loadMemberships();},[session?.user.id,demo,isPlatform,loadMemberships]);
+ useEffect(()=>{if(session&&!demo&&!isPlatform&&!isPublicPortal)void loadMemberships();},[session?.user.id,demo,isPlatform,isPublicPortal,loadMemberships]);
  const refresh=useCallback(async()=>{if(demo||!shopId)return;const next=await api<Bootstrap>('/bootstrap',shopId);setData(next);setError('');},[demo,shopId]);
- useEffect(()=>{if(session&&shopId&&!isPlatform&&!onboardingShopId){setData(null);void refresh().catch(e=>setError(e.message));}},[shopId,session?.user.id,refresh,isPlatform,onboardingShopId]);
- useEffect(()=>{if(!session||!shopId||isPlatform||onboardingShopId)return;void refresh().catch(()=>undefined);},[location.pathname,session?.user.id,shopId,isPlatform,onboardingShopId,refresh]);
- useEffect(()=>{if(!session||!shopId||isPlatform||onboardingShopId)return;const sync=()=>void refresh().catch(()=>undefined);const visible=()=>{if(document.visibilityState==='visible')sync();};window.addEventListener('focus',sync);document.addEventListener('visibilitychange',visible);const timer=window.setInterval(sync,30000);return()=>{window.removeEventListener('focus',sync);document.removeEventListener('visibilitychange',visible);window.clearInterval(timer);};},[session?.user.id,shopId,isPlatform,onboardingShopId,refresh]);
+ useEffect(()=>{if(session&&shopId&&!isPlatform&&!isPublicPortal&&!onboardingShopId){setData(null);void refresh().catch(e=>setError(e.message));}},[shopId,session?.user.id,refresh,isPlatform,isPublicPortal,onboardingShopId]);
+ useEffect(()=>{if(!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;void refresh().catch(()=>undefined);},[location.pathname,session?.user.id,shopId,isPlatform,isPublicPortal,onboardingShopId,refresh]);
+ useEffect(()=>{if(!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;const sync=()=>void refresh().catch(()=>undefined);const visible=()=>{if(document.visibilityState==='visible')sync();};window.addEventListener('focus',sync);document.addEventListener('visibilitychange',visible);const timer=window.setInterval(sync,30000);return()=>{window.removeEventListener('focus',sync);document.removeEventListener('visibilitychange',visible);window.clearInterval(timer);};},[session?.user.id,shopId,isPlatform,isPublicPortal,onboardingShopId,refresh]);
  useEffect(()=>{setMenu(false);},[location.pathname]);
  useEffect(()=>{
   if(!menu)return;
@@ -96,13 +97,13 @@ export default function App(){
  useEffect(()=>{if(data?.membership.role==='CLIENT')rememberClientShop(data.shop.slug);},[data?.membership.role,data?.shop.slug]);
  useEffect(()=>{
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-  if(!manifest||!data||isPlatform)return;
-  manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':`/api/public/manifest/${encodeURIComponent(data.shop.slug)}`;
- },[data?.membership.role,data?.shop.slug,isPlatform]);
+  if(!manifest||!data||isPlatform||isPublicPortal)return;
+  manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':`/api/public/manifest/${encodeURIComponent(data.shop.slug)}?v=client-brand-v2`;
+ },[data?.membership.role,data?.shop.slug,isPlatform,isPublicPortal]);
 
  if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<AppLoading/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
  if(isPlatform)return <Suspense fallback={<AppLoading/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
- if(location.pathname.startsWith('/b/')||location.pathname.startsWith('/barbearia/')||isCleanPublicSlug)return <PublicPortal/>;
+ if(isPublicPortal)return <PublicPortal/>;
  if(location.pathname==='/acesso/gestao')return <Navigate replace to="/login?audience=owner"/>;
  if(location.pathname==='/acesso/equipe')return <Navigate replace to="/login?audience=staff"/>;
  if(location.pathname==='/confirm-email')return <EmailConfirmationPage/>;
