@@ -12,7 +12,15 @@ import { optimizeImage } from '../lib/images';
 import { planAllows } from '../../shared/entitlements';
 import { Empty,Field,Modal,PageTitle,ArrowLink } from '../components/ui';
 export interface WorkspaceProps {data:Bootstrap;demo:boolean;base:string;refresh:()=>Promise<void>;notify:(text:string)=>void;updateDemo:(fn:(d:Bootstrap)=>Bootstrap)=>void;canInstall?:boolean;installApp?:()=>Promise<void>}
-const statusLabels={scheduled:'Agendado',confirmed:'Confirmado',in_service:'Em atendimento',completed:'Concluído',cancelled:'Cancelado',no_show:'Falta'};
+const statusLabels={scheduled:'Aguardando confirmação',confirmed:'Confirmado',in_service:'Em atendimento',completed:'Concluído',cancelled:'Cancelado',no_show:'Falta'};
+const statusHelp={
+ scheduled:'O horário foi solicitado e ainda aguarda confirmação do profissional.',
+ confirmed:'O profissional confirmou este horário e o cliente foi avisado no FIO.',
+ in_service:'O atendimento está em andamento.',
+ completed:'Atendimento concluído e salvo no histórico.',
+ cancelled:'Este horário foi cancelado e saiu da agenda ativa.',
+ no_show:'O cliente não compareceu e a falta foi registrada.'
+};
 const time=(date:string,zone:string)=>new Date(date).toLocaleTimeString('pt-BR',{timeZone:zone,hour:'2-digit',minute:'2-digit'});
 const whats=(phone?:string|null)=>{const digits=(phone??'').replace(/\D/g,'');if(!digits)return '';return `https://wa.me/${digits.startsWith('55')?digits:`55${digits}`}`;};
 const accentContrast=(hex:string)=>{const value=hex.replace('#','');if(!/^[0-9a-f]{6}$/i.test(value))return '#050505';const r=parseInt(value.slice(0,2),16),g=parseInt(value.slice(2,4),16),b=parseInt(value.slice(4,6),16);return (r*299+g*587+b*114)/1000<145?'#ffffff':'#050505';};
@@ -114,7 +122,7 @@ function ClientAppointmentRow({appointment:a,data,onClick}:{appointment:Appointm
  const service=data.services.find(s=>s.id===a.service_id)?.name??'Serviço';
  return <button className="client-booking-card" onClick={onClick}>
   <span className="client-booking-date"><strong>{start.toLocaleDateString('pt-BR',{timeZone:zone,day:'2-digit'})}</strong><small>{start.toLocaleDateString('pt-BR',{timeZone:zone,month:'short'}).replace('.','')}</small></span>
-  <span className="client-booking-info"><span className="eyebrow">AGENDAMENTO FEITO</span><strong>{service}</strong><small>{start.toLocaleDateString('pt-BR',{timeZone:zone,weekday:'long'})} · {time(a.starts_at,zone)} · {professional}</small></span>
+  <span className="client-booking-info"><span className="eyebrow">{statusLabels[a.status]}</span><strong>{service}</strong><small>{start.toLocaleDateString('pt-BR',{timeZone:zone,weekday:'long'})} · {time(a.starts_at,zone)} · {professional}</small></span>
   <span className={`status ${a.status}`}>{statusLabels[a.status]}</span>
   <ArrowUpRight size={17}/>
  </button>;
@@ -122,96 +130,957 @@ function ClientAppointmentRow({appointment:a,data,onClick}:{appointment:Appointm
 
 function ClientAgenda(p:WorkspaceProps){
  const {data}=p,zone=data.shop.timezone;
- const [booking,setBooking]=useState(new URLSearchParams(location.search).has('novo')),[selected,setSelected]=useState<Appointment|null>(null),[reschedule,setReschedule]=useState<Appointment|null>(null),[busy,setBusy]=useState(false),[linkOpened,setLinkOpened]=useState(false);
- useEffect(()=>{const id=new URLSearchParams(location.search).get('appointment');if(!id||linkOpened)return;let alive=true;const known=data.appointments.find(a=>a.id===id);const request=known?Promise.resolve(known):api<Appointment>(`/appointments/${id}`,data.shop.id);void request.then(found=>{if(alive){setSelected(found);setLinkOpened(true);}}).catch(e=>{if(alive){p.notify(e.message);setLinkOpened(true);}});return()=>{alive=false;};},[data.appointments,data.shop.id,linkOpened,p]);
+
+ const [booking,setBooking]=useState(
+  new URLSearchParams(location.search).has('novo')
+ );
+
+ const [selected,setSelected]=useState<Appointment|null>(null);
+ const [reschedule,setReschedule]=useState<Appointment|null>(null);
+ const [busy,setBusy]=useState(false);
+ const [linkOpened,setLinkOpened]=useState(false);
+
+ useEffect(()=>{
+
+  const id=new URLSearchParams(location.search)
+   .get('appointment');
+
+  if(!id||linkOpened)return;
+
+  let alive=true;
+
+  const known=data.appointments.find(a=>a.id===id);
+
+  const request=known
+   ?Promise.resolve(known)
+   :api<Appointment>(`/appointments/${id}`,data.shop.id);
+
+  void request
+   .then(found=>{
+    if(alive){
+     setSelected(found);
+     setLinkOpened(true);
+    }
+   })
+   .catch(e=>{
+    if(alive){
+     p.notify(e.message);
+     setLinkOpened(true);
+    }
+   });
+
+  return()=>{alive=false};
+
+ },[
+  data.appointments,
+  data.shop.id,
+  linkOpened
+ ]);
+
  const upcoming=data.appointments
-  .filter(a=>['scheduled','confirmed','in_service'].includes(a.status)&&Date.parse(a.ends_at)>Date.now())
-  .sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at));
+  .filter(a=>
+   ['scheduled','confirmed','in_service'].includes(a.status)&&
+   Date.parse(a.ends_at)>Date.now()
+  )
+  .sort((a,b)=>
+   Date.parse(a.starts_at)-Date.parse(b.starts_at)
+  );
+
+ const recentChanges=data.appointments
+  .filter(a=>
+   ['cancelled','no_show'].includes(a.status)&&
+   Date.parse(a.starts_at)>Date.now()-30*86400000
+  )
+  .sort((a,b)=>
+   Date.parse(b.starts_at)-Date.parse(a.starts_at)
+  )
+  .slice(0,5);
+
+ const latestNotice=data.notifications.find(n=>
+  n.appointment_id&&
+  /(confirmado|cancelado|remarcado)/i.test(n.body)
+ );
+
  async function cancel(){
-  if(!selected||busy)return;setBusy(true);
+
+  if(!selected||busy)return;
+
+  if(!window.confirm(
+   'Cancelar este agendamento? Ele sairá dos próximos horários, mas continuará no histórico.'
+  ))return;
+
+  setBusy(true);
+
   try{
-   if(p.demo)p.updateDemo(d=>({...d,appointments:d.appointments.map(a=>a.id===selected.id?{...a,status:'cancelled'}:a)}));
-   else{await api(`/appointments/${selected.id}`,data.shop.id,{status:'cancelled',confirmed:true},'PATCH');await p.refresh();}
-   setSelected(null);p.notify('Agendamento cancelado.');
-  }catch(e){p.notify((e as Error).message);}finally{setBusy(false);}
+
+   if(p.demo){
+
+    p.updateDemo(d=>({
+     ...d,
+     appointments:d.appointments.map(a=>
+      a.id===selected.id
+       ?{...a,status:'cancelled'}
+       :a
+     )
+    }));
+
+   }else{
+
+    await api(
+     `/appointments/${selected.id}`,
+     data.shop.id,
+     {status:'cancelled',confirmed:true},
+     'PATCH'
+    );
+
+    await p.refresh();
+
+   }
+
+   setSelected(null);
+
+   p.notify(
+    'Agendamento cancelado. A barbearia recebeu a atualização no FIO.'
+   );
+
+  }catch(e){
+
+   p.notify((e as Error).message);
+
+  }finally{
+
+   setBusy(false);
+
+  }
  }
+
  return <>
-  <PageTitle eyebrow="SEUS HORÁRIOS" title="Seus agendamentos" description="Veja o que já está marcado e, quando quiser, agende um novo horário." action={<button className="primary" onClick={()=>setBooking(true)}><Plus size={18}/>Agendar horário</button>}/>
+
+  <PageTitle
+   eyebrow="SEUS HORÁRIOS"
+   title="Seus agendamentos"
+   description="Acompanhe cada etapa do seu horário e agende novamente quando quiser."
+   action={
+    <button
+     className="primary"
+     onClick={()=>setBooking(true)}
+    >
+     <Plus size={18}/>
+     Agendar horário
+    </button>
+   }
+  />
+
+  {latestNotice&&
+   <section className="client-agenda-notice">
+
+    <span className="client-agenda-notice-icon">
+     <Info size={17}/>
+    </span>
+
+    <div>
+     <strong>{latestNotice.body}</strong>
+     <small>
+      {new Date(latestNotice.created_at)
+       .toLocaleString('pt-BR',{timeZone:zone})}
+     </small>
+    </div>
+
+   </section>
+  }
+
   <section className="client-agenda-panel">
-   <div className="client-agenda-heading"><div><span className="eyebrow">PRÓXIMOS</span><h2>Horários marcados</h2></div><span className="muted">{upcoming.length} agendamento{upcoming.length===1?'':'s'}</span></div>
-   {upcoming.length?<div className="client-agenda-list">{upcoming.map(a=><ClientAppointmentRow key={a.id} appointment={a} data={data} onClick={()=>setSelected(a)}/>)}</div>:<Empty title="Nenhum horário marcado">Toque em “Agendar horário” para escolher profissional, serviço, dia e horário.</Empty>}
+
+   <div className="client-agenda-heading">
+
+    <div>
+     <span className="eyebrow">PRÓXIMOS</span>
+     <h2>Horários marcados</h2>
+    </div>
+
+    <span className="muted">
+     {upcoming.length} agendamento
+     {upcoming.length===1?'':'s'}
+    </span>
+
+   </div>
+
+   {upcoming.length?
+
+    <div className="client-agenda-list">
+
+     {upcoming.map(a=>
+      <ClientAppointmentRow
+       key={a.id}
+       appointment={a}
+       data={data}
+       onClick={()=>setSelected(a)}
+      />
+     )}
+
+    </div>
+
+    :
+
+    <Empty title="Nenhum horário marcado">
+     Toque em “Agendar horário” para escolher
+     profissional, serviço, dia e horário.
+    </Empty>
+
+   }
+
   </section>
-  {booking&&<BookingModal {...p} onClose={()=>setBooking(false)}/>}
-  {reschedule&&<BookingModal {...p} appointment={reschedule} onClose={()=>setReschedule(null)}/>}
-  {selected&&<Modal title="Seu agendamento" onClose={()=>setSelected(null)}>
-   <div className="detail-summary">
-    <h3>{data.services.find(s=>s.id===selected.service_id)?.name??'Serviço'}</h3>
-    <p>Profissional: {data.team.find(t=>t.user_id===selected.barber_id)?.display_name??'Profissional'}</p>
-    <p>{new Date(selected.starts_at).toLocaleDateString('pt-BR',{timeZone:zone,dateStyle:'full'})}</p>
-    <p>{time(selected.starts_at,zone)} — {time(selected.ends_at,zone)}</p>
-    <p>{selected.subscription_id?'Coberto por assinatura':money(selected.price_cents)}</p>
-   </div>
-   <p className="muted">Status: {statusLabels[selected.status]}.</p>
-   <div className="modal-actions">
-    {['scheduled','confirmed'].includes(selected.status)&&<button className="secondary" disabled={busy} onClick={()=>{setReschedule(selected);setSelected(null);}}>Remarcar</button>}
-    {['scheduled','confirmed'].includes(selected.status)&&<button className="danger" disabled={busy} onClick={()=>void cancel()}>Cancelar</button>}
-   </div>
-  </Modal>}
+
+  {recentChanges.length>0&&
+
+   <details className="client-history">
+
+    <summary>
+     Alterações recentes
+     <span>{recentChanges.length}</span>
+    </summary>
+
+    <div className="client-agenda-list">
+
+     {recentChanges.map(a=>
+      <ClientAppointmentRow
+       key={a.id}
+       appointment={a}
+       data={data}
+       onClick={()=>setSelected(a)}
+      />
+     )}
+
+    </div>
+
+   </details>
+
+  }
+
+  {booking&&
+   <BookingModal
+    {...p}
+    onClose={()=>setBooking(false)}
+   />
+  }
+
+  {reschedule&&
+   <BookingModal
+    {...p}
+    appointment={reschedule}
+    onClose={()=>setReschedule(null)}
+   />
+  }
+
+  {selected&&
+   <Modal
+    title="Seu agendamento"
+    onClose={()=>setSelected(null)}
+   >
+
+    <div className="appointment-detail-status">
+
+     <span className={`status ${selected.status}`}>
+      {statusLabels[selected.status]}
+     </span>
+
+     <small>{statusHelp[selected.status]}</small>
+
+    </div>
+
+    <div className="appointment-detail-grid">
+
+     <div>
+      <span>Serviço</span>
+      <strong>
+       {data.services.find(
+        s=>s.id===selected.service_id
+       )?.name??'Serviço'}
+      </strong>
+      <small>
+       {data.services.find(
+        s=>s.id===selected.service_id
+       )?.duration_minutes??'—'} minutos
+      </small>
+     </div>
+
+     <div>
+      <span>Profissional</span>
+      <strong>
+       {data.team.find(
+        t=>t.user_id===selected.barber_id
+       )?.display_name??'Profissional'}
+      </strong>
+     </div>
+
+     <div>
+      <span>Data</span>
+      <strong>
+       {new Date(selected.starts_at)
+        .toLocaleDateString(
+         'pt-BR',
+         {timeZone:zone,dateStyle:'long'}
+        )}
+      </strong>
+     </div>
+
+     <div>
+      <span>Horário</span>
+      <strong>
+       {time(selected.starts_at,zone)}
+       {' — '}
+       {time(selected.ends_at,zone)}
+      </strong>
+     </div>
+
+     <div>
+      <span>Valor</span>
+      <strong>
+       {selected.subscription_id
+        ?'Coberto por assinatura'
+        :money(selected.price_cents)}
+      </strong>
+     </div>
+
+    </div>
+
+    <div className="modal-actions">
+
+     {['scheduled','confirmed']
+      .includes(selected.status)&&
+      <button
+       className="secondary"
+       disabled={busy}
+       onClick={()=>{
+        setReschedule(selected);
+        setSelected(null);
+       }}
+      >
+       Remarcar
+      </button>
+     }
+
+     {['scheduled','confirmed']
+      .includes(selected.status)&&
+      <button
+       className="danger"
+       disabled={busy}
+       onClick={()=>void cancel()}
+      >
+       Cancelar
+      </button>
+     }
+
+     {['cancelled','no_show']
+      .includes(selected.status)&&
+      <button
+       className="primary"
+       onClick={()=>{
+        setSelected(null);
+        setBooking(true);
+       }}
+      >
+       Agendar outro horário
+      </button>
+     }
+
+    </div>
+
+   </Modal>
+  }
+
  </>;
 }
-
 function StaffAgenda(p:WorkspaceProps){
- const {data}=p,zone=data.shop.timezone,solo=data.shop.operation_mode==='SOLO';
- const initialProfessional=data.membership.role==='BARBER'||solo?data.membership.user_id:'';
- const providers=data.team.filter(t=>t.active&&(t.role==='BARBER'||(solo&&t.role==='OWNER')));
- const [date,setDate]=useState(dayKey(new Date().toISOString(),zone)),[booking,setBooking]=useState(new URLSearchParams(location.search).has('novo')),[selected,setSelected]=useState<Appointment|null>(null),[busy,setBusy]=useState(false);
- const [professional,setProfessional]=useState(initialProfessional),[reschedule,setReschedule]=useState<Appointment|null>(null),[daily,setDaily]=useState<Appointment[]>([]),[dailyError,setDailyError]=useState(''),[dailyLoading,setDailyLoading]=useState(true),[linkOpened,setLinkOpened]=useState(false),[manualRefreshing,setManualRefreshing]=useState(false),[reloadKey,setReloadKey]=useState(0);
- useEffect(()=>{const id=new URLSearchParams(location.search).get('appointment');if(!id||linkOpened)return;let alive=true;const known=data.appointments.find(a=>a.id===id);const request=known?Promise.resolve(known):api<Appointment>(`/appointments/${id}`,data.shop.id);void request.then(found=>{if(alive){setDate(dayKey(found.starts_at,zone));setSelected(found);setLinkOpened(true);}}).catch(e=>{if(alive){setDailyError(e.message);setLinkOpened(true);}});return()=>{alive=false;};},[data.appointments,data.shop.id,zone,linkOpened]);
- useEffect(()=>{let alive=true;setDailyLoading(true);setDailyError('');const request=p.demo?Promise.resolve({items:data.appointments.filter(a=>dayKey(a.starts_at,zone)===date&&(!professional||a.barber_id===professional))}):api<{items:Appointment[]}>(`/appointments/period?from=${date}&to=${date}${professional?`&barberId=${professional}`:''}`,data.shop.id);void request.then(v=>{if(alive)setDaily(v.items);}).catch(e=>{if(alive)setDailyError(e.message);}).finally(()=>{if(alive)setDailyLoading(false);});return()=>{alive=false;};},[date,professional,data.appointments,data.shop.id,p.demo,zone,reloadKey]);
- async function manualRefresh(){
-  if(manualRefreshing)return;
-  setManualRefreshing(true);
-  try{await p.refresh();setReloadKey(key=>key+1);p.notify('Agenda atualizada.');}
-  catch(e){p.notify((e as Error).message||'Não foi possível atualizar agora.');}
-  finally{setManualRefreshing(false);}
- }
- const appointments=daily;
- function changeDay(delta:number){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+delta);setDate(d.toISOString().slice(0,10));}
- async function transition(status:'confirmed'|'in_service'|'completed'|'cancelled'|'no_show'){
-  if(!selected)return;setBusy(true);
-  try{
-   if(p.demo)p.updateDemo(d=>({...d,appointments:d.appointments.map(a=>a.id===selected.id?{...a,status}:a)}));
-   else{await api(`/appointments/${selected.id}`,data.shop.id,{status,confirmed:true},'PATCH');await p.refresh();}
-   setSelected(null);p.notify({confirmed:'Atendimento confirmado.',in_service:'Atendimento iniciado.',completed:'Atendimento concluído.',cancelled:'Agendamento cancelado.',no_show:'Falta registrada.'}[status]);
-  }catch(e){p.notify((e as Error).message);}finally{setBusy(false);}
- }
+
+ const {data}=p;
+ const zone=data.shop.timezone;
+ const solo=data.shop.operation_mode==='SOLO';
+
  const owner=data.membership.role==='OWNER';
+
+ const initialProfessional=
+  data.membership.role==='BARBER'||solo
+   ?data.membership.user_id
+   :'';
+
+ const providers=data.team.filter(t=>
+  t.active&&
+  (
+   t.role==='BARBER'||
+   (solo&&t.role==='OWNER')
+  )
+ );
+
+ const [date,setDate]=useState(
+  dayKey(new Date().toISOString(),zone)
+ );
+
+ const [booking,setBooking]=useState(
+  new URLSearchParams(location.search).has('novo')
+ );
+
+ const [selected,setSelected]=useState<Appointment|null>(null);
+ const [busy,setBusy]=useState(false);
+
+ const [professional,setProfessional]=
+  useState(initialProfessional);
+
+ const [reschedule,setReschedule]=
+  useState<Appointment|null>(null);
+
+ const [daily,setDaily]=useState<Appointment[]>([]);
+ const [dailyError,setDailyError]=useState('');
+ const [dailyLoading,setDailyLoading]=useState(true);
+ const [manualRefreshing,setManualRefreshing]=useState(false);
+ const [reloadKey,setReloadKey]=useState(0);
+
+ useEffect(()=>{
+
+  let alive=true;
+
+  setDailyLoading(true);
+  setDailyError('');
+
+  const request=p.demo
+   ?Promise.resolve({
+     items:data.appointments.filter(a=>
+      dayKey(a.starts_at,zone)===date&&
+      (!professional||a.barber_id===professional)
+     )
+    })
+   :api<{items:Appointment[]}>(
+     `/appointments/period?from=${date}&to=${date}`+
+     `${professional?`&barberId=${professional}`:''}`,
+     data.shop.id
+    );
+
+  void request
+   .then(v=>{
+    if(alive)setDaily(v.items);
+   })
+   .catch(e=>{
+    if(alive)setDailyError(e.message);
+   })
+   .finally(()=>{
+    if(alive)setDailyLoading(false);
+   });
+
+  return()=>{alive=false};
+
+ },[
+  date,
+  professional,
+  data.appointments,
+  data.shop.id,
+  p.demo,
+  zone,
+  reloadKey
+ ]);
+
+ const activeAppointments=daily.filter(a=>
+  !['cancelled','no_show'].includes(a.status)
+ );
+
+ const archivedAppointments=daily.filter(a=>
+  ['cancelled','no_show'].includes(a.status)
+ );
+
+ function changeDay(delta:number){
+
+  const d=new Date(date+'T12:00:00Z');
+
+  d.setUTCDate(d.getUTCDate()+delta);
+
+  setDate(d.toISOString().slice(0,10));
+
+ }
+
+ async function manualRefresh(){
+
+  if(manualRefreshing)return;
+
+  setManualRefreshing(true);
+
+  try{
+
+   await p.refresh();
+
+   setReloadKey(key=>key+1);
+
+   p.notify('Agenda atualizada.');
+
+  }catch(e){
+
+   p.notify(
+    (e as Error).message||
+    'Não foi possível atualizar agora.'
+   );
+
+  }finally{
+
+   setManualRefreshing(false);
+
+  }
+ }
+
+ async function transition(
+  status:
+   'confirmed'|
+   'in_service'|
+   'completed'|
+   'cancelled'|
+   'no_show'
+ ){
+
+  if(!selected)return;
+
+  if(
+   status==='cancelled'&&
+   !window.confirm(
+    'Cancelar este atendimento? Ele sairá da agenda ativa e o cliente receberá um aviso no FIO.'
+   )
+  )return;
+
+  setBusy(true);
+
+  try{
+
+   if(p.demo){
+
+    p.updateDemo(d=>({
+     ...d,
+     appointments:d.appointments.map(a=>
+      a.id===selected.id
+       ?{...a,status}
+       :a
+     )
+    }));
+
+   }else{
+
+    await api(
+     `/appointments/${selected.id}`,
+     data.shop.id,
+     {status,confirmed:true},
+     'PATCH'
+    );
+
+    await p.refresh();
+
+   }
+
+   setSelected(null);
+
+   p.notify({
+    confirmed:
+     'Horário confirmado. O cliente recebeu um aviso no FIO.',
+    in_service:
+     'Atendimento iniciado.',
+    completed:
+     'Atendimento concluído e salvo no histórico.',
+    cancelled:
+     'Agendamento cancelado. O cliente recebeu um aviso no FIO.',
+    no_show:
+     'Falta registrada no histórico.'
+   }[status]);
+
+  }catch(e){
+
+   p.notify((e as Error).message);
+
+  }finally{
+
+   setBusy(false);
+
+  }
+ }
+
+ const customer=
+  selected
+   ?data.customers.find(
+     c=>c.id===selected.client_id
+    )
+   :null;
+
+ const service=
+  selected
+   ?data.services.find(
+     s=>s.id===selected.service_id
+    )
+   :null;
+
+ const selectedProfessional=
+  selected
+   ?data.team.find(
+     t=>t.user_id===selected.barber_id
+    )
+   :null;
+
  return <>
-  <PageTitle eyebrow={owner?'GESTÃO DA AGENDA':'SEUS ATENDIMENTOS'} title={owner?(solo?'Minha agenda':'Agenda da barbearia'):'Minha agenda'} description={owner?(solo?'Organize seus horários e atendimentos em um só lugar.':'Acompanhe a equipe, confirme atendimentos e organize os horários da barbearia.'):'Aqui aparecem somente os atendimentos atribuídos a você.'} action={<div className="page-actions"><button className="secondary agenda-refresh-button" type="button" disabled={manualRefreshing} onClick={()=>void manualRefresh()} title="Atualizar agenda" aria-label="Atualizar agenda"><RefreshCw className={manualRefreshing?'spin':''} size={18}/><span>Atualizar</span></button><button className="primary" onClick={()=>setBooking(true)}><Plus size={18}/>{owner?'Novo agendamento':'Agendar cliente'}</button></div>}/>
+
+  <PageTitle
+   eyebrow={owner?'GESTÃO DA AGENDA':'SEUS ATENDIMENTOS'}
+   title={
+    owner
+     ?solo?'Minha agenda':'Agenda da barbearia'
+     :'Minha agenda'
+   }
+   description={
+    owner
+     ?'Acompanhe confirmações, equipe e atendimentos sem misturar cancelados com a agenda ativa.'
+     :'Aqui aparecem somente os atendimentos atribuídos a você.'
+   }
+   action={
+    <div className="page-actions">
+
+     <button
+      className="secondary agenda-refresh-button"
+      disabled={manualRefreshing}
+      onClick={()=>void manualRefresh()}
+     >
+      <RefreshCw
+       className={manualRefreshing?'spin':''}
+       size={18}
+      />
+      <span>Atualizar agenda</span>
+     </button>
+
+     <button
+      className="primary"
+      onClick={()=>setBooking(true)}
+     >
+      <Plus size={18}/>
+      {owner?'Novo agendamento':'Agendar cliente'}
+     </button>
+
+    </div>
+   }
+  />
+
   <div className="agenda-controls">
-   <div className="agenda-day"><button className="icon-button" aria-label="Dia anterior" onClick={()=>changeDay(-1)}><ChevronLeft/></button><Field label="Dia da agenda"><input type="date" value={date} onChange={e=>setDate(e.target.value)}/></Field><button className="icon-button" aria-label="Próximo dia" onClick={()=>changeDay(1)}><ChevronRight/></button><button className="secondary" onClick={()=>setDate(dayKey(new Date().toISOString(),zone))}>Hoje</button></div>
-   {owner&&!solo&&<Field label="Filtrar profissional"><select value={professional} onChange={e=>setProfessional(e.target.value)}><option value="">Toda a equipe</option>{providers.map(t=><option key={t.user_id} value={t.user_id}>{t.display_name}</option>)}</select></Field>}
-   <span className="muted">{appointments.length} atendimento{appointments.length!==1?'s':''} · {zone}</span><span className="agenda-live-status"><i/>Atualização automática</span>
-  </div>
-  <AppointmentPeriod {...p} professional={professional} onSelect={setSelected}/>
-  {dailyLoading?<p role="status">Carregando agenda…</p>:dailyError?<p role="alert" className="notice">{dailyError}</p>:appointments.length?<div className="appointment-list">{appointments.map(a=><AppointmentRow key={a.id} appointment={a} data={data} onClick={()=>setSelected(a)}/>)}</div>:<Empty title="Nenhum atendimento neste dia">Escolha outra data ou crie um agendamento para um cliente.</Empty>}
-  {reschedule&&<BookingModal {...p} appointment={reschedule} onClose={()=>setReschedule(null)}/>}
-  {booking&&<BookingModal {...p} onClose={()=>setBooking(false)}/>}
-  {selected&&<Modal title="Detalhes do atendimento" onClose={()=>setSelected(null)}>
-   <div className="detail-summary"><h3>{data.customers.find(c=>c.id===selected.client_id)?.name}</h3><p>{data.services.find(s=>s.id===selected.service_id)?.name}</p><p>{new Date(selected.starts_at).toLocaleDateString('pt-BR',{timeZone:zone})} · {time(selected.starts_at,zone)} — {time(selected.ends_at,zone)}</p><p>{selected.subscription_id?'Coberto por assinatura':money(selected.price_cents)}</p></div>
-   <p className="muted">Status: {statusLabels[selected.status]}.</p>
-   <div className="modal-actions">
-    {['scheduled','confirmed'].includes(selected.status)&&<button className="secondary" onClick={()=>{setReschedule(selected);setSelected(null);}}>Remarcar</button>}
-    {['scheduled','confirmed'].includes(selected.status)&&<button className="danger" disabled={busy} onClick={()=>transition('cancelled')}>Cancelar</button>}
-    {selected.status==='scheduled'&&<button className="primary" disabled={busy} onClick={()=>transition('confirmed')}>Confirmar</button>}
-    {['scheduled','confirmed'].includes(selected.status)&&<button className="primary" disabled={busy} onClick={()=>transition('in_service')}>Iniciar</button>}
-    {selected.status==='in_service'&&<button className="primary" disabled={busy} onClick={()=>transition('completed')}>Concluir</button>}
-    {['scheduled','confirmed'].includes(selected.status)&&new Date(selected.starts_at)<=new Date()&&<button className="secondary" disabled={busy} onClick={()=>transition('no_show')}>Registrar falta</button>}
+
+   <div className="agenda-day">
+
+    <button
+     className="icon-button"
+     onClick={()=>changeDay(-1)}
+    >
+     <ChevronLeft/>
+    </button>
+
+    <Field label="Dia da agenda">
+     <input
+      type="date"
+      value={date}
+      onChange={e=>setDate(e.target.value)}
+     />
+    </Field>
+
+    <button
+     className="icon-button"
+     onClick={()=>changeDay(1)}
+    >
+     <ChevronRight/>
+    </button>
+
+    <button
+     className="secondary"
+     onClick={()=>
+      setDate(
+       dayKey(new Date().toISOString(),zone)
+      )
+     }
+    >
+     Hoje
+    </button>
+
    </div>
-  </Modal>}
+
+   {owner&&!solo&&
+    <Field label="Filtrar profissional">
+     <select
+      value={professional}
+      onChange={e=>setProfessional(e.target.value)}
+     >
+      <option value="">Toda a equipe</option>
+
+      {providers.map(t=>
+       <option
+        key={t.user_id}
+        value={t.user_id}
+       >
+        {t.display_name}
+       </option>
+      )}
+
+     </select>
+    </Field>
+   }
+
+   <span className="muted">
+    {activeAppointments.length} ativo
+    {activeAppointments.length===1?'':'s'}
+   </span>
+
+   <span className="agenda-live-status">
+    <i/>
+    Atualização automática
+   </span>
+
+  </div>
+
+  <AppointmentPeriod
+   {...p}
+   professional={professional}
+   onSelect={setSelected}
+  />
+
+  <section className="staff-day-agenda">
+
+   <div className="section-title">
+
+    <h2>Atendimentos do dia</h2>
+
+    <span className="muted">
+     {activeAppointments.length} ativo
+     {activeAppointments.length===1?'':'s'}
+    </span>
+
+   </div>
+
+   {dailyLoading?
+
+    <p role="status">Carregando agenda…</p>
+
+    :dailyError?
+
+    <p role="alert" className="notice">
+     {dailyError}
+    </p>
+
+    :activeAppointments.length?
+
+    <div className="appointment-list">
+
+     {activeAppointments.map(a=>
+      <AppointmentRow
+       key={a.id}
+       appointment={a}
+       data={data}
+       onClick={()=>setSelected(a)}
+      />
+     )}
+
+    </div>
+
+    :
+
+    <Empty title="Nenhum atendimento ativo neste dia">
+     Escolha outra data ou crie um agendamento.
+    </Empty>
+
+   }
+
+   {archivedAppointments.length>0&&
+
+    <details className="staff-archive">
+
+     <summary>
+      Cancelados e faltas
+      <span>{archivedAppointments.length}</span>
+     </summary>
+
+     <div className="appointment-list">
+
+      {archivedAppointments.map(a=>
+       <AppointmentRow
+        key={a.id}
+        appointment={a}
+        data={data}
+        onClick={()=>setSelected(a)}
+       />
+      )}
+
+     </div>
+
+    </details>
+
+   }
+
+  </section>
+
+  {reschedule&&
+   <BookingModal
+    {...p}
+    appointment={reschedule}
+    onClose={()=>setReschedule(null)}
+   />
+  }
+
+  {booking&&
+   <BookingModal
+    {...p}
+    onClose={()=>setBooking(false)}
+   />
+  }
+
+  {selected&&
+   <Modal
+    title="Detalhes do atendimento"
+    onClose={()=>setSelected(null)}
+   >
+
+    <div className="appointment-detail-status">
+
+     <span className={`status ${selected.status}`}>
+      {statusLabels[selected.status]}
+     </span>
+
+     <small>{statusHelp[selected.status]}</small>
+
+    </div>
+
+    <div className="appointment-detail-grid">
+
+     <div>
+      <span>Cliente</span>
+      <strong>{customer?.name??'Cliente'}</strong>
+      {customer?.phone&&<small>{customer.phone}</small>}
+     </div>
+
+     <div>
+      <span>Serviço</span>
+      <strong>{service?.name??'Serviço'}</strong>
+      <small>
+       {service?.duration_minutes??'—'} minutos
+      </small>
+     </div>
+
+     <div>
+      <span>Profissional</span>
+      <strong>
+       {selectedProfessional?.display_name??'Profissional'}
+      </strong>
+     </div>
+
+     <div>
+      <span>Data</span>
+      <strong>
+       {new Date(selected.starts_at)
+        .toLocaleDateString(
+         'pt-BR',
+         {timeZone:zone,dateStyle:'long'}
+        )}
+      </strong>
+     </div>
+
+     <div>
+      <span>Horário</span>
+      <strong>
+       {time(selected.starts_at,zone)}
+       {' — '}
+       {time(selected.ends_at,zone)}
+      </strong>
+     </div>
+
+     <div>
+      <span>Valor</span>
+      <strong>
+       {selected.subscription_id
+        ?'Coberto por assinatura'
+        :money(selected.price_cents)}
+      </strong>
+     </div>
+
+    </div>
+
+    {customer?.phone&&
+     <a
+      className="secondary appointment-whatsapp"
+      href={whats(customer.phone)}
+      target="_blank"
+      rel="noreferrer"
+     >
+      <MessageCircle size={16}/>
+      Chamar cliente no WhatsApp
+     </a>
+    }
+
+    <div className="modal-actions">
+
+     {['scheduled','confirmed']
+      .includes(selected.status)&&
+      <button
+       className="secondary"
+       onClick={()=>{
+        setReschedule(selected);
+        setSelected(null);
+       }}
+      >
+       Remarcar
+      </button>
+     }
+
+     {['scheduled','confirmed']
+      .includes(selected.status)&&
+      <button
+       className="danger"
+       disabled={busy}
+       onClick={()=>void transition('cancelled')}
+      >
+       Cancelar
+      </button>
+     }
+
+     {selected.status==='scheduled'&&
+      <button
+       className="primary"
+       disabled={busy}
+       onClick={()=>void transition('confirmed')}
+      >
+       Confirmar horário
+      </button>
+     }
+
+     {selected.status==='confirmed'&&
+      <button
+       className="primary"
+       disabled={busy}
+       onClick={()=>void transition('in_service')}
+      >
+       Iniciar atendimento
+      </button>
+     }
+
+     {selected.status==='in_service'&&
+      <button
+       className="primary"
+       disabled={busy}
+       onClick={()=>void transition('completed')}
+      >
+       Concluir atendimento
+      </button>
+     }
+
+     {['scheduled','confirmed'].includes(selected.status)&&
+      new Date(selected.starts_at)<=new Date()&&
+      <button
+       className="secondary"
+       disabled={busy}
+       onClick={()=>void transition('no_show')}
+      >
+       Registrar falta
+      </button>
+     }
+
+    </div>
+
+   </Modal>
+  }
+
  </>;
 }
-
 export function Agenda(p:WorkspaceProps){
  return p.data.membership.role==='CLIENT'?<ClientAgenda {...p}/>:<StaffAgenda {...p}/>;
 }
