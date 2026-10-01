@@ -1,7 +1,10 @@
-// Contexto apenas de navegaÃ§Ã£o.
+// Contexto apenas de navegacao.
 // O servidor continua validando a membership de verdade.
 
 const contextKey='fio-client-shop-v1';
+
+const routeRoot=(pathname:string,segment:string)=>
+ pathname===`/${segment}`||pathname.startsWith(`/${segment}/`);
 
 function validShop(value:string|null){
  return Boolean(value&&/^[a-z0-9-]{3,60}$/.test(value));
@@ -31,7 +34,7 @@ export function clientContext(pathname:string,search:string){
 
  if(
   (audience&&audience!=='client')||
-  /^\/(owner|barber|platform|acesso)(\/|$)/.test(pathname)
+  ['owner','barber','platform','acesso'].some(segment=>routeRoot(pathname,segment))
  ) return '';
 
  const slug=q.get('shop')||'';
@@ -40,7 +43,7 @@ export function clientContext(pathname:string,search:string){
 
  if(
   audience==='client'||
-  /^\/client(\/|$)/.test(pathname)
+  routeRoot(pathname,'client')
  ) return storedClientShop();
 
  return '';
