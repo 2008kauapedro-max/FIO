@@ -6,12 +6,13 @@ afterEach(()=>vi.unstubAllEnvs());
 
 describe('SyncPay billing boundary',()=>{
  it('derives the provider price from the trusted FIO catalog',()=>{
-  expect(syncpayInternals.planConfig('PRO','monthly')).toMatchObject({amountCents:11990,periodicityDays:30});
-  expect(syncpayInternals.planConfig('PREMIUM','annual')).toMatchObject({amountCents:189990,periodicityDays:365});
+  expect(syncpayInternals.planConfig('PRO','monthly')).toMatchObject({amountCents:14990,periodicityDays:30});
+  expect(syncpayInternals.planConfig('PREMIUM','annual')).toMatchObject({amountCents:249900,periodicityDays:365});
  });
 
- it('accepts PLUS as an active paid plan',()=>{
-  expect(syncpayInternals.planConfig('PLUS','monthly')).toMatchObject({amountCents:14990,periodicityDays:30});
+ it('retira PLUS e semanal das novas vendas',()=>{
+  expect(()=>syncpayInternals.planConfig('PLUS' as never,'monthly')).toThrow();
+  expect(()=>syncpayInternals.planConfig('PRO','weekly')).toThrow();
  });
 
  it('accepts valid CPF/CNPJ and rejects malformed documents',()=>{

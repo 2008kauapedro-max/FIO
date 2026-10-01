@@ -213,7 +213,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const c=ctx(res);const v=z.object({barberId:z.union([z.uuid(),z.literal('any')]),serviceId:z.uuid(),day:z.iso.date()}).parse(req.query);
   const r=await c.db.rpc('available_slots',{p_shop:c.shopId,p_barber:v.barberId==='any'?null:v.barberId,p_service:v.serviceId,p_day:v.day});dbError(r.error);res.json(r.data);
  });
- app.post('/api/appointments',async(req,res)=>{
+ app.post('/api/appointments',rateLimitByUser('appointment-create',60_000,20),async(req,res)=>{
   const c=ctx(res),v=bookingSchema.parse(req.body);
   const r=await c.db.rpc('book_appointment',{p_shop:c.shopId,p_client:v.clientId,p_barber:v.barberId,p_service:v.serviceId,p_start:v.startsAt,p_use_subscription:v.useSubscription});dbError(r.error);
   const assigned=await c.db.from('appointments').select('barber_id').eq('barbershop_id',c.shopId).eq('id',r.data).maybeSingle();
@@ -223,7 +223,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const c=ctx(res),v=z.object({from:z.iso.date(),to:z.iso.date(),barberId:z.uuid().optional()}).parse(req.query);
   const r=await c.db.rpc('appointment_period',{p_shop:c.shopId,p_from:v.from,p_to:v.to,p_barber:v.barberId??null});dbError(r.error);res.json(r.data);
  });
- app.post('/api/appointments/:id/reschedule',async(req,res)=>{
+ app.post('/api/appointments/:id/reschedule',rateLimitByUser('appointment-reschedule',60_000,20),async(req,res)=>{
   const c=ctx(res),id=z.uuid().parse(req.params.id),v=z.object({startsAt:z.iso.datetime({offset:true}),confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('reschedule_appointment',{p_shop:c.shopId,p_id:id,p_start:v.startsAt});dbError(r.error);res.json({ok:true});
  });
@@ -253,7 +253,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.delete('/api/push/devices',async(req,res)=>{
   const c=ctx(res),v=z.object({endpoint:z.string().max(2048)}).strict().parse(req.body);const r=await c.db.rpc('disable_appointment_push',{p_shop:c.shopId,p_endpoint:v.endpoint});dbError(r.error);res.json({ok:true});
  });
- app.patch('/api/appointments/:id',async(req,res)=>{
+ app.patch('/api/appointments/:id',rateLimitByUser('appointment-status',60_000,30),async(req,res)=>{
   const c=ctx(res),id=z.uuid().parse(req.params.id),v=z.object({status:z.enum(['confirmed','in_service','completed','cancelled','no_show']),confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('transition_appointment',{p_shop:c.shopId,p_id:id,p_status:v.status});dbError(r.error);res.json({ok:true});
  });

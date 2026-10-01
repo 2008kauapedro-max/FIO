@@ -81,10 +81,10 @@ it('FREE and PRO service capacities are enforced without deleting existing rows 
  expect(await scalar<number>('select count(*)::int from public.services where barbershop_id=$1',[shop])).toBe(9);
  await expect(extra()).rejects.toThrow('PLAN_CAPACITY');
 });
-it('FREE rejects a second active barber and customer number 101',async()=>{
+it('FREE rejects a second active barber and customer number 86',async()=>{
  await db.exec('reset role');await db.query('insert into auth.users(id) values($1)',[uid(5)]);
  await user(1);const invite=await scalar("select public.create_invitation($1,'BARBER')",[shop]);await user(5);
  await expect(db.query("select public.accept_invitation($1,'Extra barber')",[invite])).rejects.toThrow('PLAN_CAPACITY');
- await user(1);for(let i=0;i<99;i++)await db.query("insert into public.customers(barbershop_id,name) values($1,$2)",[shop,`Cliente ${i}`]);
+ await user(1);for(let i=0;i<84;i++)await db.query("insert into public.customers(barbershop_id,name) values($1,$2)",[shop,`Cliente ${i}`]);
  await expect(db.query("insert into public.customers(barbershop_id,name) values($1,'Cliente extra')",[shop])).rejects.toThrow('PLAN_CAPACITY');
 });

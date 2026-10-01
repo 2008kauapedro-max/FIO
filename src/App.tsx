@@ -29,8 +29,9 @@ const navItems:NavItem[]=[
  {path:'/agenda',label:'Agenda',icon:CalendarDays,roles:['OWNER','BARBER','CLIENT']},
  {path:'/assistente',label:'Assistente',icon:Sparkles,roles:['OWNER','BARBER','CLIENT'],feature:'assistant'},
  {path:'/feed',label:'Feed',icon:Images,roles:['OWNER','BARBER','CLIENT'],feature:'feed'},
- {path:'/clientes',label:'Clientes',icon:Users,roles:['OWNER','BARBER']},
- {path:'/equipe',label:'Equipe',icon:UserRound,roles:['OWNER','BARBER','CLIENT']},
+ {path:'/clientes',label:'Clientes',icon:Users,roles:['OWNER']},
+ {path:'/equipe',label:'Equipe',icon:UserRound,roles:['OWNER','BARBER']},
+ {path:'/profissionais',label:'Profissionais',icon:UserRound,roles:['CLIENT']},
  {path:'/servicos',label:'Serviços',icon:Scissors,roles:['OWNER','BARBER','CLIENT']},
  {path:'/assinaturas',label:'Pacotes de cortes',icon:Wallet,roles:['OWNER','CLIENT']},
  {path:'/comunicacao',label:'Comunicação',icon:Megaphone,roles:['OWNER'],feature:'communication'},
@@ -168,6 +169,7 @@ export default function App(){
   case '/agenda':content=<Agenda {...props}/>;break;
   case '/clientes':content=<Customers {...props}/>;break;
   case '/equipe':content=<Team {...props}/>;break;
+   case '/profissionais':content=<Team {...props}/>;break;
   case '/servicos':content=<Services {...props}/>;break;
   case '/assinaturas':content=<Subscriptions {...props}/>;break;
   case '/comunicacao':content=<Communication {...props}/>;break;
@@ -195,8 +197,14 @@ export default function App(){
     <button className="icon-button close-menu" aria-label="Fechar navegação" onClick={()=>setMenu(false)}><X size={20}/></button>
    </div>
    <p className="nav-label">NAVEGAÇÃO</p>
-   <nav ref={sidebarNavRef} aria-label="Navegação principal">{items.map(n=><NavLink data-tour={`nav${n.path.replace('/','-')}`} end={n.path===''} className={({isActive})=>`nav-link ${isActive?'active':''}`} to={base+n.path} key={n.path}><n.icon size={19} strokeWidth={1.6}/>{n.label}{n.path==='/assistente'&&<span className="ai-tag">IA</span>}</NavLink>)}</nav>
+   <nav ref={sidebarNavRef} aria-label="Navegação principal">{items.filter(n=>!['/configuracoes','/suporte'].includes(n.path)).map(n=><NavLink data-tour={`nav${n.path.replace('/','-')}`} end={n.path===''} className={({isActive})=>`nav-link ${isActive?'active':''}`} to={base+n.path} key={n.path}><n.icon size={19} strokeWidth={1.6}/>{n.label}{n.path==='/assistente'&&<span className="ai-tag">IA</span>}</NavLink>)}</nav>
    <div className="sidebar-bottom">
+    <NavLink className="nav-link" to={`${base}/configuracoes`}>
+     <Settings size={19}/>Configurações
+    </NavLink>
+    <NavLink className="nav-link" to={`${base}/suporte`}>
+     <CircleHelp size={19}/>Ajuda e suporte
+    </NavLink>
     {role!=='CLIENT'&&memberships&&memberships.length>1?<label className="field">Trocar barbearia<select value={shopId} onChange={e=>{sessionStorage.setItem('fio-shop',e.target.value);setShopId(e.target.value);}}>{memberships.map(m=><option key={m.barbershop_id} value={m.barbershop_id}>{m.role} · {m.barbershop_id.slice(0,8)}</option>)}</select></label>:null}
     <button className="nav-link theme-toggle" onClick={toggleTheme}>{theme==='dark'?<Sun size={19}/>:<Moon size={19}/>} {theme==='dark'?'Tema claro':'Tema escuro'}</button>
     <div className="profile">
