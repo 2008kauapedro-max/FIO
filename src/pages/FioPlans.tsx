@@ -1,6 +1,6 @@
 import { useEffect,useMemo,useState } from 'react';
 import { ArrowRight,Check,Copy,Crown,Gift,Info,RefreshCw,ShieldCheck,WalletCards } from 'lucide-react';
-import { BILLING_LABELS,FIO_PLAN_CATALOG,billingSuffix,type BillingCycle } from '../../shared/fio-plans';
+import { BILLING_LABELS,FIO_PLAN_CATALOG,SALE_BILLING_CYCLES,billingSuffix,type BillingCycle } from '../../shared/fio-plans';
 import { money } from '../../shared/domain';
 import { api,RequestError } from '../lib/api';
 import { QRCodeSVG } from 'qrcode.react';

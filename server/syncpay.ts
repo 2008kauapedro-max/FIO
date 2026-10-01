@@ -7,8 +7,8 @@ import { ApiError,dbError } from './errors.js';
 import { FIO_PLAN_CATALOG,type BillingCycle } from '../shared/fio-plans.js';
 
 const BASE='https://api.syncpayments.com.br/api/partner/v1';
-const PAID_PLANS=['PRO','PLUS','PREMIUM'] as const;
-const CYCLES=['weekly','monthly','annual'] as const;
+const PAID_PLANS=['PRO','PREMIUM'] as const;
+const CYCLES=['monthly','annual'] as const;
 const CYCLE_DAYS:Record<BillingCycle,number>={weekly:7,monthly:30,annual:365};
 const BILLING_ADVANCE:Record<BillingCycle,number>={weekly:1,monthly:3,annual:7};
 const GRACE_DAYS:Record<BillingCycle,number>={weekly:2,monthly:5,annual:7};
