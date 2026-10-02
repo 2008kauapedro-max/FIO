@@ -1,4 +1,4 @@
-@import '@fontsource/dm-sans/latin-400.css';
+﻿@import '@fontsource/dm-sans/latin-400.css';
 @import '@fontsource/dm-sans/latin-500.css';
 @import '@fontsource/dm-sans/latin-600.css';
 @import '@fontsource/dm-sans/latin-700.css';
@@ -45,7 +45,7 @@ box-shadow:0 24px 80px rgba(0,0,0,.38);
 .eyebrow,.page-title .eyebrow,.section-kicker,.nav-label,.demo-panel .eyebrow,.demo-panel a,.demo-badge,.breadcrumb,.plan-badge,.ai-tag,.profile strong,.profile small,.shop-switch small,.overview-primary p,.overview-stats small,.appointment-info>span,.appointment-time small,.appointment-row>.status,.assistant-promo>small,.quiet-footer,.quiet-footer span:last-child,.bottom-nav a,.bottom-nav button,.person-row>.muted{font-size:.75rem}
 @media(max-width:760px){.overview-stats span{font-size:.8rem}.appointment-row>.status{font-size:.7rem}.plan-badge{font-size:.65rem}.demo-badge{font-size:.7rem}.appointment-info>span{font-size:.8rem}.bottom-nav a,.bottom-nav button{font-size:.75rem}.sidebar{visibility:hidden}.sidebar.is-open{visibility:visible}}
 
-/* FIO brand texture — kept deliberately subtle so content remains the focus. */
+/* FIO brand texture â€” kept deliberately subtle so content remains the focus. */
 .workspace{position:relative;isolation:isolate}
 .sidebar{overflow:hidden}
 .sidebar:after{content:"";position:absolute;left:-80px;right:-80px;bottom:-130px;height:360px;background:url('/Textura/fiobrancofundopreto.png') center/280px repeat;opacity:.055;transform:rotate(-7deg);pointer-events:none}
@@ -928,7 +928,7 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
 
 .client-welcome+section .empty{padding:30px 20px;min-height:140px}.client-welcome+section .empty-mark{margin-bottom:12px}
 
-/* 2026-09-28 · experiência pública compacta + instalação do app por estabelecimento */
+/* 2026-09-28 Â· experiÃªncia pÃºblica compacta + instalaÃ§Ã£o do app por estabelecimento */
 .booking-showcase{max-width:760px;margin:0 auto;min-height:100dvh;background:var(--public-bg);color:var(--public-text);box-shadow:0 0 80px #0005}
 .booking-showcase-hero{min-height:250px;padding:18px 18px 22px;background:linear-gradient(180deg,color-mix(in srgb,var(--public-surface) 35%,transparent),var(--public-bg));background-size:cover;background-position:center;display:flex;flex-direction:column;justify-content:space-between}
 .booking-showcase-top{display:flex;align-items:center;justify-content:space-between;gap:12px}.booking-showcase-badge{font-size:.62rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#fff;background:#0008;border:1px solid #ffffff25;border-radius:999px;padding:7px 10px;backdrop-filter:blur(8px)}
@@ -944,7 +944,7 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
 @media(max-width:560px){.booking-showcase{max-width:none}.booking-showcase-hero{min-height:230px;padding:14px 14px 18px}.booking-showcase-logo{width:64px;height:64px;border-radius:16px}.booking-showcase-identity h1{font-size:1.32rem}.booking-showcase-content{padding:14px 12px 24px}.booking-app-card{grid-template-columns:auto 1fr}.booking-app-card button{grid-column:2}.booking-service-row{gap:9px}.booking-service-action{padding:8px}.booking-showcase-tabs button{font-size:.63rem}.booking-showcase-tabs svg{width:13px}.client-app-gate{padding:8px}.client-app-gate-card{border-radius:17px}}
 .ob-mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:8px 0 18px}.ob-mode-grid button{display:grid;gap:5px;text-align:left;padding:14px;border:1px solid color-mix(in srgb,var(--ob-text) 16%,transparent);border-radius:13px;background:var(--ob-surface);color:var(--ob-text)}.ob-mode-grid button strong{font-size:.8rem}.ob-mode-grid button span{font-size:.66rem;line-height:1.4;color:var(--ob-muted)}.ob-mode-grid button.selected{border-color:var(--ob-accent);box-shadow:inset 0 0 0 1px var(--ob-accent)}.ob-mode-grid button:disabled{opacity:.72;cursor:not-allowed}@media(max-width:520px){.ob-mode-grid{grid-template-columns:1fr}}
 
-/* 2026-09-29 · seletor de instalação por plataforma */
+/* 2026-09-29 Â· seletor de instalaÃ§Ã£o por plataforma */
 .booking-app-card-platforms{grid-template-columns:auto 1fr}.booking-app-card-platforms .booking-platform-buttons{grid-column:1/-1}
 .booking-platform-buttons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
 .booking-platform-buttons button{min-height:38px;display:flex;align-items:center;justify-content:center;gap:5px;border:1px solid color-mix(in srgb,var(--public-text) 13%,transparent);border-radius:9px;background:var(--public-surface);color:var(--public-text);font-size:.64rem;font-weight:800}
@@ -981,7 +981,7 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
 .agenda-live-status{display:inline-flex;align-items:center;gap:7px;font-size:.75rem;color:var(--muted,#8d8d8d);white-space:nowrap}.agenda-live-status i{width:7px;height:7px;border-radius:999px;background:#39b86b;box-shadow:0 0 0 3px color-mix(in srgb,#39b86b 18%,transparent)}.agenda-refresh-button{display:inline-flex;align-items:center;gap:8px}.agenda-refresh-button:disabled{opacity:.65}@media(max-width:640px){.agenda-refresh-button span{display:none}.agenda-refresh-button{width:42px;min-width:42px;padding-inline:0;justify-content:center}.agenda-live-status{width:100%;margin-top:2px}}
 
 
-/* Visão geral focada em destaques, atalhos e novidades do FIO */
+/* VisÃ£o geral focada em destaques, atalhos e novidades do FIO */
 .home-hub-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:8px 0 22px}.home-hub-intro>div{min-width:0}.home-hub-intro .eyebrow{margin:0 0 7px}.home-hub-intro h1{margin:0;font-size:clamp(1.55rem,2.6vw,2.35rem);line-height:1.05;letter-spacing:-.04em}.home-hub-intro p{margin:9px 0 0;color:var(--muted);font-size:.84rem;line-height:1.5;max-width:64ch}.home-hub-intro>button{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px}
 .home-carousel-featured{min-height:232px;margin-bottom:28px}.home-carousel-featured .home-carousel-track{min-height:232px}.home-carousel-featured .home-carousel-slide{padding:30px 30px 62px}.home-carousel-featured .home-carousel-copy h2{font-size:clamp(1.35rem,2.4vw,1.9rem);max-width:22ch;letter-spacing:-.035em}.home-carousel-featured .home-carousel-copy p{max-width:62ch}.home-carousel-action.future{opacity:.7;cursor:default;border-style:dashed}.home-carousel-action.future:disabled{color:var(--muted);background:transparent}
 .home-quick-section{margin-top:4px}.home-section-heading{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:0 0 12px}.home-section-heading .eyebrow{margin:0 0 5px}.home-section-heading h2{margin:0;font-size:1rem;letter-spacing:-.02em}.home-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.home-quick-grid>button{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;padding:15px;text-align:left;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text);transition:transform .18s ease,border-color .18s ease,background .18s ease}.home-quick-grid>button:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--text) 28%,var(--border));background:color-mix(in srgb,var(--surface) 94%,var(--text) 6%)}.home-quick-grid>button>span{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--text) 8%,transparent)}.home-quick-grid>button>div{min-width:0}.home-quick-grid strong{display:block;font-size:.78rem}.home-quick-grid small{display:block;margin-top:3px;color:var(--muted);font-size:.65rem;line-height:1.35}.home-quick-grid>button>svg{color:var(--muted)}
@@ -1049,7 +1049,7 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
  border-color:#ddd
 }
 
-/* Agenda separada por papel: cliente simples; equipe com gestão operacional */
+/* Agenda separada por papel: cliente simples; equipe com gestÃ£o operacional */
 .client-agenda-panel{max-width:900px;margin:0 auto}.client-agenda-heading{display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:14px}.client-agenda-heading .eyebrow{margin:0 0 5px}.client-agenda-heading h2{margin:0;font-size:1.05rem}.client-agenda-list{display:grid;gap:10px}.client-booking-card{width:100%;display:grid;grid-template-columns:64px minmax(0,1fr) auto auto;align-items:center;gap:14px;padding:16px;border:1px solid var(--border);border-radius:15px;background:var(--surface);color:var(--text);text-align:left}.client-booking-card:hover{border-color:color-mix(in srgb,var(--text) 28%,var(--border));background:color-mix(in srgb,var(--surface) 94%,var(--text) 6%)}.client-booking-date{width:58px;height:58px;border:1px solid var(--border);border-radius:13px;display:grid;place-items:center;align-content:center;background:color-mix(in srgb,var(--text) 5%,transparent)}.client-booking-date strong{font-size:1.35rem;line-height:1}.client-booking-date small{margin-top:4px;text-transform:uppercase;color:var(--muted);font-size:.66rem}.client-booking-info{min-width:0}.client-booking-info .eyebrow{display:block;margin:0 0 5px;font-size:.58rem}.client-booking-info>strong{display:block;font-size:.92rem}.client-booking-info>small{display:block;margin-top:5px;color:var(--muted);font-size:.73rem;line-height:1.45}.client-booking-card>svg{color:var(--muted)}
 @media(max-width:640px){.client-agenda-panel{margin:0}.client-agenda-heading{align-items:flex-start}.client-booking-card{grid-template-columns:52px minmax(0,1fr) auto;padding:13px;gap:11px}.client-booking-date{width:50px;height:50px}.client-booking-date strong{font-size:1.15rem}.client-booking-card>.status{grid-column:2/3;justify-self:start}.client-booking-card>svg{grid-column:3;grid-row:1/3}.client-booking-info>small{font-size:.69rem}}
 
@@ -1438,7 +1438,7 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
 
 /* STAFF UX STEP 1 */
 
-/* Corrige o espaço preto abaixo do conteúdo no tema claro. */
+/* Corrige o espaÃ§o preto abaixo do conteÃºdo no tema claro. */
 body:has(.workspace),
 #root:has(.workspace),
 .app-shell,
@@ -1482,7 +1482,7 @@ body:has(.workspace),
  color:#111!important;
 }
 
-/* Próximo atendimento */
+/* PrÃ³ximo atendimento */
 .next-appointment-card{
  width:100%;
  display:grid;
@@ -1591,7 +1591,7 @@ body:has(.workspace),
  display:grid!important;
 }
 
-/* Histórico mensal - sem blocão cinza */
+/* HistÃ³rico mensal - sem blocÃ£o cinza */
 .period-list{
  display:grid;
  gap:8px;
@@ -1890,7 +1890,3 @@ body:has(.workspace),
   flex: 0 0 auto;
 }
 
-
-
-/* FIO_LANGUAGE_SETTINGS_20261002 */
-.language-settings{display:grid;gap:18px}.language-settings .section-title{margin:0}.language-settings .section-title p{margin:5px 0 0}.language-option-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.language-option{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;min-height:64px;padding:12px 13px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);text-align:left}.language-option:hover{border-color:color-mix(in srgb,var(--text) 28%,var(--border));background:color-mix(in srgb,var(--surface) 94%,var(--text) 6%)}.language-option.selected{border-color:var(--text);box-shadow:inset 0 0 0 1px var(--text)}.language-flag{font-size:1.35rem;line-height:1}.language-option strong,.language-option small{display:block}.language-option small{margin-top:3px;color:var(--muted);font-size:.65rem}.language-region-grid{margin:0}.language-settings>.primary{justify-self:start}@media(max-width:640px){.language-option-grid{grid-template-columns:1fr}.language-settings>.primary{width:100%}}

@@ -1,5 +1,4 @@
-import { useI18n } from './i18n';
-import { loadLocalePreferences } from './i18n/supabaseLocale';
+﻿import { useI18n } from './i18n';
 import {appointmentLink} from './lib/appointment-link';
 import { clientContext,rememberClientShop } from './lib/client-context';
 import { useCallback,useEffect,useRef,useState,lazy,Suspense } from 'react';
@@ -27,18 +26,18 @@ function AppLoading(){
 
 type NavItem={path:string;label:string;icon:typeof LayoutDashboard;roles:Role[];feature?:FioFeature};
 const navItems:NavItem[]=[
- {path:'',label:'Visão geral',icon:LayoutDashboard,roles:['OWNER','BARBER','CLIENT']},
+ {path:'',label:'VisÃ£o geral',icon:LayoutDashboard,roles:['OWNER','BARBER','CLIENT']},
  {path:'/agenda',label:'Agenda',icon:CalendarDays,roles:['OWNER','BARBER','CLIENT']},
  {path:'/assistente',label:'Assistente',icon:Sparkles,roles:['OWNER','BARBER','CLIENT'],feature:'assistant'},
  {path:'/feed',label:'Feed',icon:Images,roles:['OWNER','BARBER','CLIENT'],feature:'feed'},
  {path:'/clientes',label:'Clientes',icon:Users,roles:['OWNER']},
  {path:'/equipe',label:'Equipe',icon:UserRound,roles:['OWNER','BARBER']},
  {path:'/profissionais',label:'Profissionais',icon:UserRound,roles:['CLIENT']},
- {path:'/servicos',label:'Serviços',icon:Scissors,roles:['OWNER','BARBER','CLIENT']},
+ {path:'/servicos',label:'ServiÃ§os',icon:Scissors,roles:['OWNER','BARBER','CLIENT']},
  {path:'/assinaturas',label:'Pacotes de cortes',icon:Wallet,roles:['OWNER','CLIENT']},
- {path:'/comunicacao',label:'Comunicação',icon:Megaphone,roles:['OWNER'],feature:'communication'},
+ {path:'/comunicacao',label:'ComunicaÃ§Ã£o',icon:Megaphone,roles:['OWNER'],feature:'communication'},
  {path:'/plano-fio',label:'Plano FIO',icon:Crown,roles:['OWNER']},
- {path:'/configuracoes',label:'Configurações',icon:Settings,roles:['OWNER','BARBER','CLIENT']},
+ {path:'/configuracoes',label:'ConfiguraÃ§Ãµes',icon:Settings,roles:['OWNER','BARBER','CLIENT']},
  {path:'/suporte',label:'Ajuda e suporte',icon:CircleHelp,roles:['OWNER','BARBER','CLIENT']}
 ];
 
@@ -46,7 +45,7 @@ type Theme='dark'|'light';
 type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:'accepted'|'dismissed'}>};
 
 export default function App(){
- const {t,setLocale,setRegion,setCurrency}=useI18n();
+ const {t}=useI18n();
  const location=useLocation(),navigate=useNavigate();
  const isPlatform=location.pathname==='/acesso/plataforma'||location.pathname==='/platform'||location.pathname.startsWith('/platform/');
  const reservedPublicSlugs=new Set(['owner','barber','client','login','reset-password','confirm-email','acesso','b','barbearia','platform','api']);
@@ -58,7 +57,6 @@ export default function App(){
  const [theme,setTheme]=useState<Theme>(()=>(localStorage.getItem('fio-theme')==='light'?'light':'dark'));
  const [installPrompt,setInstallPrompt]=useState<InstallPromptEvent|null>(null);
  const sidebarNavRef=useRef<HTMLElement>(null);
- const localeLoadedRef=useRef('');
  const activeRole=data?.membership.role;
  const navLabel=(path:string)=>t(({
   '':'nav.overview',
@@ -76,20 +74,6 @@ export default function App(){
   '/suporte':'nav.support'
  } as Record<string,string>)[path]??'nav.overview');
 
- useEffect(()=>{
-  if(!supabase||!data?.shop.id||!data.membership.user_id)return;
-  const key=`${data.shop.id}:${data.membership.user_id}`;
-  if(localeLoadedRef.current===key)return;
-  let active=true;
-  void loadLocalePreferences(supabase,data.shop.id,data.membership.user_id).then(pref=>{
-   if(!active||!pref)return;
-   setLocale(pref.preferred_locale,{persistLocal:true,updateDefaults:false});
-   setRegion(pref.preferred_region);
-   setCurrency(pref.preferred_currency);
-   localeLoadedRef.current=key;
-  }).catch(()=>{localeLoadedRef.current=key;});
-  return()=>{active=false;};
- },[data?.shop.id,data?.membership.user_id,setLocale,setRegion,setCurrency]);
  useEffect(()=>{const change=(e:Event)=>setTheme((e as CustomEvent<Theme>).detail);window.addEventListener('fio-theme-change',change);return()=>window.removeEventListener('fio-theme-change',change);},[]);
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('fio-theme',theme);},[theme]);
  useEffect(()=>{
@@ -114,11 +98,11 @@ export default function App(){
   if(clientSlug&&!preferredShop){
    try{
     const response=await fetch(`/api/public/shop/${encodeURIComponent(clientSlug)}`),body=await response.json();
-    if(!response.ok)throw new Error('Não foi possível abrir a barbearia deste link. Confira o endereço e tente novamente.');
+    if(!response.ok)throw new Error('NÃ£o foi possÃ­vel abrir a barbearia deste link. Confira o endereÃ§o e tente novamente.');
     const targetId=String(body?.shop?.id??'');
-    if(!targetId)throw new Error('Barbearia não encontrada.');
+    if(!targetId)throw new Error('Barbearia nÃ£o encontrada.');
     if(targetId){const membership=m.find(x=>x.barbershop_id===targetId);if(membership&&membership.role!=='CLIENT')throw new Error('CLIENT_ACCOUNT_REQUIRED');if(membership)preferredShop=targetId;else needsClientJoin=true;}
-   }catch(e){if((e as Error).message==='CLIENT_ACCOUNT_REQUIRED')throw new Error('Esta conta pertence à equipe da barbearia. Saia e entre com sua conta de cliente para usar este link.');throw new Error('Não foi possível abrir a barbearia deste link. Confira o endereço e tente novamente.');}
+   }catch(e){if((e as Error).message==='CLIENT_ACCOUNT_REQUIRED')throw new Error('Esta conta pertence Ã  equipe da barbearia. Saia e entre com sua conta de cliente para usar este link.');throw new Error('NÃ£o foi possÃ­vel abrir a barbearia deste link. Confira o endereÃ§o e tente novamente.');}
   }
   setClientJoinPending(needsClientJoin);
   const owner=m.find(x=>x.role==='OWNER');
@@ -179,7 +163,7 @@ export default function App(){
   const params=new URLSearchParams();const next=appointmentLink(location.pathname+location.search);if(next)params.set('next',next);if(audience)params.set('audience',audience);const shop=clientContext(location.pathname,location.search);if(shop)params.set('shop',shop);
   return <Navigate replace to={`/login${params.toString()?`?${params.toString()}`:''}`}/>;
  }
- if(error)return <div className="full-error"><h1>Não foi possível abrir seu espaço.</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>Tentar novamente</button><button className="secondary" onClick={()=>void supabase?.auth.signOut({scope:'local'})}>Sair da conta</button><Link to="/login">Voltar ao acesso</Link></div>;
+ if(error)return <div className="full-error"><h1>NÃ£o foi possÃ­vel abrir seu espaÃ§o.</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>Tentar novamente</button><button className="secondary" onClick={()=>void supabase?.auth.signOut({scope:'local'})}>Sair da conta</button><Link to="/login">Voltar ao acesso</Link></div>;
  if(!demo&&memberships===null)return <AppLoading/>;
  if(!demo&&(memberships?.length===0||Boolean(onboardingShopId)||clientJoinPending))return <Onboarding shopId={onboardingShopId||undefined} onDone={()=>void loadMemberships()}/>;
  if(!data)return <AppLoading/>;
@@ -191,7 +175,7 @@ export default function App(){
  const props:WorkspaceProps={data,demo,base,refresh,notify:setToast,updateDemo:fn=>setData(d=>d?fn(d):d),canInstall:Boolean(installPrompt),installApp:async()=>{
   type InstallWindow=Window&{__fioInstallPrompt?:InstallPromptEvent|null};
   const prompt=installPrompt??(window as InstallWindow).__fioInstallPrompt??null;
-  if(!prompt){setToast('O navegador ainda não liberou a instalação. Abra no Chrome ou Edge e tente novamente.');return;}
+  if(!prompt){setToast('O navegador ainda nÃ£o liberou a instalaÃ§Ã£o. Abra no Chrome ou Edge e tente novamente.');return;}
   await prompt.prompt();
   await prompt.userChoice;
   (window as InstallWindow).__fioInstallPrompt=null;
@@ -227,40 +211,40 @@ export default function App(){
       <small>{role==='OWNER'?(solo?'FIO Solo':'FIO GestÃ£o'):role==='BARBER'?'FIO Equipe':'Ãrea do cliente'}</small>
      </span>
     </Link>
-    <button className="icon-button close-menu" aria-label="Fechar navegação" onClick={()=>setMenu(false)}><X size={20}/></button>
+    <button className="icon-button close-menu" aria-label="Fechar navegaÃ§Ã£o" onClick={()=>setMenu(false)}><X size={20}/></button>
    </div>
-   <p className="nav-label">NAVEGAÇÃO</p>
-   <nav ref={sidebarNavRef} aria-label="Navegação principal">{items.filter(n=>!['/configuracoes','/suporte'].includes(n.path)).map(n=><NavLink data-tour={`nav${n.path.replace('/','-')}`} end={n.path===''} className={({isActive})=>`nav-link ${isActive?'active':''}`} to={base+n.path} key={n.path}><n.icon size={19} strokeWidth={1.6}/>{navLabel(n.path)}{n.path==='/assistente'&&<span className="ai-tag">IA</span>}</NavLink>)}</nav>
+   <p className="nav-label">NAVEGAÃ‡ÃƒO</p>
+   <nav ref={sidebarNavRef} aria-label="NavegaÃ§Ã£o principal">{items.filter(n=>!['/configuracoes','/suporte'].includes(n.path)).map(n=><NavLink data-tour={`nav${n.path.replace('/','-')}`} end={n.path===''} className={({isActive})=>`nav-link ${isActive?'active':''}`} to={base+n.path} key={n.path}><n.icon size={19} strokeWidth={1.6}/>{navLabel(n.path)}{n.path==='/assistente'&&<span className="ai-tag">IA</span>}</NavLink>)}</nav>
    <div className="sidebar-bottom">
     <NavLink className="nav-link" to={`${base}/configuracoes`}>
-     <Settings size={19}/>Configurações
+     <Settings size={19}/>ConfiguraÃ§Ãµes
     </NavLink>
     <NavLink className="nav-link" to={`${base}/suporte`}>
      <CircleHelp size={19}/>{t("nav.support")}
     </NavLink>
-    {role!=='CLIENT'&&memberships&&memberships.length>1?<label className="field">Trocar barbearia<select value={shopId} onChange={e=>{sessionStorage.setItem('fio-shop',e.target.value);setShopId(e.target.value);}}>{memberships.map(m=><option key={m.barbershop_id} value={m.barbershop_id}>{m.role} · {m.barbershop_id.slice(0,8)}</option>)}</select></label>:null}
+    {role!=='CLIENT'&&memberships&&memberships.length>1?<label className="field">Trocar barbearia<select value={shopId} onChange={e=>{sessionStorage.setItem('fio-shop',e.target.value);setShopId(e.target.value);}}>{memberships.map(m=><option key={m.barbershop_id} value={m.barbershop_id}>{m.role} Â· {m.barbershop_id.slice(0,8)}</option>)}</select></label>:null}
     <button className="nav-link theme-toggle" onClick={toggleTheme}>{theme==='dark'?<Sun size={19}/>:<Moon size={19}/>} {theme==='dark'?t('nav.lightTheme'):t('nav.darkTheme')}</button>
     <div className="profile">
-     <NavLink data-tour="profile" className="profile-account" to={`${base}/configuracoes`} aria-label="Abrir perfil e configurações">
+     <NavLink data-tour="profile" className="profile-account" to={`${base}/configuracoes`} aria-label="Abrir perfil e configuraÃ§Ãµes">
       <span className="avatar small">{data.membership.avatar_url?<img src={data.membership.avatar_url} alt=""/>:data.membership.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>
-      <span className="profile-copy"><strong>{data.membership.display_name}</strong><small>{role==='OWNER'?(solo?'Barbeiro solo':'Responsável'):role==='BARBER'?'Barbeiro':'Cliente'} · Configurações</small></span>
+      <span className="profile-copy"><strong>{data.membership.display_name}</strong><small>{role==='OWNER'?(solo?'Barbeiro solo':'ResponsÃ¡vel'):role==='BARBER'?'Barbeiro':'Cliente'} Â· ConfiguraÃ§Ãµes</small></span>
      </NavLink>
      <button className="icon-button" aria-label="Sair" title="Sair" onClick={()=>{if(demo)navigate('/login');else void supabase?.auth.signOut();}}><LogOut size={17}/></button>
     </div>
    </div>
   </aside>
   <div className="workspace" inert={menu}>
-   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'Configurações':items.find(n=>n.path===page)?.label??'Visão geral'}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:role==='BARBER'?<span className="plan-badge">FIO {data.plan}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
+   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'ConfiguraÃ§Ãµes':items.find(n=>n.path===page)?.label??'VisÃ£o geral'}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:role==='BARBER'?<span className="plan-badge">FIO {data.plan}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
    <main key={`${base}:${shopId}:${page}`} className={page==='/assistente'?'chat-main assistant-chat-main':'main-content'}>{content}</main>
-   <nav className="bottom-nav" aria-label="Navegação mobile">
-    <NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink>
+   <nav className="bottom-nav" aria-label="NavegaÃ§Ã£o mobile">
+    <NavLink end to={base}><LayoutDashboard size={21}/><span>InÃ­cio</span></NavLink>
     <NavLink to={base+'/agenda'}><CalendarDays size={21}/><span>{t("nav.agenda")}</span></NavLink>
-    {planAllows(data.plan,'assistant')?<NavLink to={base+'/assistente'}><Sparkles size={21}/><span>{t("nav.assistant")}</span></NavLink>:<NavLink to={base+'/servicos'}><Scissors size={21}/><span>Serviços</span></NavLink>}
-    <button className={menu||!['','/agenda','/assistente','/servicos'].includes(page)?'active':''} aria-label="Mais opções" aria-expanded={menu} onClick={()=>setMenu(!menu)}><MoreHorizontal size={21}/><span>{t("nav.more")}</span></button>
+    {planAllows(data.plan,'assistant')?<NavLink to={base+'/assistente'}><Sparkles size={21}/><span>{t("nav.assistant")}</span></NavLink>:<NavLink to={base+'/servicos'}><Scissors size={21}/><span>ServiÃ§os</span></NavLink>}
+    <button className={menu||!['','/agenda','/assistente','/servicos'].includes(page)?'active':''} aria-label="Mais opÃ§Ãµes" aria-expanded={menu} onClick={()=>setMenu(!menu)}><MoreHorizontal size={21}/><span>{t("nav.more")}</span></button>
    </nav>
   </div>
   <GuidedTour key={`${shopId}:${data.membership.user_id}:${role}`} userId={data.membership.user_id} shopId={shopId} role={role} base={base} openMenu={setMenu}/>
-  {toast&&<div className={`toast ${/não foi|falh|erro|indisponível|expir|aguarde|pendente/i.test(toast)?'is-error':'is-success'}`} role="status">{toast}<button aria-label="Fechar aviso" onClick={()=>setToast('')}><X size={16}/></button></div>}
+  {toast&&<div className={`toast ${/nÃ£o foi|falh|erro|indisponÃ­vel|expir|aguarde|pendente/i.test(toast)?'is-error':'is-success'}`} role="status">{toast}<button aria-label="Fechar aviso" onClick={()=>setToast('')}><X size={16}/></button></div>}
  </div>;
 }
 

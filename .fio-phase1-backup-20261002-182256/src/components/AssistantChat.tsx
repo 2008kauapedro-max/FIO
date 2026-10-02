@@ -5,7 +5,6 @@ import { api,RequestError } from '../lib/api';
 import { suggestions,type Role,type Plan } from '../../shared/domain';
 import {useChatViewport} from './useChatViewport';
 import { Modal } from './ui';
-import { useI18n } from '../i18n';
 interface Message { id:string;role:'user'|'assistant';content:string }
 function InlineMarkdown({text}:{text:string}){
  const parts:ReactNode[]=[];const re=/(\*\*[^*\n]+\*\*|`[^`\n]+`)/g;let last=0,m:RegExpExecArray|null,i=0;
@@ -19,7 +18,6 @@ export function AssistantEmptyState({role,onSelect}:{role:Role;onSelect:(text:st
 export function AssistantErrorState({error,onRetry}:{error:RequestError;onRetry?:()=>void}){const Icon=error.code==='OFFLINE'?WifiOff:error.code==='PLAN_REQUIRED'?LockKeyhole:TriangleAlert;return <div className="notice" role="alert"><Icon size={18}/><span>{error.message}</span>{onRetry&&<button type="button" className="notice-retry" onClick={onRetry}>Tentar de novo</button>}</div>;}
 export function AssistantComposer({value,onChange,onSubmit,busy}:{value:string;onChange:(v:string)=>void;onSubmit:(e:FormEvent)=>void;busy:boolean}){return <form className="composer" onSubmit={onSubmit}><textarea aria-label="Mensagem para o Assistente" placeholder="Pergunte ao FIO…" maxLength={2000} rows={1} value={value} onChange={e=>onChange(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(value.trim()&&!busy)onSubmit(e);}}}/><button className="send-button" aria-label="Enviar mensagem" disabled={!value.trim()||busy}><ArrowUp size={20}/></button></form>;}
 export function AssistantChat({role,plan,aiEnabled,shopId,demo,base,shopName,shopLogo}:{role:Role;plan:Plan;aiEnabled:boolean;shopId:string;demo:boolean;base:string;shopName?:string;shopLogo?:string}) {
- const {locale}=useI18n();
  const [messages,setMessages]=useState<Message[]>([]),[value,setValue]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<RequestError|null>(null),[conversationId,setConversationId]=useState<string>(),[history,setHistory]=useState<{id:string;title:string}[]|null>(null),[failedText,setFailedText]=useState<string>();
  useChatViewport();
  const scroll=useRef<HTMLDivElement>(null),follow=useRef(true),navigate=useNavigate();
@@ -28,7 +26,7 @@ export function AssistantChat({role,plan,aiEnabled,shopId,demo,base,shopName,sho
   if(demo){setError(new RequestError('AI_UNAVAILABLE','Esta é uma demonstração. Conecte o Supabase e um provedor de IA para conversar com dados reais.'));return;}
   if(!aiEnabled){setError(new RequestError('PLAN_REQUIRED','O Assistente está disponível a partir do plano PRO.'));return;}
   const message=text.trim();follow.current=true;setBusy(true);if(!retry)setMessages(prev=>[...prev,{id:crypto.randomUUID(),role:'user',content:message}]);setValue('');
-  try{const result=await api<{conversationId:string;message:string}>('/assistant',shopId,{message,locale,...(conversationId?{conversationId}:{})});setConversationId(result.conversationId);setMessages(prev=>[...prev,{id:crypto.randomUUID(),role:'assistant',content:result.message}]);}
+  try{const result=await api<{conversationId:string;message:string}>('/assistant',shopId,{message,...(conversationId?{conversationId}:{})});setConversationId(result.conversationId);setMessages(prev=>[...prev,{id:crypto.randomUUID(),role:'assistant',content:result.message}]);}
   catch(e){setFailedText(message);setError(e instanceof RequestError?e:new RequestError('ERROR','Não foi possível responder.'));}finally{setBusy(false);}
  }
  async function submit(e:FormEvent){e.preventDefault();await send(value);}

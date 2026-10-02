@@ -4,7 +4,7 @@ export type Plan = 'FREE' | 'PRO' | 'PLUS' | 'PREMIUM';
 export const roleHome = (role: Role) => '/' + role.toLowerCase();
 export const money = (cents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
 export const bookingSchema = z.object({ serviceId: z.uuid(), barberId: z.uuid().nullable(), clientId: z.uuid(), startsAt: z.iso.datetime({ offset: true }), useSubscription: z.boolean().default(false) }).strict();
-export const assistantSchema = z.object({ message: z.string().trim().min(1).max(2000), conversationId: z.uuid().optional(), locale: z.enum(['pt-BR','en','es','fr','de','it']).optional() }).strict();
+export const assistantSchema = z.object({ message: z.string().trim().min(1).max(2000), conversationId: z.uuid().optional() }).strict();
 export const actionSchema = z.object({ type: z.enum(['open_schedule', 'open_subscription', 'open_clients']), label: z.string().max(80) }).strict();
 export const allowedActions: Record<Role, string[]> = { OWNER: ['open_schedule', 'open_clients'], BARBER: ['open_schedule'], CLIENT: ['open_schedule', 'open_subscription'] };
 export const suggestions: Record<Role, string[]> = {

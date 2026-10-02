@@ -10,36 +10,41 @@ export type LocalePreferences = {
 
 export async function loadLocalePreferences(
   supabase: SupabaseClient,
-  shopId: string,
   userId: string
 ): Promise<LocalePreferences | null> {
   const { data, error } = await supabase
-    .from("memberships")
+    .from("profiles")
     .select("preferred_locale, preferred_region, preferred_currency")
-    .eq("barbershop_id", shopId)
-    .eq("user_id", userId)
+    .eq("id", userId)
     .maybeSingle();
 
   if (error) throw error;
   if (!data) return null;
 
+  const preferredLocale = isSupportedLocale(data.preferred_locale)
+    ? data.preferred_locale
+    : "pt-BR";
+
   return {
-    preferred_locale: isSupportedLocale(data.preferred_locale) ? data.preferred_locale : "pt-BR",
-    preferred_region: /^[A-Z]{2}$/.test(data.preferred_region || "") ? data.preferred_region : "BR",
+    preferred_locale: preferredLocale,
+    preferred_region: data.preferred_region || "BR",
     preferred_currency: (data.preferred_currency || "BRL") as SupportedCurrency,
   };
 }
 
 export async function saveLocalePreferences(
   supabase: SupabaseClient,
-  shopId: string,
+  userId: string,
   preferences: LocalePreferences
 ) {
-  const { error } = await supabase.rpc("set_locale_preferences", {
-    p_shop: shopId,
-    p_locale: preferences.preferred_locale,
-    p_region: preferences.preferred_region.trim().toUpperCase(),
-    p_currency: preferences.preferred_currency,
-  });
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      preferred_locale: preferences.preferred_locale,
+      preferred_region: preferences.preferred_region,
+      preferred_currency: preferences.preferred_currency,
+    })
+    .eq("id", userId);
+
   if (error) throw error;
 }
