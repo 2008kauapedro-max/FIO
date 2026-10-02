@@ -15,7 +15,7 @@ export interface WorkspaceProps {data:Bootstrap;demo:boolean;base:string;refresh
 const statusLabels={scheduled:'Agendado',confirmed:'Confirmado',in_service:'Em atendimento',completed:'Concluído',cancelled:'Cancelado',no_show:'Falta'};
 const statusHelp={
  scheduled:'Este horário já está reservado na agenda.',
- confirmed:'O profissional confirmou este horário e o cliente foi avisado no FIO.',
+ confirmed:'Este horário está reservado automaticamente na agenda.',
  in_service:'O atendimento está em andamento.',
  completed:'Atendimento concluído e salvo no histórico.',
  cancelled:'Este horário foi cancelado e saiu da agenda ativa.',
@@ -26,6 +26,34 @@ const whats=(phone?:string|null)=>{const digits=(phone??'').replace(/\D/g,'');if
 const accentContrast=(hex:string)=>{const value=hex.replace('#','');if(!/^[0-9a-f]{6}$/i.test(value))return '#050505';const r=parseInt(value.slice(0,2),16),g=parseInt(value.slice(2,4),16),b=parseInt(value.slice(4,6),16);return (r*299+g*587+b*114)/1000<145?'#ffffff':'#050505';};
 export const dayKey=(date:string,zone:string)=>new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(date));
 function MemberAvatar({member,className=''}:{member:{display_name:string;avatar_url?:string|null};className?:string}){return <span className={`avatar ${className}`}>{member.avatar_url?<img src={member.avatar_url} alt=""/>:member.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>;}
+
+type Customer=Bootstrap['customers'][number];
+
+const firstName=(name?:string|null)=>
+ (name??'Cliente').trim().split(/\s+/)[0]||'Cliente';
+
+function CustomerAvatar({
+ customer,
+ data,
+ className=''
+}:{
+ customer?:Customer|null;
+ data:Bootstrap;
+ className?:string
+}){
+ const membership=
+  customer?.user_id
+   ?data.team.find(member=>member.user_id===customer.user_id)
+   :undefined;
+
+ const name=customer?.name??'Cliente';
+
+ return <span className={`avatar customer-avatar ${className}`}>
+  {membership?.avatar_url
+   ?<img src={membership.avatar_url} alt=""/>
+   :name.split(' ').map(n=>n[0]).slice(0,2).join('')}
+ </span>;
+}
 
 type HomeSlide={eyebrow:string;title:string;text:string;action:string;kind:'route'|'public'|'install'|'info';to?:string};
 function HomeCarousel(p:WorkspaceProps){
@@ -72,23 +100,246 @@ function HomeCarousel(p:WorkspaceProps){
  </section>;
 }
 function StaffHome(p:WorkspaceProps){
- const navigate=useNavigate(),role=p.data.membership.role,shopName=p.data.shop.public_title||p.data.shop.name;
- const openPublic=()=>window.open(`/${p.data.shop.slug}`,'_blank','noopener,noreferrer');
+ const navigate=useNavigate();
+ const role=p.data.membership.role;
+ const shopName=p.data.shop.public_title||p.data.shop.name;
+ const now=Date.now();
+
+ const openPublic=()=>
+  window.open(
+   `/${p.data.shop.slug}`,
+   '_blank',
+   'noopener,noreferrer'
+  );
+
+ const next=p.data.appointments
+  .filter(a=>
+   ['scheduled','confirmed','in_service'].includes(a.status)&&
+   Date.parse(a.ends_at)>now&&
+   (
+    role!=='BARBER'||
+    a.barber_id===p.data.membership.user_id
+   )
+  )
+  .sort(
+   (a,b)=>
+    Date.parse(a.starts_at)-
+    Date.parse(b.starts_at)
+  )[0];
+
+ const customer=
+  next
+   ?p.data.customers.find(c=>c.id===next.client_id)
+   :undefined;
+
+ const service=
+  next
+   ?p.data.services.find(s=>s.id===next.service_id)
+   :undefined;
+
+ const professional=
+  next
+   ?p.data.team.find(t=>t.user_id===next.barber_id)
+   :undefined;
+
+ const happening=Boolean(
+  next&&
+  Date.parse(next.starts_at)<=now&&
+  Date.parse(next.ends_at)>now
+ );
+
  return <>
+
   <section className="home-hub-intro">
-   <div><span className="eyebrow">VISÃO GERAL</span><h1>{shopName}</h1><p>{role==='OWNER'?'Gerencie sua presença digital pelo FIO. A agenda continua disponível no menu e atualiza automaticamente.':'Sua rotina, seus atalhos e as novidades do FIO em um só lugar.'}</p></div>
-   {role==='OWNER'&&<button type="button" className="secondary" onClick={openPublic}><LinkIcon size={17}/>Abrir mini site</button>}
-  </section>
-  <HomeCarousel {...p}/>
-  <section className="home-quick-section" aria-label="Atalhos"><div className="home-section-heading"><div><span className="eyebrow">ATALHOS</span><h2>Acesse o que você usa no dia a dia.</h2></div></div>
-   <div className="home-quick-grid">
-    <button type="button" onClick={()=>navigate(`${p.base}/agenda`)}><span><CalendarDays size={19}/></span><div><strong>Agenda</strong><small>Horários e atendimentos em tempo real.</small></div><ArrowUpRight size={17}/></button>
-    {role==='OWNER'&&<button type="button" onClick={()=>navigate(`${p.base}/clientes`)}><span><Users size={19}/></span><div><strong>Clientes</strong><small>Cadastros e histórico da sua barbearia.</small></div><ArrowUpRight size={17}/></button>}
-    <button type="button" onClick={()=>navigate(`${p.base}/servicos`)}><span><Scissors size={19}/></span><div><strong>Serviços</strong><small>Preços, duração e opções disponíveis.</small></div><ArrowUpRight size={17}/></button>
-    <button type="button" onClick={()=>navigate(`${p.base}/configuracoes`)}><span><Palette size={19}/></span><div><strong>{role==='OWNER'?'Personalização':'Configurações'}</strong><small>{role==='OWNER'?'Logo, cores e informações do seu espaço.':'Perfil, acesso e preferências do aplicativo.'}</small></div><ArrowUpRight size={17}/></button>
+
+   <div>
+    <span className="eyebrow">VISÃO GERAL</span>
+    <h1>{shopName}</h1>
+    <p>
+     {role==='OWNER'
+      ?'Acompanhe a rotina da barbearia e veja rapidamente quem é o próximo cliente.'
+      :'Veja rapidamente seu próximo cliente e mantenha os atendimentos organizados.'}
+    </p>
    </div>
+
+   {role==='OWNER'&&
+    <button
+     type="button"
+     className="secondary"
+     onClick={openPublic}
+    >
+     <LinkIcon size={17}/>
+     Abrir mini site
+    </button>
+   }
+
   </section>
+
+  {next&&
+   <button
+    type="button"
+    className={
+     `next-appointment-card ${happening?'is-now':''}`
+    }
+    onClick={()=>
+     navigate(
+      `${p.base}/agenda?appointment=${next.id}`
+     )
+    }
+   >
+
+    <div className="next-appointment-time">
+
+     <span className="eyebrow">
+      {happening
+       ?'ATENDIMENTO AGORA'
+       :'PRÓXIMO ATENDIMENTO'}
+     </span>
+
+     <strong>
+      {time(
+       next.starts_at,
+       p.data.shop.timezone
+      )}
+     </strong>
+
+     <small>
+      {new Date(next.starts_at)
+       .toLocaleDateString(
+        'pt-BR',
+        {
+         timeZone:p.data.shop.timezone,
+         weekday:'long',
+         day:'2-digit',
+         month:'short'
+        }
+       )}
+     </small>
+
+    </div>
+
+    <CustomerAvatar
+     customer={customer}
+     data={p.data}
+    />
+
+    <div className="next-appointment-person">
+
+     <strong>
+      {firstName(customer?.name)}
+     </strong>
+
+     <span>
+      {service?.name??'Serviço'}
+     </span>
+
+     {role==='OWNER'&&
+      <small>
+       com {professional?.display_name??'Profissional'}
+      </small>
+     }
+
+    </div>
+
+    <span className={`status ${next.status}`}>
+     {happening
+      ?'Agora'
+      :statusLabels[next.status]}
+    </span>
+
+    <ArrowUpRight size={19}/>
+
+   </button>
+  }
+
+  <HomeCarousel {...p}/>
+
+  <section
+   className="home-quick-section"
+   aria-label="Atalhos"
+  >
+
+   <div className="home-section-heading">
+    <div>
+     <span className="eyebrow">ATALHOS</span>
+     <h2>
+      Acesse o que você usa no dia a dia.
+     </h2>
+    </div>
+   </div>
+
+   <div className="home-quick-grid">
+
+    <button
+     type="button"
+     onClick={()=>navigate(`${p.base}/agenda`)}
+    >
+     <span><CalendarDays size={19}/></span>
+     <div>
+      <strong>Agenda</strong>
+      <small>
+       Horários e atendimentos em tempo real.
+      </small>
+     </div>
+     <ArrowUpRight size={17}/>
+    </button>
+
+    {role==='OWNER'&&
+     <button
+      type="button"
+      onClick={()=>navigate(`${p.base}/clientes`)}
+     >
+      <span><Users size={19}/></span>
+      <div>
+       <strong>Clientes</strong>
+       <small>
+        Cadastros e histórico da sua barbearia.
+       </small>
+      </div>
+      <ArrowUpRight size={17}/>
+     </button>
+    }
+
+    <button
+     type="button"
+     onClick={()=>navigate(`${p.base}/servicos`)}
+    >
+     <span><Scissors size={19}/></span>
+     <div>
+      <strong>Serviços</strong>
+      <small>
+       Preços, duração e opções disponíveis.
+      </small>
+     </div>
+     <ArrowUpRight size={17}/>
+    </button>
+
+    <button
+     type="button"
+     onClick={()=>navigate(`${p.base}/configuracoes`)}
+    >
+     <span><Palette size={19}/></span>
+     <div>
+      <strong>
+       {role==='OWNER'
+        ?'Personalização'
+        :'Configurações'}
+      </strong>
+      <small>
+       {role==='OWNER'
+        ?'Logo, cores e informações do seu espaço.'
+        :'Perfil, acesso e preferências do aplicativo.'}
+      </small>
+     </div>
+     <ArrowUpRight size={17}/>
+    </button>
+
+   </div>
+
+  </section>
+
   <InstallNudge {...p}/>
+
  </>;
 }
 export function Dashboard(p:WorkspaceProps){
@@ -115,7 +366,55 @@ function ReviewPrompt(p:WorkspaceProps){
  async function submit(){if(!appointment)return;setBusy(true);try{if(p.demo){p.updateDemo(d=>({...d,reviews:[...d.reviews,{id:crypto.randomUUID(),appointment_id:appointment.id,client_id:appointment.client_id,barber_id:appointment.barber_id,rating,comment,created_at:new Date().toISOString()}]}));}else{await api('/reviews',p.data.shop.id,{appointmentId:appointment.id,rating,comment});await p.refresh();}setAppointment(null);setComment('');setRating(5);p.notify('Obrigado pela avaliação.');}catch(e){p.notify((e as Error).message);}finally{setBusy(false);}}
  return <><button className="review-prompt" onClick={()=>setAppointment(pending)}><div><span className="eyebrow">COMO FOI?</span><strong>Avalie seu atendimento com {barber.split(' ')[0]}</strong><small>Leva menos de 20 segundos.</small></div><div className="review-stars">★★★★★</div><ArrowUpRight size={18}/></button>{appointment&&<Modal title="Avalie seu atendimento" onClose={()=>setAppointment(null)}><div className="review-modal"><p className="muted">Sua avaliação vai para {barber} e ajuda a barbearia a melhorar.</p><div className="star-picker" aria-label="Nota">{[1,2,3,4,5].map(n=><button type="button" aria-label={`${n} estrela${n>1?'s':''}`} className={n<=rating?'selected':''} key={n} onClick={()=>setRating(n)}><Star size={30} fill={n<=rating?'currentColor':'none'}/></button>)}</div><Field label="Comentário (opcional)"><textarea maxLength={1000} value={comment} onChange={e=>setComment(e.target.value)} placeholder="Conte como foi sua experiência."/></Field><button className="primary full" disabled={busy} onClick={submit}>{busy?'Enviando…':'Enviar avaliação'}</button></div></Modal>}</>;
 }
-function AppointmentRow({appointment:a,data,onClick}:{appointment:Appointment;data:Bootstrap;onClick:()=>void}){const name=data.customers.find(c=>c.id===a.client_id)?.name??'Atendimento';return <button className="appointment-row" onClick={onClick}><div className="appointment-time">{time(a.starts_at,data.shop.timezone)}<small>{time(a.ends_at,data.shop.timezone)}</small></div><span className="avatar">{name.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><div className="appointment-info"><strong>{name}</strong><span>{data.services.find(s=>s.id===a.service_id)?.name??'Serviço'} <i>·</i> {data.team.find(t=>t.user_id===a.barber_id)?.display_name}</span></div><span className={`status ${a.status}`}>{statusLabels[a.status]}</span><ArrowUpRight size={16}/></button>;}
+function AppointmentRow({appointment:a,data,onClick}:{appointment:Appointment;data:Bootstrap;onClick:()=>void}){
+ const customer=
+  data.customers.find(c=>c.id===a.client_id);
+
+ return <button
+  className="appointment-row"
+  onClick={onClick}
+ >
+
+  <div className="appointment-time">
+   {time(a.starts_at,data.shop.timezone)}
+   <small>
+    {time(a.ends_at,data.shop.timezone)}
+   </small>
+  </div>
+
+  <CustomerAvatar
+   customer={customer}
+   data={data}
+  />
+
+  <div className="appointment-info">
+
+   <strong>
+    {firstName(customer?.name)}
+   </strong>
+
+   <span>
+    {data.services.find(
+     s=>s.id===a.service_id
+    )?.name??'Serviço'}
+
+    {' · '}
+
+    {data.team.find(
+     t=>t.user_id===a.barber_id
+    )?.display_name}
+   </span>
+
+  </div>
+
+  <span className={`status ${a.status}`}>
+   {statusLabels[a.status]}
+  </span>
+
+  <ArrowUpRight size={16}/>
+
+ </button>;
+}
 function ClientAppointmentRow({appointment:a,data,onClick}:{appointment:Appointment;data:Bootstrap;onClick:()=>void}){
  const zone=data.shop.timezone,start=new Date(a.starts_at);
  const professional=data.team.find(t=>t.user_id===a.barber_id)?.display_name??'Profissional';
@@ -521,6 +820,8 @@ function StaffAgenda(p:WorkspaceProps){
  );
 
  const [selected,setSelected]=useState<Appointment|null>(null);
+ const [profileCustomer,setProfileCustomer]=useState<Customer|null>(null);
+ const [linkOpened,setLinkOpened]=useState(false);
  const [busy,setBusy]=useState(false);
 
  const [professional,setProfessional]=
@@ -578,12 +879,57 @@ function StaffAgenda(p:WorkspaceProps){
   reloadKey
  ]);
 
+ useEffect(()=>{
+
+  const id=
+   new URLSearchParams(location.search)
+    .get('appointment');
+
+  if(!id||linkOpened)return;
+
+  let alive=true;
+
+  const known=
+   data.appointments.find(a=>a.id===id);
+
+  const request=
+   known
+    ?Promise.resolve(known)
+    :api<Appointment>(
+      `/appointments/${id}`,
+      data.shop.id
+     );
+
+  void request
+   .then(found=>{
+    if(alive){
+     setSelected(found);
+     setLinkOpened(true);
+    }
+   })
+   .catch(e=>{
+    if(alive){
+     p.notify(e.message);
+     setLinkOpened(true);
+    }
+   });
+
+  return()=>{alive=false};
+
+ },[
+  data.appointments,
+  data.shop.id,
+  linkOpened
+ ]);
+
  const activeAppointments=daily.filter(a=>
-  !['cancelled','no_show'].includes(a.status)
+  ['scheduled','confirmed','in_service']
+   .includes(a.status)
  );
 
  const archivedAppointments=daily.filter(a=>
-  ['cancelled','no_show'].includes(a.status)
+  ['completed','cancelled','no_show']
+   .includes(a.status)
  );
 
  function changeDay(delta:number){
@@ -717,6 +1063,33 @@ function StaffAgenda(p:WorkspaceProps){
     )
    :null;
 
+ const profileAppointments=
+  profileCustomer
+   ?data.appointments.filter(
+     a=>a.client_id===profileCustomer.id
+    )
+   :[];
+
+ const profileCompleted=
+  profileAppointments.filter(
+   a=>a.status==='completed'
+  );
+
+ const profileUpcoming=
+  profileAppointments.filter(a=>
+   ['scheduled','confirmed','in_service']
+    .includes(a.status)&&
+   Date.parse(a.ends_at)>Date.now()
+  );
+
+ const profileLast=
+  [...profileCompleted]
+   .sort(
+    (a,b)=>
+     Date.parse(b.starts_at)-
+     Date.parse(a.starts_at)
+   )[0];
+
  return <>
 
   <PageTitle
@@ -728,7 +1101,7 @@ function StaffAgenda(p:WorkspaceProps){
    }
    description={
     owner
-     ?'Acompanhe confirmações, equipe e atendimentos sem misturar cancelados com a agenda ativa.'
+     ?'Acompanhe equipe e atendimentos sem misturar o histórico com a agenda ativa.'
      :'Aqui aparecem somente os atendimentos atribuídos a você.'
    }
    action={
@@ -887,7 +1260,7 @@ function StaffAgenda(p:WorkspaceProps){
     <details className="staff-archive">
 
      <summary>
-      Cancelados e faltas
+      Histórico do dia
       <span>{archivedAppointments.length}</span>
      </summary>
 
@@ -941,13 +1314,37 @@ function StaffAgenda(p:WorkspaceProps){
 
     </div>
 
-    <div className="appointment-detail-grid">
+    {customer&&
+     <div className="appointment-client-card">
 
-     <div>
-      <span>Cliente</span>
-      <strong>{customer?.name??'Cliente'}</strong>
-      {customer?.phone&&<small>{customer.phone}</small>}
+      <CustomerAvatar
+       customer={customer}
+       data={data}
+       className="appointment-client-avatar"
+      />
+
+      <div>
+       <span>CLIENTE</span>
+       <strong>
+        {firstName(customer.name)}
+       </strong>
+       <small>
+        Perfil, contato e histórico.
+       </small>
+      </div>
+
+      <button
+       type="button"
+       className="secondary client-profile-button"
+       onClick={()=>setProfileCustomer(customer)}
+      >
+       Perfil
+      </button>
+
      </div>
+    }
+
+    <div className="appointment-detail-grid">
 
      <div>
       <span>Serviço</span>
@@ -995,18 +1392,6 @@ function StaffAgenda(p:WorkspaceProps){
 
     </div>
 
-    {customer?.phone&&
-     <a
-      className="secondary appointment-whatsapp"
-      href={whats(customer.phone)}
-      target="_blank"
-      rel="noreferrer"
-     >
-      <MessageCircle size={16}/>
-      Chamar cliente no WhatsApp
-     </a>
-    }
-
     <div className="modal-actions">
 
      {['scheduled','confirmed']
@@ -1033,23 +1418,15 @@ function StaffAgenda(p:WorkspaceProps){
       </button>
      }
 
-     {['scheduled','confirmed'].includes(selected.status)&&
-      <button
-       className="primary"
-       disabled={busy}
-       onClick={()=>void transition('in_service')}
-      >
-       Iniciar atendimento
-      </button>
-     }
-
-     {selected.status==='in_service'&&
+     {['scheduled','confirmed','in_service']
+      .includes(selected.status)&&
+      new Date(selected.starts_at)<=new Date()&&
       <button
        className="primary"
        disabled={busy}
        onClick={()=>void transition('completed')}
       >
-       Concluir atendimento
+       Finalizar atendimento
       </button>
      }
 
@@ -1062,6 +1439,99 @@ function StaffAgenda(p:WorkspaceProps){
       >
        Registrar falta
       </button>
+     }
+
+    </div>
+
+   </Modal>
+  }
+
+
+  {profileCustomer&&
+   <Modal
+    title="Perfil do cliente"
+    onClose={()=>setProfileCustomer(null)}
+   >
+
+    <div className="customer-profile-modal">
+
+     <CustomerAvatar
+      customer={profileCustomer}
+      data={data}
+      className="profile-avatar"
+     />
+
+     <h3>
+      {profileCustomer.name}
+     </h3>
+
+     <p className="muted">
+      {profileCustomer.phone||
+       'Telefone ainda não cadastrado.'}
+     </p>
+
+     <small className="customer-profile-origin">
+      {profileCustomer.user_id
+       ?'Conta conectada ao FIO'
+       :'Cadastro da barbearia'}
+     </small>
+
+     <div className="profile-stats">
+
+      <div>
+       <strong>
+        {profileCompleted.length}
+       </strong>
+       <span>
+        concluídos recentes
+       </span>
+      </div>
+
+      <div>
+       <strong>
+        {profileUpcoming.length}
+       </strong>
+       <span>
+        próximos horários
+       </span>
+      </div>
+
+     </div>
+
+     {profileLast&&
+      <div className="customer-last-visit">
+
+       <span>
+        Último atendimento
+       </span>
+
+       <strong>
+        {data.services.find(
+         s=>s.id===profileLast.service_id
+        )?.name??'Serviço'}
+       </strong>
+
+       <small>
+        {new Date(profileLast.starts_at)
+         .toLocaleDateString(
+          'pt-BR',
+          {timeZone:zone}
+         )}
+       </small>
+
+      </div>
+     }
+
+     {profileCustomer.phone&&
+      <a
+       className="primary full whatsapp-button"
+       href={whats(profileCustomer.phone)}
+       target="_blank"
+       rel="noreferrer"
+      >
+       <MessageCircle size={18}/>
+       Chamar no WhatsApp
+      </a>
      }
 
     </div>

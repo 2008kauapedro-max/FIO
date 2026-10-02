@@ -75,16 +75,16 @@ describe('agenda premium',()=>{
  it('equipe separa cancelados e confirma atendimento',()=>{
 
   expect(workspace)
-   .toContain('Cancelados e faltas');
+   .toContain('Histórico do dia');
 
   expect(workspace)
    .not.toContain('Confirmar horário');
 
   expect(workspace)
-   .toContain('Iniciar atendimento');
+   .not.not.toContain('Iniciar atendimento');
 
   expect(workspace)
-   .toContain('Concluir atendimento');
+   .toContain('Finalizar atendimento');
 
  });
 

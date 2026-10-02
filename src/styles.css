@@ -1435,3 +1435,380 @@ body{background:var(--bg);color:var(--text,#f4f4f4);transition:background .25s e
  }
 
 }
+
+/* STAFF UX STEP 1 */
+
+/* Corrige o espaço preto abaixo do conteúdo no tema claro. */
+body:has(.workspace),
+#root:has(.workspace),
+.app-shell,
+.workspace{
+ min-height:100dvh;
+ background:var(--bg)!important;
+}
+
+.main-content{
+ min-height:calc(100dvh - 78px);
+}
+
+/* Remove a textura exagerada da lateral. */
+.sidebar:after{
+ display:none!important;
+}
+
+/* Evita texto desaparecer no hover dos profissionais. */
+.person-button{
+ color:inherit!important;
+}
+
+.person-button:hover,
+.person-button:focus-visible{
+ background:#181818!important;
+ color:#f4f4f4!important;
+}
+
+.person-button:hover h3,
+.person-button:hover p,
+.person-button:hover strong,
+.person-button:focus-visible h3,
+.person-button:focus-visible p,
+.person-button:focus-visible strong{
+ color:inherit!important;
+}
+
+:root[data-theme='light'] .person-button:hover,
+:root[data-theme='light'] .person-button:focus-visible{
+ background:#eeeeea!important;
+ color:#111!important;
+}
+
+/* Próximo atendimento */
+.next-appointment-card{
+ width:100%;
+ display:grid;
+ grid-template-columns:
+  minmax(155px,.55fr)
+  auto
+  minmax(0,1fr)
+  auto
+  auto;
+ align-items:center;
+ gap:17px;
+ margin:0 0 24px;
+ padding:19px 21px;
+ text-align:left;
+ border:1px solid var(--border);
+ border-radius:15px;
+ background:var(--surface);
+ color:#f4f4f4;
+ box-shadow:0 12px 35px #0002;
+}
+
+.next-appointment-card:hover{
+ border-color:#484848;
+ background:#171717;
+ transform:translateY(-1px);
+}
+
+.next-appointment-card.is-now{
+ border-color:#376d47;
+ box-shadow:
+  inset 3px 0 0 #53b873,
+  0 12px 35px #0002;
+}
+
+.next-appointment-time .eyebrow{
+ display:block;
+ margin:0 0 5px;
+ font-size:.61rem;
+}
+
+.next-appointment-time strong{
+ display:block;
+ font-size:1.7rem;
+ line-height:1;
+ letter-spacing:-.04em;
+}
+
+.next-appointment-time small{
+ display:block;
+ margin-top:7px;
+ color:var(--muted);
+ text-transform:capitalize;
+}
+
+.next-appointment-card>.customer-avatar{
+ width:49px;
+ height:49px;
+}
+
+.next-appointment-person{
+ min-width:0;
+}
+
+.next-appointment-person strong,
+.next-appointment-person span,
+.next-appointment-person small{
+ display:block;
+}
+
+.next-appointment-person strong{
+ font-size:1rem;
+}
+
+.next-appointment-person span{
+ margin-top:3px;
+ color:var(--muted);
+ font-size:.81rem;
+}
+
+.next-appointment-person small{
+ margin-top:2px;
+ color:var(--muted);
+ font-size:.72rem;
+}
+
+/* Cards ativos */
+.appointment-list{
+ border-top:0;
+ display:grid;
+ gap:8px;
+}
+
+.appointment-row{
+ padding:13px 14px;
+ border:1px solid var(--border);
+ border-radius:12px;
+ background:var(--surface);
+ color:#f4f4f4;
+}
+
+.appointment-row:hover{
+ background:#181818;
+}
+
+.appointment-row>.customer-avatar{
+ display:grid!important;
+}
+
+/* Histórico mensal - sem blocão cinza */
+.period-list{
+ display:grid;
+ gap:8px;
+ margin-top:13px;
+}
+
+.period-appointment{
+ width:100%;
+ display:grid!important;
+ grid-template-columns:
+  auto
+  minmax(0,1fr)
+  auto;
+ align-items:center;
+ gap:12px;
+ padding:13px 14px!important;
+ text-align:left!important;
+ border:1px solid var(--border)!important;
+ border-radius:12px!important;
+ background:var(--surface)!important;
+ color:#f4f4f4!important;
+}
+
+.period-appointment:hover{
+ background:#181818!important;
+ border-color:#454545!important;
+}
+
+.period-client-avatar{
+ width:39px;
+ height:39px;
+}
+
+.period-appointment-copy{
+ min-width:0;
+}
+
+.period-appointment-copy strong,
+.period-appointment-copy small{
+ display:block;
+}
+
+.period-appointment-copy small{
+ margin-top:4px;
+ color:var(--muted);
+}
+
+.period-cancelled{
+ opacity:.68;
+}
+
+.period-completed{
+ border-left:3px solid #4b9b67!important;
+}
+
+/* Cliente dentro do atendimento */
+.appointment-client-card{
+ display:grid;
+ grid-template-columns:
+  auto
+  minmax(0,1fr)
+  auto;
+ align-items:center;
+ gap:12px;
+ margin-bottom:12px;
+ padding:13px;
+ border:1px solid var(--border);
+ border-radius:12px;
+ background:var(--surface);
+}
+
+.appointment-client-avatar{
+ width:49px;
+ height:49px;
+}
+
+.appointment-client-card>div{
+ min-width:0;
+}
+
+.appointment-client-card>div>span{
+ display:block;
+ color:var(--muted);
+ font-size:.62rem;
+ letter-spacing:.09em;
+}
+
+.appointment-client-card>div>strong{
+ display:block;
+ margin-top:3px;
+ font-size:.97rem;
+}
+
+.appointment-client-card>div>small{
+ display:block;
+ margin-top:2px;
+ color:var(--muted);
+}
+
+.client-profile-button{
+ min-height:38px;
+ padding:8px 14px;
+}
+
+/* Perfil */
+.customer-profile-modal{
+ text-align:center;
+}
+
+.customer-profile-modal>.profile-avatar{
+ margin:0 auto 12px;
+}
+
+.customer-profile-modal h3{
+ margin-bottom:4px;
+ font-size:1.2rem;
+}
+
+.customer-profile-modal>p{
+ margin-bottom:3px;
+}
+
+.customer-profile-origin{
+ display:block;
+ margin-bottom:18px;
+ color:var(--muted);
+}
+
+.customer-last-visit{
+ display:grid;
+ gap:3px;
+ margin:0 0 16px;
+ padding:13px;
+ text-align:left;
+ border:1px solid var(--border);
+ border-radius:10px;
+ background:var(--surface);
+}
+
+.customer-last-visit span,
+.customer-last-visit small{
+ color:var(--muted);
+ font-size:.72rem;
+}
+
+/* Tema claro */
+:root[data-theme='light'] .next-appointment-card,
+:root[data-theme='light'] .appointment-row,
+:root[data-theme='light'] .period-appointment,
+:root[data-theme='light'] .appointment-client-card,
+:root[data-theme='light'] .customer-last-visit{
+ background:#fff!important;
+ color:#111!important;
+}
+
+:root[data-theme='light'] .next-appointment-card:hover,
+:root[data-theme='light'] .appointment-row:hover,
+:root[data-theme='light'] .period-appointment:hover{
+ background:#f0f0ed!important;
+ border-color:#cacac4!important;
+}
+
+@media(max-width:760px){
+
+ .main-content{
+  min-height:calc(100dvh - 72px);
+ }
+
+ .next-appointment-card{
+  grid-template-columns:auto 1fr auto;
+  gap:11px;
+  padding:15px;
+ }
+
+ .next-appointment-time{
+  grid-column:1/-1;
+  display:flex;
+  align-items:center;
+  gap:10px;
+ }
+
+ .next-appointment-time .eyebrow{
+  margin:0 auto 0 0;
+ }
+
+ .next-appointment-time strong{
+  font-size:1.35rem;
+ }
+
+ .next-appointment-time small{
+  margin:0;
+ }
+
+ .next-appointment-card>.status{
+  display:none;
+ }
+
+ .appointment-row>.customer-avatar{
+  display:grid!important;
+ }
+
+ .appointment-client-card{
+  grid-template-columns:auto 1fr;
+ }
+
+ .client-profile-button{
+  grid-column:1/-1;
+  width:100%;
+ }
+
+ .period-appointment{
+  grid-template-columns:auto minmax(0,1fr);
+ }
+
+ .period-appointment>.status{
+  grid-column:2;
+  width:max-content;
+ }
+
+}
