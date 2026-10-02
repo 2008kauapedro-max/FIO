@@ -62,7 +62,7 @@ describe('agenda premium',()=>{
  it('cliente vê alterações e status',()=>{
 
   expect(workspace)
-   .toContain('Aguardando confirmação');
+   .toContain('Agendado');
 
   expect(workspace)
    .toContain('Alterações recentes');
@@ -78,7 +78,7 @@ describe('agenda premium',()=>{
    .toContain('Cancelados e faltas');
 
   expect(workspace)
-   .toContain('Confirmar horário');
+   .not.toContain('Confirmar horário');
 
   expect(workspace)
    .toContain('Iniciar atendimento');

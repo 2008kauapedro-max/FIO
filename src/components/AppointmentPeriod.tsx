@@ -5,7 +5,7 @@ import {dayKey} from '../pages/Workspace';
 import {api} from '../lib/api';
 import {Field} from './ui';
 type Period={total:number;completed:number;cancelled:number;noShow:number;items:Appointment[]};
-const statusLabel={scheduled:'Aguardando',confirmed:'Confirmado',in_service:'Em atendimento',completed:'Concluído',cancelled:'Cancelado',no_show:'Falta'} as const;
+const statusLabel={scheduled:'Agendado',confirmed:'Confirmado',in_service:'Em atendimento',completed:'Concluído',cancelled:'Cancelado',no_show:'Falta'} as const;
 export function AppointmentPeriod(p:WorkspaceProps&{professional:string;onSelect:(a:Appointment)=>void}){
  const zone=p.data.shop.timezone;
  const [month,setMonth]=useState(dayKey(new Date().toISOString(),zone).slice(0,7)),[value,setValue]=useState<Period|null>(null),[error,setError]=useState('');

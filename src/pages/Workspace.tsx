@@ -12,9 +12,9 @@ import { optimizeImage } from '../lib/images';
 import { planAllows } from '../../shared/entitlements';
 import { Empty,Field,Modal,PageTitle,ArrowLink } from '../components/ui';
 export interface WorkspaceProps {data:Bootstrap;demo:boolean;base:string;refresh:()=>Promise<void>;notify:(text:string)=>void;updateDemo:(fn:(d:Bootstrap)=>Bootstrap)=>void;canInstall?:boolean;installApp?:()=>Promise<void>}
-const statusLabels={scheduled:'Aguardando confirmação',confirmed:'Confirmado',in_service:'Em atendimento',completed:'Concluído',cancelled:'Cancelado',no_show:'Falta'};
+const statusLabels={scheduled:'Agendado',confirmed:'Confirmado',in_service:'Em atendimento',completed:'Concluído',cancelled:'Cancelado',no_show:'Falta'};
 const statusHelp={
- scheduled:'O horário foi solicitado e ainda aguarda confirmação do profissional.',
+ scheduled:'Este horário já está reservado na agenda.',
  confirmed:'O profissional confirmou este horário e o cliente foi avisado no FIO.',
  in_service:'O atendimento está em andamento.',
  completed:'Atendimento concluído e salvo no histórico.',
@@ -1033,17 +1033,7 @@ function StaffAgenda(p:WorkspaceProps){
       </button>
      }
 
-     {selected.status==='scheduled'&&
-      <button
-       className="primary"
-       disabled={busy}
-       onClick={()=>void transition('confirmed')}
-      >
-       Confirmar horário
-      </button>
-     }
-
-     {selected.status==='confirmed'&&
+     {['scheduled','confirmed'].includes(selected.status)&&
       <button
        className="primary"
        disabled={busy}
