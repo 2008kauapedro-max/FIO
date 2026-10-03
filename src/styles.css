@@ -1968,3 +1968,135 @@ body:has(.workspace),
   opacity:.7;
   line-height:1.4;
 }
+
+
+/* FIO_WORKSPACE_ORGANIZATION_V3_20261003 */
+.app-shell .main-content{width:min(100%,1180px);margin:0 auto;padding:32px 34px 48px}
+.app-shell .page-title{max-width:900px;margin-bottom:28px}
+.app-shell .page-title>div:first-child{max-width:720px}
+.app-shell .page-title h1{line-height:1.08}
+.app-shell .page-title .muted{line-height:1.6;max-width:720px}
+.app-shell .page-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.app-shell .page-actions>:is(button,a){min-height:44px}
+
+/* Settings: home behaves like a clean mobile account hub, categories stay focused. */
+.category-settings.at-home{display:block;max-width:760px;margin-inline:auto}
+.category-settings.at-home .settings-nav{position:static;display:grid;gap:24px;padding:0;border:0;background:transparent}
+.category-settings.at-home .settings-content{display:none}
+.settings-home-profile{display:flex;align-items:center;gap:16px;padding:4px 2px 2px;color:var(--text)}
+.settings-home-avatar{width:64px;height:64px;flex:0 0 64px;font-size:1rem;border:1px solid var(--border);background:var(--surface)}
+.settings-home-profile>div{display:grid;gap:4px;min-width:0}
+.settings-home-profile strong{font-size:1.05rem;line-height:1.25;overflow-wrap:anywhere}
+.settings-home-profile small{font-size:.78rem;color:var(--muted);line-height:1.4}
+.settings-home-group{display:grid;gap:9px}
+.settings-group-label{padding-left:2px;font-size:.68rem;line-height:1.2;letter-spacing:.11em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.settings-home-list{overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.settings-home-list>button{width:100%;min-height:64px;display:grid;grid-template-columns:38px minmax(0,1fr) 20px;align-items:center;gap:12px;padding:12px 16px;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;color:var(--text);text-align:left}
+.settings-home-list>button:last-child{border-bottom:0}
+.settings-home-list>button:hover{background:color-mix(in srgb,var(--text) 5%,transparent)}
+.settings-home-icon{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--border);border-radius:10px;background:color-mix(in srgb,var(--surface) 72%,var(--bg));color:var(--text)}
+.settings-home-copy{min-width:0;display:grid;gap:3px}
+.settings-home-copy strong{font-size:.9rem;line-height:1.25;font-weight:600;overflow-wrap:anywhere}
+.settings-home-list>button>svg{color:var(--muted);justify-self:end}
+.category-settings.in-category{grid-template-columns:210px minmax(0,760px);justify-content:center;gap:22px}
+.category-settings.in-category .settings-content{grid-template-columns:minmax(0,1fr);gap:16px}
+.category-settings.in-category .settings-nav{top:88px}
+.category-settings.in-category .settings-nav button{min-height:46px;padding:10px 11px;border-radius:9px}
+.category-settings.in-category .settings-card{padding:22px;border-radius:14px}
+.category-settings.in-category .settings-card .section-title{align-items:flex-start;gap:8px;margin-bottom:18px}
+.category-settings.in-category .settings-card .section-title h2{font-size:1rem;line-height:1.35}
+.category-settings.in-category .settings-card .section-title>.muted{font-size:.78rem;line-height:1.45;text-align:right}
+.category-settings.in-category .settings-shortcuts{margin:0 0 2px;padding:0 0 2px}
+.settings-profile-head{gap:14px;padding-bottom:18px;margin-bottom:18px}
+.settings-avatar{width:54px;height:54px;flex-basis:54px}
+.settings-readonly{padding:13px 14px;border-radius:10px}
+.settings-meta{max-width:970px;margin:20px auto 0}
+
+/* Agenda: one readable control block, one month summary and one day list. */
+.app-shell .agenda-controls{padding:16px;border:1px solid var(--border);border-radius:14px;background:var(--surface);gap:12px 14px;margin-bottom:16px}
+.app-shell .agenda-controls>.muted,.app-shell .agenda-live-status{margin:0;font-size:.78rem}
+.app-shell .agenda-live-status{display:inline-flex;align-items:center;gap:7px;color:var(--muted)}
+.app-shell .agenda-live-status i{width:7px;height:7px;border-radius:50%;background:#31c77a;box-shadow:0 0 0 4px #31c77a18}
+.period-summary{margin:0 0 18px;padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.period-summary>.section-title{margin-bottom:14px}
+.period-counts{margin:14px 0 12px;gap:10px}
+.period-counts>div{padding:14px;background:color-mix(in srgb,var(--surface) 75%,var(--bg))}
+.period-counts dd{font-size:1.55rem}
+.staff-day-agenda{padding:18px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.staff-day-agenda>.section-title{margin-bottom:10px}
+.app-shell .appointment-list{display:grid;gap:8px}
+.app-shell .appointment-row{border:1px solid var(--border);border-radius:11px;background:color-mix(in srgb,var(--surface) 86%,var(--bg));padding:14px 15px}
+.app-shell .appointment-row:last-child{border-bottom:1px solid var(--border)}
+
+/* Services, clients and team: lists become obvious grouped cards instead of loose lines. */
+.app-shell .service-list,.app-shell .people-list{overflow:hidden;border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+.app-shell .service-list{border-top:1px solid var(--border)}
+.app-shell .service-row,.app-shell .person-row{padding:17px 18px;border-bottom:1px solid var(--border)}
+.app-shell .service-row:last-child,.app-shell .person-row:last-child{border-bottom:0}
+.app-shell .service-row{gap:16px}
+.app-shell .service-name h2{font-size:1rem;margin-bottom:5px}
+.app-shell .service-description{max-width:660px;line-height:1.45}
+.app-shell .search-input{max-width:560px;border-radius:11px;background:var(--surface);margin-bottom:18px}
+.app-shell .person-button{width:100%;text-align:left;background:transparent;color:inherit;border-left:0;border-right:0;border-top:0}
+
+/* Subscriptions: compact information cards and correct mobile rhythm. */
+.app-shell .subscription-grid{grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.app-shell .subscription-card{padding:20px;border-radius:14px;background:var(--surface);min-width:0}
+.app-shell .subscription-card h2{font-size:1.15rem;line-height:1.25;margin:10px 0 16px}
+.app-shell .subscription-card>strong{display:block;font-size:clamp(1.8rem,4vw,2.35rem);line-height:1.05;letter-spacing:-.035em;overflow-wrap:anywhere}
+.app-shell .subscription-card p{line-height:1.5;margin:9px 0 0}
+.app-shell .plan-description{padding-top:8px;border-top:1px solid var(--border)}
+.app-shell .subscriptions-active-title{margin-top:28px}
+.app-shell .empty{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:42px 20px}
+
+/* Keep account/sidebar text visible in dark mode even when cards are also dark. */
+.app-shell :is(.profile-account,.sidebar-shop-link,.settings-home-list button,.person-button){color:var(--text)}
+.app-shell :is(.profile-account,.sidebar-shop-link) strong{color:var(--text)}
+
+@media(max-width:760px){
+ .app-shell .main-content{padding:20px 16px calc(92px + env(safe-area-inset-bottom))}
+ .app-shell .page-title{margin-bottom:18px}
+ .app-shell .page-title h1{font-size:1.7rem}
+ .app-shell .page-title .muted{font-size:.86rem;line-height:1.5}
+ .app-shell .page-actions{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .app-shell .page-actions>:is(button,a){width:100%;justify-content:center;padding-inline:12px}
+ .category-settings.at-home{max-width:none}
+ .category-settings.at-home .settings-nav{display:grid;grid-template-columns:1fr;gap:22px;width:100%}
+ .settings-home-profile{padding:2px 0 4px}
+ .settings-home-avatar{width:60px;height:60px;flex-basis:60px}
+ .settings-home-list>button{min-height:62px;padding:11px 13px;grid-template-columns:36px minmax(0,1fr) 18px;gap:10px}
+ .category-settings.in-category{display:block}
+ .category-settings.in-category .settings-nav{display:none}
+ .category-settings.in-category .settings-content{margin-top:0}
+ .category-settings.in-category .settings-card{padding:17px;border-radius:12px}
+ .category-settings.in-category .settings-card .section-title{flex-direction:column;margin-bottom:15px}
+ .category-settings.in-category .settings-card .section-title>.muted{text-align:left}
+ .category-settings.in-category .settings-shortcuts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .category-settings.in-category .settings-shortcuts .secondary{width:100%;justify-content:center}
+ .app-shell .agenda-controls{padding:13px;margin-bottom:14px}
+ .agenda-day{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;align-items:end;gap:7px}
+ .agenda-day>.field{grid-column:auto}
+ .agenda-day>.secondary{grid-column:1/-1;width:100%}
+ .app-shell .agenda-controls>.field{width:100%}
+ .app-shell .agenda-controls>.muted,.app-shell .agenda-live-status{flex-basis:auto;width:auto}
+ .period-summary{padding:14px;margin-bottom:14px}
+ .period-summary>.section-title{display:grid;grid-template-columns:1fr;gap:12px}
+ .period-summary .field{width:100%;margin:0}
+ .period-counts{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .period-counts>div{padding:12px}
+ .staff-day-agenda{padding:14px}
+ .app-shell .appointment-row{padding:13px 12px;grid-template-columns:46px minmax(0,1fr);gap:5px 10px}
+ .app-shell .service-row{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px 10px;padding:15px 13px}
+ .app-shell .service-row>.icon-button{grid-column:3;grid-row:1/3}
+ .app-shell .service-row>strong{grid-column:2;justify-self:start;font-size:.95rem}
+ .app-shell .person-row{padding:14px 13px;gap:11px}
+ .app-shell .subscription-grid{grid-template-columns:1fr;gap:10px}
+ .app-shell .subscription-card{padding:17px}
+ .app-shell .subscription-card>strong{font-size:2rem}
+ .app-shell .subscriptions-active-title{margin-top:24px}
+ .app-shell .empty{padding:32px 16px}
+}
+@media(max-width:430px){
+ .app-shell .page-actions{grid-template-columns:1fr}
+ .category-settings.in-category .settings-shortcuts{grid-template-columns:1fr}
+}
