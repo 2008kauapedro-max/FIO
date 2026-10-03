@@ -30,8 +30,8 @@ export function clearlyGenericAIRequest(value:string){
  ].some(p=>p.test(q));
 }
 
-export function safeAIOutput(value:string){
+export function safeAIOutput(value:string,fallback=AI_SCOPE_REPLY){
  const text=value.trim().slice(0,8000);
  const leak=/\b(system prompt|developer message|service[_ -]?role|api[_ -]?key|sb_secret_|bearer\s+[a-z0-9._-]+|supabase_service_role_key|ai_api_key|process\.env|information_schema|pg_catalog)\b/i;
- return leak.test(text)?AI_SCOPE_REPLY:text;
+ return leak.test(text)?fallback:text;
 }

@@ -1,3 +1,4 @@
+import { useI18n } from '../i18n';
 import {appointmentLink} from '../lib/appointment-link';
 import { clientContext,rememberClientShop } from '../lib/client-context';
 import { ShopIdentity } from '../components/ShopIdentity';
@@ -12,6 +13,7 @@ import { OwnerOnboarding } from './OwnerOnboarding';
 type AuthMode='login'|'signup'|'forgot';
 
 export function AuthPage({reset=false}:{reset?:boolean}) {
+ const {t}=useI18n();
  const location=useLocation(),navigate=useNavigate();
  const params=new URLSearchParams(location.search);
  const shop=clientContext(location.pathname,location.search);
@@ -109,7 +111,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   const fragmentParams=new URLSearchParams(location.hash.replace(/^#/,'').replace(/^\?/,'') );
   const oauthError=callbackParams.get('error_description')||callbackParams.get('error')||callbackParams.get('error_code')||fragmentParams.get('error_description')||fragmentParams.get('error')||fragmentParams.get('error_code');
   if(!oauthError)return;
-  setMessage(oauthError==='access_denied'?'O acesso pelo Google foi cancelado. Você pode tentar novamente.':'O Google não conseguiu concluir o acesso. Confira a configuração do login Google e tente novamente.');
+  setMessage(oauthError==='access_denied'?t('auth.oauthCancelled'):t('auth.oauthFailed'));
   for(const params of [callbackParams,fragmentParams]){params.delete('error');params.delete('error_description');params.delete('error_code');}
   const cleanSearch=callbackParams.toString();
   const cleanHash=fragmentParams.toString();
@@ -126,7 +128,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
  async function signInWithGoogle(){
   setMessage('');
-  if(!supabase){setMessage('Não foi possível abrir o login agora. Tente novamente.');return;}
+  if(!supabase){setMessage(t('auth.openLoginFailed'));return;}
   setRememberSession(remember);setBusy(true);
   try{
    const query=new URLSearchParams();
@@ -136,7 +138,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    try{localStorage.setItem('fio-tour:google-signup-started',String(Date.now()));}catch{}
    const result=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo,queryParams:{prompt:'select_account'}}});
    if(result.error)throw result.error;
-  }catch{setMessage('Não foi possível abrir o Google agora. Tente novamente.');setBusy(false);}
+  }catch{setMessage(t('auth.googleOpenFailed'));setBusy(false);}
  }
 
  async function submit(e:FormEvent<HTMLFormElement>){
@@ -147,36 +149,36 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   setMessage('');
 
   if(!supabase){
-   setMessage('O acesso está temporariamente indisponível. Tente novamente mais tarde.');
+   setMessage(t('auth.unavailable'));
    return;
   }
 
   if(reset){
    if(!resetReady){
-    setMessage('Este link de recuperação é inválido ou expirou. Solicite um novo link.');
+    setMessage(t('auth.recoveryInvalid'));
     return;
    }
    if(submittedPassword.length<8){
-    setMessage('A nova senha precisa ter pelo menos 8 caracteres.');
+    setMessage(t('auth.passwordMin'));
     return;
    }
    if(submittedPassword!==submittedConfirmPassword){
-    setMessage('As senhas não são iguais. Confira e tente novamente.');
+    setMessage(t('auth.passwordMismatch'));
     return;
    }
   }
 
-  if(needsCaptcha&&!captchaToken){setMessage('Conclua a verificação de segurança para continuar.');return;}
+  if(needsCaptcha&&!captchaToken){setMessage(t('auth.captchaRequired'));return;}
   setBusy(true);
 
   try{
    if(reset){
     const result=await supabase.auth.updateUser({password:submittedPassword});
     if(result.error){
-     setMessage('Não foi possível alterar a senha. O link pode ter expirado. Solicite um novo link.');
+     setMessage(t('auth.passwordChangeFailed'));
      return;
     }
-    setMessage('Senha alterada com sucesso.');
+    setMessage(t('auth.passwordChanged'));
     window.setTimeout(()=>navigate(destination(),{replace:true}),700);
     return;
    }
@@ -190,18 +192,18 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     const result=await supabase.auth.resetPasswordForEmail(email,{redirectTo:redirect,captchaToken:captchaToken||undefined});
 
     if(result.error){
-     setMessage('Não foi possível enviar o link agora. Confira o e-mail e tente novamente.');
+     setMessage(t('auth.resetSendFailed'));
      return;
     }
 
-    setMessage('Pronto. Se existir uma conta com este e-mail, você receberá um link para criar uma nova senha.');
+    setMessage(t('auth.resetSent'));
     return;
    }
 
    if(mode==='signup'){
     const phoneDigits=signupPhone.replace(/\D/g,'');
     if(phoneDigits.length<10||phoneDigits.length>13){
-     setMessage('Informe um WhatsApp / telefone válido para vincular esta conta.');
+     setMessage(t('auth.phoneInvalid'));
      return;
     }
     setRememberSession(remember);
@@ -215,12 +217,12 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     });
 
     if(result.error){
-     setMessage('Não foi possível criar a conta. Confira os dados e tente novamente.');
+     setMessage(t('auth.signupFailed'));
      return;
     }
     if(result.data.user&&Array.isArray(result.data.user.identities)&&result.data.user.identities.length===0){
      setMode('login');
-     setMessage('Este e-mail já está vinculado a uma conta FIO. Entre com a conta existente.');
+     setMessage(t('auth.existingAccount'));
      return;
     }
 
@@ -230,14 +232,14 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
      try{localStorage.setItem(`fio-tour:new-account:${result.data.user.id}`,'pending');}catch{}
     }
 
-    setMessage('Confira seu e-mail para confirmar o cadastro.');
+    setMessage(t('auth.checkEmail'));
     return;
    }
 
    setRememberSession(remember);
    const result=await supabase.auth.signInWithPassword({email,password:submittedPassword,options:{captchaToken:captchaToken||undefined}});
    if(result.error){
-    setMessage('Não foi possível entrar. Confira seu e-mail e senha.');
+    setMessage(t('auth.loginFailed'));
     return;
    }
 
@@ -248,47 +250,47 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    else if(audience==='client')navigate(shop?`/?shop=${encodeURIComponent(shop)}&audience=client`:'/client',{replace:true});
    else navigate('/',{replace:true});
   }catch{
-   setMessage('Sem conexão. Tente novamente.');
+   setMessage(t('auth.offline'));
   }finally{
    setBusy(false);
    setCaptchaToken('');setCaptchaAttempt(v=>v+1);
   }
  }
 
- const clientBrand=clientShopName||'esta barbearia';
+ const clientBrand=clientShopName||t('auth.clientBrandFallback');
  const heading=reset
-  ?'Crie sua nova senha.'
+  ?t('auth.headingReset')
   :mode==='signup'
    ?audience==='client'
-    ?`Faça parte da ${clientBrand}.`
+    ?t('auth.headingClientSignup',{name:clientBrand})
     :(audience==='owner'||!audience)
-     ?'Crie sua barbearia com o FIO.'
-     :'Crie sua conta no FIO.'
+     ?t('auth.headingOwnerSignup')
+     :t('auth.headingSignup')
    :mode==='forgot'
-    ?'Recupere seu acesso.'
+    ?t('auth.headingForgot')
     :audience==='client'
-     ?`Acesse a ${clientBrand}.`
+     ?t('auth.headingClientLogin',{name:clientBrand})
      :(audience==='owner'||!audience)
-      ?'Sua barbearia começa aqui.'
-      :'Tudo começa aqui.';
+      ?t('auth.headingOwnerLogin')
+      :t('auth.headingLogin');
 
  const description=reset
-  ?'Digite a nova senha duas vezes para confirmar.'
+  ?t('auth.descReset')
   :mode==='forgot'
-   ?'Informe seu e-mail e enviaremos um link seguro para você criar uma nova senha.'
+   ?t('auth.descForgot')
    :audience==='client'
-    ?`Entre ou crie sua conta para acompanhar seus horários e agendar na ${clientBrand}.`
+    ?t('auth.descClient',{name:clientBrand})
     :(audience==='owner'||!audience)
-     ?'Entre para continuar ou crie agora seu espaço, sua agenda e o app dos seus clientes.'
-     :'Sua rotina. Seu tempo. Em sintonia.';
+     ?t('auth.descOwner')
+     :t('auth.descGeneric');
 
  if(reset&&!supabase){
   return <div className="auth-page">
    <Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>
    <div className="auth-card">
-    <p className="eyebrow">RECUPERAÇÃO DE SENHA</p>
-    <h1>Não foi possível abrir.</h1>
-    <p className="notice">O acesso está temporariamente indisponível.</p>
+    <p className="eyebrow">{t('auth.recoveryEyebrow')}</p>
+    <h1>{t('auth.cannotOpen')}</h1>
+    <p className="notice">{t('auth.unavailable')}</p>
    </div>
   </div>;
  }
@@ -297,9 +299,9 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   return <div className="auth-page">
    <span className="auth-logo"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></span>
    <div className="auth-card">
-    <p className="eyebrow">RECUPERAÇÃO DE SENHA</p>
-    <h1>Validando seu link…</h1>
-    <p className="muted">Só um instante.</p>
+    <p className="eyebrow">{t('auth.recoveryEyebrow')}</p>
+    <h1>{t('auth.validatingLink')}</h1>
+    <p className="muted">{t('auth.justMoment')}</p>
    </div>
   </div>;
  }
@@ -308,12 +310,12 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   return <div className="auth-page">
    <Link className="auth-logo" to={destination()}><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>
    <div className="auth-card">
-    <p className="eyebrow">RECUPERAÇÃO DE SENHA</p>
-    <h1>Esse link não é mais válido.</h1>
-    <p className="muted">Ele pode ter expirado ou já ter sido usado. Solicite um novo link para continuar.</p>
-    <Link className="primary full" to={`/login?mode=forgot${audience?`&audience=${encodeURIComponent(audience)}`:''}${shop?`&shop=${encodeURIComponent(shop)}`:''}`}>Solicitar novo link</Link>
+    <p className="eyebrow">{t('auth.recoveryEyebrow')}</p>
+    <h1>{t('auth.linkInvalidTitle')}</h1>
+    <p className="muted">{t('auth.linkInvalidDesc')}</p>
+    <Link className="primary full" to={`/login?mode=forgot${audience?`&audience=${encodeURIComponent(audience)}`:''}${shop?`&shop=${encodeURIComponent(shop)}`:''}`}>{t('auth.requestNewLink')}</Link>
    </div>
-   <p className="auth-footer">MENOS RUÍDO. MAIS FIO.</p>
+   <p className="auth-footer">{t('auth.footer')}</p>
   </div>;
  }
 
@@ -321,12 +323,12 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
   {shop?<ShopIdentity slug={shop}/>:<Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>}
 
   <div className="auth-card auth-card--login">
-   <p className="eyebrow">{reset?'RECUPERAÇÃO DE SENHA':audience==='client'?'ACESSO DO CLIENTE':(audience==='owner'||!audience)?(mode==='signup'?'CRIE SUA BARBEARIA':'FIO PARA BARBEARIAS'):'BEM-VINDO AO FIO'}</p>
+   <p className="eyebrow">{reset?t('auth.recoveryEyebrow'):audience==='client'?t('auth.clientEyebrow'):(audience==='owner'||!audience)?(mode==='signup'?t('auth.createShopEyebrow'):t('auth.shopEyebrow')):t('auth.welcomeEyebrow')}</p>
    <h1>{heading}</h1>
    <p className="muted">{description}</p>
 
    <form onSubmit={submit}>
-    {!reset&&<Field label="E-mail">
+    {!reset&&<Field label={t('auth.email')}>
      <input
       type="email"
       autoComplete="email"
@@ -336,7 +338,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
      />
     </Field>}
 
-    {!reset&&mode==='signup'&&<Field label="WhatsApp / telefone">
+    {!reset&&mode==='signup'&&<Field label={t('auth.phone')}>
      <input
       type="tel"
       inputMode="tel"
@@ -348,67 +350,67 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
       onChange={e=>setSignupPhone(e.target.value)}
       required
      />
-     <small>Um número pode ficar vinculado a apenas uma conta FIO.</small>
+     <small>{t('auth.onePhoneHint')}</small>
     </Field>}
 
-    {(reset||mode!=='forgot')&&<Field label={reset?'Nova senha':'Senha'}>
+    {(reset||mode!=='forgot')&&<Field label={reset?t('auth.newPassword'):t('auth.password')}>
       <div style={{position:'relative'}}>
        <input name="password" type={showPassword?'text':'password'} minLength={8}
         autoComplete={mode==='login'&&!reset?'current-password':'new-password'}
         value={password} onChange={e=>setPassword(e.target.value)}
         style={{paddingRight:48}} required />
-       <button type="button" aria-label={showPassword?'Ocultar senha':'Mostrar senha'}
-        title={showPassword?'Ocultar senha':'Mostrar senha'} onClick={()=>setShowPassword(v=>!v)}
+       <button type="button" aria-label={showPassword?t('auth.hidePassword'):t('auth.showPassword')}
+        title={showPassword?t('auth.hidePassword'):t('auth.showPassword')} onClick={()=>setShowPassword(v=>!v)}
         style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',display:'grid',placeItems:'center',width:32,height:32,padding:0,border:0,background:'transparent',color:'inherit',cursor:'pointer'}}>
         {showPassword?<EyeOff size={18}/>:<Eye size={18}/>}
        </button>
       </div>
      </Field>}
 
-    {reset&&<Field label="Confirmar nova senha">
+    {reset&&<Field label={t('auth.confirmNewPassword')}>
       <div style={{position:'relative'}}>
        <input name="confirmPassword" type={showConfirmPassword?'text':'password'} minLength={8}
         autoComplete="new-password" value={confirmPassword}
         onChange={e=>setConfirmPassword(e.target.value)}
         style={{paddingRight:48}} required />
-       <button type="button" aria-label={showConfirmPassword?'Ocultar confirmação de senha':'Mostrar confirmação de senha'}
-        title={showConfirmPassword?'Ocultar senha':'Mostrar senha'} onClick={()=>setShowConfirmPassword(v=>!v)}
+       <button type="button" aria-label={showConfirmPassword?t('auth.hidePasswordConfirm'):t('auth.showPasswordConfirm')}
+        title={showConfirmPassword?t('auth.hidePassword'):t('auth.showPassword')} onClick={()=>setShowConfirmPassword(v=>!v)}
         style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',display:'grid',placeItems:'center',width:32,height:32,padding:0,border:0,background:'transparent',color:'inherit',cursor:'pointer'}}>
         {showConfirmPassword?<EyeOff size={18}/>:<Eye size={18}/>}
        </button>
       </div>
      </Field>}
 
-    {!reset&&mode==='login'&&<label className="remember-session"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/><span>Manter conectado neste dispositivo</span></label>}
+    {!reset&&mode==='login'&&<label className="remember-session"><input type="checkbox" checked={remember} onChange={e=>setRemember(e.target.checked)}/><span>{t('auth.remember')}</span></label>}
 
     {needsCaptcha&&<AuthCaptcha onToken={setCaptchaToken} attempt={captchaAttempt}/>}
     {message&&<p role="status" className="notice">{message}</p>}
 
     <button className="primary full" disabled={busy||(needsCaptcha&&!captchaToken)}>
      {busy
-      ?'Aguarde…'
+      ?t('auth.wait')
       :reset
-       ?'Salvar nova senha'
+       ?t('auth.saveNewPassword')
        :mode==='signup'
-        ?'Criar conta'
+        ?t('auth.signUp')
         :mode==='forgot'
-         ?'Enviar link de recuperação'
-         :'Entrar'}
+         ?t('auth.sendRecovery')
+         :t('auth.signIn')}
     </button>
    </form>
 
    {!reset&&<div className="auth-options">
     {mode==='forgot'
-     ?<button type="button" className="text-button" onClick={()=>{setMode('login');setMessage('');}}>Voltar para entrar</button>
+     ?<button type="button" className="text-button" onClick={()=>{setMode('login');setMessage('');}}>{t('auth.backSignIn')}</button>
      :<>
        <button type="button" className="text-button" onClick={()=>{setMode(mode==='signup'?'login':'signup');setMessage('');}}>
-        {mode==='signup'?'Já tenho uma conta':audience==='client'?`Criar conta na ${clientBrand}`:(audience==='owner'||!audience)?'Criar minha barbearia':'Criar uma conta'}
+        {mode==='signup'?t('auth.alreadyHave'):audience==='client'?t('auth.createClientAt',{name:clientBrand}):(audience==='owner'||!audience)?t('auth.createMyShop'):t('auth.createOne')}
        </button>
-       <button type="button" className="text-button" onClick={()=>{setMode('forgot');setMessage('');}}>Esqueci minha senha</button>
+       <button type="button" className="text-button" onClick={()=>{setMode('forgot');setMessage('');}}>{t('auth.forgotPassword')}</button>
       </>}
    </div>}
    {!reset&&mode!=='forgot'&&<>
-    <div className="auth-divider" style={{display:'flex',alignItems:'center',gap:16,margin:'22px 0',color:'#888',fontSize:13}}><span style={{flex:1,height:1,background:'currentColor',opacity:.3}}/><span>ou</span><span style={{flex:1,height:1,background:'currentColor',opacity:.3}}/></div>
+    <div className="auth-divider" style={{display:'flex',alignItems:'center',gap:16,margin:'22px 0',color:'#888',fontSize:13}}><span style={{flex:1,height:1,background:'currentColor',opacity:.3}}/><span>{t('auth.or')}</span><span style={{flex:1,height:1,background:'currentColor',opacity:.3}}/></div>
     <button type="button" className="oauth-button" disabled={busy} onClick={()=>void signInWithGoogle()}>
      <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true" focusable="false" style={{flexShrink:0}}>
       <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"/>
@@ -416,18 +418,19 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
       <path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.87 23.87 0 0 0 0 24c0 3.87.93 7.53 2.56 10.78l7.97-6.19Z"/>
       <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.15 1.45-4.92 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z"/>
      </svg>
-     Continuar com Google
+     {t('auth.continueWithGoogle')}
     </button>
    </>}
 
 
   </div>
 
-  <p className="auth-footer">MENOS RUÍDO. MAIS FIO.</p>
+  <p className="auth-footer">{t('auth.footer')}</p>
  </div>;
 }
 
 function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
+ const {t}=useI18n();
  const [displayName,setDisplayName]=useState(''),[phone,setPhone]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  useEffect(()=>{
   if(!supabase)return;
@@ -454,20 +457,21 @@ function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
  return <div className="auth-page">
   <ShopIdentity slug={slug}/>
   <div className="auth-card">
-   <p className="eyebrow">SEU PERFIL</p><h1>Como podemos te chamar?</h1><p className="muted">Só precisamos do básico para conectar sua conta a esta barbearia.</p>
+   <p className="eyebrow">{t('auth.profileEyebrow')}</p><h1>{t('auth.profileQuestion')}</h1><p className="muted">{t('auth.profileDesc')}</p>
    <form onSubmit={submit}>
-    <Field label="Seu nome"><input minLength={2} maxLength={100} autoComplete="name" required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></Field>
-    <Field label="WhatsApp / telefone"><input type="tel" inputMode="tel" autoComplete="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)} required/><small>Esse número identifica sua conta e não pode pertencer a outra conta FIO.</small></Field>
+    <Field label={t('auth.yourName')}><input minLength={2} maxLength={100} autoComplete="name" required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></Field>
+    <Field label={t('auth.phone')}><input type="tel" inputMode="tel" autoComplete="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)} required/><small>{t('auth.phoneIdentityHint')}</small></Field>
     {error&&<p className="notice" role="alert">{error}</p>}
-    <button className="primary full" disabled={busy}>{busy?'Entrando…':'Entrar na barbearia'}</button>
+    <button className="primary full" disabled={busy}>{busy?t('auth.entering'):t('auth.enterShop')}</button>
    </form>
-   <button type="button" className="text-button" onClick={()=>supabase?.auth.signOut()}>Usar outra conta</button>
+   <button type="button" className="text-button" onClick={()=>supabase?.auth.signOut()}>{t('auth.useAnother')}</button>
   </div>
-  <p className="auth-footer">MENOS RUÍDO. MAIS FIO.</p>
+  <p className="auth-footer">{t('auth.footer')}</p>
  </div>;
 }
 
 function LegacyOnboarding({onDone}:{onDone:()=>void}) {
+ const {t}=useI18n();
  const params=new URLSearchParams(window.location.search),token=params.get('invite'),presetShop=params.get('shop')??'';
  const [mode,setMode]=useState<'create'|'join'|'invite'>(token?'invite':presetShop?'join':'create');
  const [name,setName]=useState(''),[slug,setSlug]=useState(presetShop),[displayName,setDisplayName]=useState(''),[phone,setPhone]=useState(''),[invite,setInvite]=useState(token??''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
@@ -491,33 +495,34 @@ function LegacyOnboarding({onDone}:{onDone:()=>void}) {
  return <div className="auth-page">
   <span className="auth-logo"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></span>
   <div className="auth-card">
-   <p className="eyebrow">SEU ESPAÇO</p>
-   <h1>Vamos conectar os pontos.</h1>
+   <p className="eyebrow">{t('auth.spaceEyebrow')}</p>
+   <h1>{t('auth.connectPoints')}</h1>
 
    <div className="segmented">
-    {([['create','Sou responsável'],['join','Sou cliente'],['invite','Tenho convite']] as const).map(([v,t])=>
+    {([['create',t('auth.iAmOwner')],['join',t('auth.iAmClient')],['invite',t('auth.haveInvite')]] as const).map(([v,t])=>
      <button type="button" className={mode===v?'selected':''} key={v} onClick={()=>setMode(v)}>{t}</button>
     )}
    </div>
 
    <form onSubmit={submit}>
-    <Field label="Seu nome"><input minLength={2} maxLength={100} required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></Field>
-    <Field label="WhatsApp / telefone"><input type="tel" inputMode="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)} required/><small>Um número pode ficar vinculado a apenas uma conta FIO.</small></Field>
-    {mode==='create'&&<Field label="Nome da barbearia"><input required minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></Field>}
+    <Field label={t('auth.yourName')}><input minLength={2} maxLength={100} required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></Field>
+    <Field label={t('auth.phone')}><input type="tel" inputMode="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)} required/><small>{t('auth.onePhoneHint')}</small></Field>
+    {mode==='create'&&<Field label={t('auth.shopName')}><input required minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></Field>}
     {mode!=='invite'
-     ?<Field label="Identificador da barbearia"><input required pattern="[a-z0-9-]{3,60}" placeholder="ex.: studio-011" value={slug} onChange={e=>setSlug(e.target.value.toLowerCase())}/></Field>
-     :<Field label="Código do convite"><input required value={invite} onChange={e=>setInvite(e.target.value)}/></Field>}
+     ?<Field label={t('auth.shopSlug')}><input required pattern="[a-z0-9-]{3,60}" placeholder="ex.: studio-011" value={slug} onChange={e=>setSlug(e.target.value.toLowerCase())}/></Field>
+     :<Field label={t('auth.inviteCode')}><input required value={invite} onChange={e=>setInvite(e.target.value)}/></Field>}
     {error&&<p className="notice" role="alert">{error}</p>}
-    <button className="primary full" disabled={busy}>{busy?'Conectando…':'Continuar'}</button>
+    <button className="primary full" disabled={busy}>{busy?t('auth.connecting'):t('common.continue')}</button>
    </form>
 
-   <button className="text-button" onClick={()=>supabase?.auth.signOut()}>Sair da conta</button>
+   <button className="text-button" onClick={()=>supabase?.auth.signOut()}>{t('auth.signOut')}</button>
   </div>
  </div>;
 }
 
 
 export function EmailConfirmationPage(){
+ const {t}=useI18n();
  const location=useLocation(),navigate=useNavigate();
  const params=new URLSearchParams(location.search);
  const shop=clientContext(location.pathname,location.search);
@@ -556,30 +561,31 @@ export function EmailConfirmationPage(){
   <div className="auth-card email-confirm-card">
    {state==='checking'?<>
     <span className="email-confirm-icon is-loading"><LoaderCircle size={28}/></span>
-    <p className="eyebrow">CONFIRMANDO SEU E-MAIL</p>
-    <h1>Só um instante.</h1>
-    <p className="muted">Estamos finalizando seu acesso ao FIO.</p>
+    <p className="eyebrow">{t('auth.confirmingEmail')}</p>
+    <h1>{t('auth.justMoment')}</h1>
+    <p className="muted">{t('auth.finishingAccess')}</p>
    </>:state==='confirmed'?<>
     <span className="email-confirm-icon"><CheckCircle2 size={30}/></span>
-    <p className="eyebrow">E-MAIL CONFIRMADO</p>
-    <h1>Seu acesso está pronto.</h1>
-    <p className="muted">Agora você já pode entrar no FIO com o e-mail e a senha que criou.</p>
-    <button className="primary full" onClick={()=>void back()}>Voltar para entrar</button>
+    <p className="eyebrow">{t('auth.emailConfirmed')}</p>
+    <h1>{t('auth.accessReady')}</h1>
+    <p className="muted">{t('auth.accessReadyDesc')}</p>
+    <button className="primary full" onClick={()=>void back()}>{t('auth.backSignIn')}</button>
    </>:<>
-    <p className="eyebrow">CONFIRMAÇÃO DE E-MAIL</p>
-    <h1>Não foi possível confirmar este link.</h1>
-    <p className="muted">Ele pode ter expirado ou já ter sido usado. Tente entrar normalmente; se necessário, crie a conta novamente.</p>
-    <button className="primary full" onClick={()=>void back()}>Voltar para entrar</button>
+    <p className="eyebrow">{t('auth.emailConfirmation')}</p>
+    <h1>{t('auth.confirmFailed')}</h1>
+    <p className="muted">{t('auth.confirmFailedDesc')}</p>
+    <button className="primary full" onClick={()=>void back()}>{t('auth.backSignIn')}</button>
    </>}
   </div>
-  <p className="auth-footer">MENOS RUÍDO. MAIS FIO.</p>
+  <p className="auth-footer">{t('auth.footer')}</p>
  </div>;
 }
 
 export function Onboarding({onDone,shopId}:{onDone:()=>void;shopId?:string}) {
+ const {t}=useI18n();
  const params=new URLSearchParams(window.location.search),shop=clientContext(window.location.pathname,window.location.search),audience=params.get('audience');
  if(shop)return <ClientJoinOnboarding onDone={onDone} slug={shop}/>;
- if(audience==='client'||window.location.pathname.startsWith('/client'))return <div className="auth-page"><div className="auth-card"><h1>Acesse o link da sua barbearia.</h1><p>Peça o link ao profissional para criar seu perfil de cliente e agendar.</p><button className="secondary" onClick={()=>void supabase?.auth.signOut()}>Sair da conta</button></div></div>;
+ if(audience==='client'||window.location.pathname.startsWith('/client'))return <div className="auth-page"><div className="auth-card"><h1>{t('auth.clientLinkTitle')}</h1><p>{t('auth.clientLinkDesc')}</p><button className="secondary" onClick={()=>void supabase?.auth.signOut()}>{t('auth.signOut')}</button></div></div>;
  return <OwnerOnboarding onDone={onDone} shopId={shopId}/>;
 }
 

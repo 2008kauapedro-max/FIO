@@ -1,3 +1,4 @@
+import {useI18n} from '../i18n';
 import {useEffect,useRef,useState} from 'react';
 
 type Turnstile={render:(element:HTMLElement,options:Record<string,unknown>)=>string;remove:(id:string)=>void};
@@ -21,6 +22,7 @@ function loadTurnstile(){
 }
 
 export function AuthCaptcha({onToken,attempt}:{onToken:(token:string)=>void;attempt:number}){
+ const {t}=useI18n();
  const container=useRef<HTMLDivElement>(null);
  const [failed,setFailed]=useState(false),[retry,setRetry]=useState(0);
  const [ready,setReady]=useState(false),[verified,setVerified]=useState(false);
@@ -50,9 +52,9 @@ export function AuthCaptcha({onToken,attempt}:{onToken:(token:string)=>void;atte
  },[onToken,attempt,retry,compact]);
  return <div className="auth-captcha">
   <div className="auth-captcha-widget" ref={container}/>
-  {verified&&<p className="auth-captcha-status" role="status"><span aria-hidden="true">✓</span> Verificado. Toque em Entrar para continuar.</p>}
-  {failed&&<p role="alert" className="auth-captcha-error">Não foi possível concluir a verificação. Tente novamente.</p>}
-  {!ready&&!failed&&<p className="auth-captcha-hint">Carregando verificação de segurança…</p>}
-  {failed&&<button type="button" className="text-button auth-captcha-retry" onClick={()=>setRetry(v=>v+1)}>Recarregar verificação</button>}
+  {verified&&<p className="auth-captcha-status" role="status"><span aria-hidden="true">✓</span> {t('captcha.verified')}</p>}
+  {failed&&<p role="alert" className="auth-captcha-error">{t('captcha.failed')}</p>}
+  {!ready&&!failed&&<p className="auth-captcha-hint">{t('captcha.loading')}</p>}
+  {failed&&<button type="button" className="text-button auth-captcha-retry" onClick={()=>setRetry(v=>v+1)}>{t('captcha.retry')}</button>}
  </div>;
 }

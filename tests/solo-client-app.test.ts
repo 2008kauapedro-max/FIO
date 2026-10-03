@@ -27,19 +27,24 @@ describe('site e app do cliente',()=>{
  it('mantém instalação personalizada e bloqueia o agendamento web antes do app',()=>{
   const portal=readFileSync(resolve('src/pages/PublicPortal.tsx'),'utf8');
   const server=readFileSync(resolve('server/app.ts'),'utf8');
-  expect(portal).toContain('Baixe {title} para continuar.');
+  expect(portal).toContain("t('public.downloadContinue',{title})");
   expect(portal).toContain('beforeinstallprompt');
   expect(portal).toContain("installPlatform('android')");
   expect(portal).toContain("installPlatform('windows')");
   expect(portal).toContain("installPlatform('mac')");
   expect(portal).toContain("installPlatform('iphone')");
-  expect(portal).toContain('Instale no seu iPhone');
+  expect(portal).toContain("t('public.installIphone')");
   expect(portal).toContain('apple-touch-icon');
-  expect(portal).toContain('Tecnologia por');
+  expect(portal).toContain("t('public.powered')");
   expect(portal).toContain('publicMapsUrl');
   expect(portal).toContain('publicInstagramUrl');
   expect(portal).toContain('publicWhatsappUrl');
-  expect(portal).toContain('Vim pelo site da ${title} no FIO');
+  expect(portal).toContain("t('public.whatsappMessage',{title})");
+  const dict=readFileSync(resolve('src/i18n/dictionaries.ts'),'utf8');
+  expect(dict).toContain('Baixe {{title}} para continuar.');
+  expect(dict).toContain('Instale no seu iPhone');
+  expect(dict).toContain('Tecnologia por FIO');
+  expect(dict).toContain('Vim pelo site da {{title}} no FIO');
   expect(server).toContain("/api/public/manifest/:slug");
   expect(server).toContain('operation_mode');
  });

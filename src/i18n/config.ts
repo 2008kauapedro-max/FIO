@@ -50,7 +50,7 @@ export const LOCALE_OPTIONS: Array<{
     nativeLabel: "English",
     flag: "🇺🇸",
     defaultRegion: "US",
-    defaultCurrency: "USD",
+    defaultCurrency: "BRL",
   },
   {
     value: "es",
@@ -58,7 +58,7 @@ export const LOCALE_OPTIONS: Array<{
     nativeLabel: "Español",
     flag: "🇪🇸",
     defaultRegion: "ES",
-    defaultCurrency: "EUR",
+    defaultCurrency: "BRL",
   },
   {
     value: "fr",
@@ -66,7 +66,7 @@ export const LOCALE_OPTIONS: Array<{
     nativeLabel: "Français",
     flag: "🇫🇷",
     defaultRegion: "FR",
-    defaultCurrency: "EUR",
+    defaultCurrency: "BRL",
   },
   {
     value: "de",
@@ -74,7 +74,7 @@ export const LOCALE_OPTIONS: Array<{
     nativeLabel: "Deutsch",
     flag: "🇩🇪",
     defaultRegion: "DE",
-    defaultCurrency: "EUR",
+    defaultCurrency: "BRL",
   },
   {
     value: "it",
@@ -82,7 +82,7 @@ export const LOCALE_OPTIONS: Array<{
     nativeLabel: "Italiano",
     flag: "🇮🇹",
     defaultRegion: "IT",
-    defaultCurrency: "EUR",
+    defaultCurrency: "BRL",
   },
 ];
 

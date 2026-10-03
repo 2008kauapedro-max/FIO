@@ -2,24 +2,26 @@ import { useEffect,useLayoutEffect,useMemo,useRef,useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Role } from '../../shared/domain';
 import './guided-tour.css';
+import {useI18n} from '../i18n';
 
 type Step={target:string;title:string;text:string;route?:string;menu?:boolean};
 type Position={top:number;left:number};
 
 export function GuidedTour({userId,shopId,role,base,openMenu}:{userId:string;shopId:string;role:Role;base:string;openMenu:(open:boolean)=>void}){
+ const {t}=useI18n();
  const key=`fio-tour:v2:${userId}:${shopId}:${role}`;
  const pendingKey=`fio-tour:new-account:${userId}`;
  const navigate=useNavigate(),dialog=useRef<HTMLDivElement>(null);
  const [index,setIndex]=useState<number|null>(null),[rect,setRect]=useState<DOMRect|null>(null),[position,setPosition]=useState<Position>({top:12,left:12});
  const steps=useMemo<Step[]>(()=>[
-  {target:'overview',title:'Seu resumo do dia',text:role==='OWNER'?'Aqui você acompanha os horários de hoje e os atendimentos concluídos. Abra a agenda para ver os detalhes.':role==='BARBER'?'Aqui você acompanha sua agenda e os próximos atendimentos.':'Aqui você vê seu próximo atendimento e os horários da sua barbearia.',route:base},
-  {target:'nav-agenda',title:'Agenda',text:'O menu será aberto durante o tutorial. Aqui você encontra horários, agendamentos e detalhes dos atendimentos.',menu:true},
-  {target:'nav-configuracoes',title:'Configurações',text:'Abra Configurações para editar seu perfil, aparência e segurança.',menu:true},
-  {target:'nav-suporte',title:'Ajuda e suporte',text:'Aqui você pode falar com a equipe do FIO, tirar dúvidas ou contar quando algo não funcionar.',menu:true},
-  {target:'feedback',title:'Envie uma sugestão ou dúvida',text:'Esta opção abre o formulário. O tutorial vai mostrar onde escrever e enviar sua mensagem.',route:`${base}/suporte`},
-  {target:'feedback-message',title:'Escreva sua mensagem',text:'Explique o que aconteceu ou o que está faltando. Diga em qual tela ocorreu. Não inclua senhas nem códigos.',route:`${base}/suporte`},
-  {target:'feedback-send',title:'Envie para a equipe do FIO',text:'Quando quiser falar com a equipe, preencha o formulário e use este botão. O tutorial não envia mensagens.',route:`${base}/suporte`}
- ],[role,base]);
+  {target:'overview',title:t('tour.overviewTitle'),text:role==='OWNER'?t('tour.overviewOwner'):role==='BARBER'?t('tour.overviewBarber'):t('tour.overviewClient'),route:base},
+  {target:'nav-agenda',title:t('tour.agendaTitle'),text:t('tour.agendaText'),menu:true},
+  {target:'nav-configuracoes',title:t('tour.settingsTitle'),text:t('tour.settingsText'),menu:true},
+  {target:'nav-suporte',title:t('tour.supportTitle'),text:t('tour.supportText'),menu:true},
+  {target:'feedback',title:t('tour.feedbackTitle'),text:t('tour.feedbackText'),route:`${base}/suporte`},
+  {target:'feedback-message',title:t('tour.messageTitle'),text:t('tour.messageText'),route:`${base}/suporte`},
+  {target:'feedback-send',title:t('tour.sendTitle'),text:t('tour.sendText'),route:`${base}/suporte`}
+ ],[role,base,t]);
 
  useEffect(()=>{
   const restart=()=>setIndex(0);
@@ -82,8 +84,8 @@ export function GuidedTour({userId,shopId,role,base,openMenu}:{userId:string;sho
  return <div className="fio-tour-layer">
   <svg className="fio-tour-shade" aria-hidden="true"><defs><mask id="fio-tour-hole"><rect width="100%" height="100%" fill="white"/>{rect&&<rect x={left} y={top} width={width} height={height} rx="10" fill="black"/>}</mask></defs><rect width="100%" height="100%" fill="rgba(0,0,0,.54)" mask="url(#fio-tour-hole)"/>{rect&&<rect x={left} y={top} width={width} height={height} rx="10" fill="none" stroke="white" strokeWidth="2"/>}</svg>
   <div ref={dialog} tabIndex={-1} className="fio-tour-card" role="dialog" aria-modal="true" aria-labelledby="fio-tour-title" style={{top:position.top,left:position.left}} onKeyDown={e=>{if(e.key==='Tab'){const buttons=Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));const first=buttons[0],last=buttons.at(-1);if(e.shiftKey&&(document.activeElement===first||document.activeElement===e.currentTarget)){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}}}>
-   <small>CONHEÇA O FIO · {index+1} / {steps.length}</small><h2 id="fio-tour-title">{step.title}</h2><p>{step.text}</p>
-   <div className="fio-tour-actions"><button onClick={finish}>Pular</button><span/><button disabled={index===0} onClick={()=>setIndex(index-1)}>Anterior</button><button className="primary" onClick={()=>index===steps.length-1?finish():setIndex(index+1)}>{index===steps.length-1?'Concluir':'Próximo'}</button></div>
+   <small>{t('tour.kicker',{current:index+1,total:steps.length})}</small><h2 id="fio-tour-title">{step.title}</h2><p>{step.text}</p>
+   <div className="fio-tour-actions"><button onClick={finish}>{t('tour.skip')}</button><span/><button disabled={index===0} onClick={()=>setIndex(index-1)}>{t('tour.previous')}</button><button className="primary" onClick={()=>index===steps.length-1?finish():setIndex(index+1)}>{index===steps.length-1?t('tour.finish'):t('tour.next')}</button></div>
   </div>
  </div>;
 }

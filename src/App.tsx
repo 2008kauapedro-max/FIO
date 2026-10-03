@@ -1,5 +1,5 @@
 import { useI18n } from './i18n';
-import { loadLocalePreferences } from './i18n/supabaseLocale';
+import { loadLocalePreferences,saveLocalePreferences } from './i18n/supabaseLocale';
 import {appointmentLink} from './lib/appointment-link';
 import { clientContext,rememberClientShop } from './lib/client-context';
 import { useCallback,useEffect,useRef,useState,lazy,Suspense } from 'react';
@@ -22,7 +22,8 @@ const PlatformLogin=lazy(()=>import('./pages/Platform').then(m=>({default:m.Plat
 
 
 function AppLoading(){
- return <div className="fio-loading-screen" role="status" aria-label="Abrindo FIO"><img src="/FIOlogo/FIObranco.png" alt=""/></div>;
+ const {t}=useI18n();
+ return <div className="fio-loading-screen" role="status" aria-label={t('app.loadingAria')}><img src="/FIOlogo/FIObranco.png" alt=""/></div>;
 }
 
 type NavItem={path:string;label:string;icon:typeof LayoutDashboard;roles:Role[];feature?:FioFeature};
@@ -46,7 +47,7 @@ type Theme='dark'|'light';
 type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:'accepted'|'dismissed'}>};
 
 export default function App(){
- const {t,setLocale,setRegion,setCurrency}=useI18n();
+ const {t,locale,region,setLocale,setRegion,setCurrency}=useI18n();
  const location=useLocation(),navigate=useNavigate();
  const isPlatform=location.pathname==='/acesso/plataforma'||location.pathname==='/platform'||location.pathname.startsWith('/platform/');
  const reservedPublicSlugs=new Set(['owner','barber','client','login','reset-password','confirm-email','acesso','b','barbearia','platform','api']);
@@ -77,15 +78,20 @@ export default function App(){
  } as Record<string,string>)[path]??'nav.overview');
 
  useEffect(()=>{
-  if(!supabase||!data?.shop.id||!data.membership.user_id)return;
+  const client=supabase;
+  if(!client||!data?.shop.id||!data.membership.user_id)return;
   const key=`${data.shop.id}:${data.membership.user_id}`;
   if(localeLoadedRef.current===key)return;
   let active=true;
-  void loadLocalePreferences(supabase,data.shop.id,data.membership.user_id).then(pref=>{
+  void loadLocalePreferences(client,data.shop.id,data.membership.user_id).then(async pref=>{
    if(!active||!pref)return;
-   setLocale(pref.preferred_locale,{persistLocal:true,updateDefaults:false});
-   setRegion(pref.preferred_region);
-   setCurrency(pref.preferred_currency);
+   if(pref.explicit){
+    setLocale(pref.preferred_locale,{persistLocal:true,updateDefaults:false});
+    setRegion(pref.preferred_region);
+    setCurrency('BRL');
+   }else{
+    await saveLocalePreferences(client,data.shop.id,{preferred_locale:locale,preferred_region:(region||'BR').trim().toUpperCase(),preferred_currency:'BRL'});
+   }
    localeLoadedRef.current=key;
   }).catch(()=>{localeLoadedRef.current=key;});
   return()=>{active=false;};
@@ -114,11 +120,11 @@ export default function App(){
   if(clientSlug&&!preferredShop){
    try{
     const response=await fetch(`/api/public/shop/${encodeURIComponent(clientSlug)}`),body=await response.json();
-    if(!response.ok)throw new Error('Não foi possível abrir a barbearia deste link. Confira o endereço e tente novamente.');
+    if(!response.ok)throw new Error(t('app.publicShopOpenFailed'));
     const targetId=String(body?.shop?.id??'');
-    if(!targetId)throw new Error('Barbearia não encontrada.');
+    if(!targetId)throw new Error(t('app.shopNotFound'));
     if(targetId){const membership=m.find(x=>x.barbershop_id===targetId);if(membership&&membership.role!=='CLIENT')throw new Error('CLIENT_ACCOUNT_REQUIRED');if(membership)preferredShop=targetId;else needsClientJoin=true;}
-   }catch(e){if((e as Error).message==='CLIENT_ACCOUNT_REQUIRED')throw new Error('Esta conta pertence à equipe da barbearia. Saia e entre com sua conta de cliente para usar este link.');throw new Error('Não foi possível abrir a barbearia deste link. Confira o endereço e tente novamente.');}
+   }catch(e){if((e as Error).message==='CLIENT_ACCOUNT_REQUIRED')throw new Error(t('app.clientAccountRequired'));throw new Error(t('app.publicShopOpenFailed'));}
   }
   setClientJoinPending(needsClientJoin);
   const owner=m.find(x=>x.role==='OWNER');
@@ -137,7 +143,7 @@ export default function App(){
    if(refreshTimer)window.clearTimeout(refreshTimer);
    refreshTimer=window.setTimeout(()=>{
     void refresh().catch(()=>undefined);
-    if(showNew&&activeRole!=='CLIENT'&&createdBy!==session.user.id)setToast('Novo agendamento recebido.');
+    if(showNew&&activeRole!=='CLIENT'&&createdBy!==session.user.id)setToast(t('app.newAppointment'));
    },180);
   };
   const channel=supabase.channel(`fio-appointments-${shopId}-${session.user.id}`)
@@ -179,7 +185,7 @@ export default function App(){
   const params=new URLSearchParams();const next=appointmentLink(location.pathname+location.search);if(next)params.set('next',next);if(audience)params.set('audience',audience);const shop=clientContext(location.pathname,location.search);if(shop)params.set('shop',shop);
   return <Navigate replace to={`/login${params.toString()?`?${params.toString()}`:''}`}/>;
  }
- if(error)return <div className="full-error"><h1>Não foi possível abrir seu espaço.</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>Tentar novamente</button><button className="secondary" onClick={()=>void supabase?.auth.signOut({scope:'local'})}>Sair da conta</button><Link to="/login">Voltar ao acesso</Link></div>;
+ if(error)return <div className="full-error"><h1>{t('app.openFailed')}</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>{t('app.tryAgain')}</button><button className="secondary" onClick={()=>void supabase?.auth.signOut({scope:'local'})}>{t('app.signOut')}</button><Link to="/login">{t('app.backToAccess')}</Link></div>;
  if(!demo&&memberships===null)return <AppLoading/>;
  if(!demo&&(memberships?.length===0||Boolean(onboardingShopId)||clientJoinPending))return <Onboarding shopId={onboardingShopId||undefined} onDone={()=>void loadMemberships()}/>;
  if(!data)return <AppLoading/>;
@@ -191,7 +197,7 @@ export default function App(){
  const props:WorkspaceProps={data,demo,base,refresh,notify:setToast,updateDemo:fn=>setData(d=>d?fn(d):d),canInstall:Boolean(installPrompt),installApp:async()=>{
   type InstallWindow=Window&{__fioInstallPrompt?:InstallPromptEvent|null};
   const prompt=installPrompt??(window as InstallWindow).__fioInstallPrompt??null;
-  if(!prompt){setToast('O navegador ainda não liberou a instalação. Abra no Chrome ou Edge e tente novamente.');return;}
+  if(!prompt){setToast(t('app.installUnavailable'));return;}
   await prompt.prompt();
   await prompt.userChoice;
   (window as InstallWindow).__fioInstallPrompt=null;
@@ -215,52 +221,52 @@ export default function App(){
  }
  const toggleTheme=()=>setTheme(t=>t==='dark'?'light':'dark');
  return <div className={`app-shell ${role==='CLIENT'?'client-shell':''} ${page==='/assistente'?'chat-shell':''}`}>
-  {menu&&<button className="menu-backdrop" aria-label="Fechar menu" onClick={()=>setMenu(false)}/>}
+  {menu&&<button className="menu-backdrop" aria-label={t('app.closeMenu')} onClick={()=>setMenu(false)}/>}
   <aside className={`sidebar ${menu?'is-open':''}`}>
    <div className="sidebar-brand sidebar-shop-brand">
-    <Link to={base} className="sidebar-shop-link" aria-label={`Abrir ${data.shop.name}`}>
+    <Link to={base} className="sidebar-shop-link" aria-label={t('app.openShop',{name:data.shop.name})}>
      <span className="sidebar-shop-logo">
       {data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={18}/>}
      </span>
      <span className="sidebar-shop-copy">
       <strong>{data.shop.public_title||data.shop.name}</strong>
-      <small>{role==='OWNER'?(solo?'FIO Solo':'FIO GestÃ£o'):role==='BARBER'?'FIO Equipe':'Ãrea do cliente'}</small>
+      <small>{role==='OWNER'?(solo?t('role.fioSolo'):t('role.fioManagement')):role==='BARBER'?t('role.fioTeam'):t('role.clientArea')}</small>
      </span>
     </Link>
-    <button className="icon-button close-menu" aria-label="Fechar navegação" onClick={()=>setMenu(false)}><X size={20}/></button>
+    <button className="icon-button close-menu" aria-label={t('app.closeNavigation')} onClick={()=>setMenu(false)}><X size={20}/></button>
    </div>
-   <p className="nav-label">NAVEGAÇÃO</p>
-   <nav ref={sidebarNavRef} aria-label="Navegação principal">{items.filter(n=>!['/configuracoes','/suporte'].includes(n.path)).map(n=><NavLink data-tour={`nav${n.path.replace('/','-')}`} end={n.path===''} className={({isActive})=>`nav-link ${isActive?'active':''}`} to={base+n.path} key={n.path}><n.icon size={19} strokeWidth={1.6}/>{navLabel(n.path)}{n.path==='/assistente'&&<span className="ai-tag">IA</span>}</NavLink>)}</nav>
+   <p className="nav-label">{t('nav.navigation')}</p>
+   <nav ref={sidebarNavRef} aria-label={t('app.mainNavigation')}>{items.filter(n=>!['/configuracoes','/suporte'].includes(n.path)).map(n=><NavLink data-tour={`nav${n.path.replace('/','-')}`} end={n.path===''} className={({isActive})=>`nav-link ${isActive?'active':''}`} to={base+n.path} key={n.path}><n.icon size={19} strokeWidth={1.6}/>{navLabel(n.path)}{n.path==='/assistente'&&<span className="ai-tag">IA</span>}</NavLink>)}</nav>
    <div className="sidebar-bottom">
     <NavLink className="nav-link" to={`${base}/configuracoes`}>
-     <Settings size={19}/>Configurações
+     <Settings size={19}/>{t('nav.settings')}
     </NavLink>
     <NavLink className="nav-link" to={`${base}/suporte`}>
      <CircleHelp size={19}/>{t("nav.support")}
     </NavLink>
-    {role!=='CLIENT'&&memberships&&memberships.length>1?<label className="field">Trocar barbearia<select value={shopId} onChange={e=>{sessionStorage.setItem('fio-shop',e.target.value);setShopId(e.target.value);}}>{memberships.map(m=><option key={m.barbershop_id} value={m.barbershop_id}>{m.role} · {m.barbershop_id.slice(0,8)}</option>)}</select></label>:null}
+    {role!=='CLIENT'&&memberships&&memberships.length>1?<label className="field">{t('app.switchBusiness')}<select value={shopId} onChange={e=>{sessionStorage.setItem('fio-shop',e.target.value);setShopId(e.target.value);}}>{memberships.map(m=><option key={m.barbershop_id} value={m.barbershop_id}>{m.role} · {m.barbershop_id.slice(0,8)}</option>)}</select></label>:null}
     <button className="nav-link theme-toggle" onClick={toggleTheme}>{theme==='dark'?<Sun size={19}/>:<Moon size={19}/>} {theme==='dark'?t('nav.lightTheme'):t('nav.darkTheme')}</button>
     <div className="profile">
-     <NavLink data-tour="profile" className="profile-account" to={`${base}/configuracoes`} aria-label="Abrir perfil e configurações">
+     <NavLink data-tour="profile" className="profile-account" to={`${base}/configuracoes`} aria-label={t('app.openProfile')}>
       <span className="avatar small">{data.membership.avatar_url?<img src={data.membership.avatar_url} alt=""/>:data.membership.display_name.split(' ').map(n=>n[0]).slice(0,2).join('')}</span>
-      <span className="profile-copy"><strong>{data.membership.display_name}</strong><small>{role==='OWNER'?(solo?'Barbeiro solo':'Responsável'):role==='BARBER'?'Barbeiro':'Cliente'} · Configurações</small></span>
+      <span className="profile-copy"><strong>{data.membership.display_name}</strong><small>{role==='OWNER'?(solo?t('role.solo'):t('role.owner')):role==='BARBER'?t('role.barber'):t('role.client')} · {t('nav.settings')}</small></span>
      </NavLink>
-     <button className="icon-button" aria-label="Sair" title="Sair" onClick={()=>{if(demo)navigate('/login');else void supabase?.auth.signOut();}}><LogOut size={17}/></button>
+     <button className="icon-button" aria-label={t('app.signOut')} title={t('app.signOut')} onClick={()=>{if(demo)navigate('/login');else void supabase?.auth.signOut();}}><LogOut size={17}/></button>
     </div>
    </div>
   </aside>
   <div className="workspace" inert={menu}>
-   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?'Configurações':items.find(n=>n.path===page)?.label??'Visão geral'}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:role==='BARBER'?<span className="plan-badge">FIO {data.plan}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?'Usar tema claro':'Usar tema escuro'} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label="Abrir menu" onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
+   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?t('nav.settings'):navLabel(page)}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:role==='BARBER'?<span className="plan-badge">FIO {data.plan}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?t('app.useLightTheme'):t('app.useDarkTheme')} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label={t('app.openMenu')} onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
    <main key={`${base}:${shopId}:${page}`} className={page==='/assistente'?'chat-main assistant-chat-main':'main-content'}>{content}</main>
-   <nav className="bottom-nav" aria-label="Navegação mobile">
-    <NavLink end to={base}><LayoutDashboard size={21}/><span>Início</span></NavLink>
+   <nav className="bottom-nav" aria-label={t('app.mobileNavigation')}>
+    <NavLink end to={base}><LayoutDashboard size={21}/><span>{t('nav.home')}</span></NavLink>
     <NavLink to={base+'/agenda'}><CalendarDays size={21}/><span>{t("nav.agenda")}</span></NavLink>
-    {planAllows(data.plan,'assistant')?<NavLink to={base+'/assistente'}><Sparkles size={21}/><span>{t("nav.assistant")}</span></NavLink>:<NavLink to={base+'/servicos'}><Scissors size={21}/><span>Serviços</span></NavLink>}
-    <button className={menu||!['','/agenda','/assistente','/servicos'].includes(page)?'active':''} aria-label="Mais opções" aria-expanded={menu} onClick={()=>setMenu(!menu)}><MoreHorizontal size={21}/><span>{t("nav.more")}</span></button>
+    {planAllows(data.plan,'assistant')?<NavLink to={base+'/assistente'}><Sparkles size={21}/><span>{t("nav.assistant")}</span></NavLink>:<NavLink to={base+'/servicos'}><Scissors size={21}/><span>{t('nav.services')}</span></NavLink>}
+    <button className={menu||!['','/agenda','/assistente','/servicos'].includes(page)?'active':''} aria-label={t('app.moreOptions')} aria-expanded={menu} onClick={()=>setMenu(!menu)}><MoreHorizontal size={21}/><span>{t("nav.more")}</span></button>
    </nav>
   </div>
   <GuidedTour key={`${shopId}:${data.membership.user_id}:${role}`} userId={data.membership.user_id} shopId={shopId} role={role} base={base} openMenu={setMenu}/>
-  {toast&&<div className={`toast ${/não foi|falh|erro|indisponível|expir|aguarde|pendente/i.test(toast)?'is-error':'is-success'}`} role="status">{toast}<button aria-label="Fechar aviso" onClick={()=>setToast('')}><X size={16}/></button></div>}
+  {toast&&<div className={`toast ${/não foi|falh|erro|indisponível|expir|aguarde|pendente/i.test(toast)?'is-error':'is-success'}`} role="status">{toast}<button aria-label={t('app.closeNotice')} onClick={()=>setToast('')}><X size={16}/></button></div>}
  </div>;
 }
 

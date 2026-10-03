@@ -14,5 +14,13 @@ describe('notificações: transporte e destino',()=>{
   expect(JSON.parse(send.mock.calls[0][1])).toMatchObject({title:'Sua agenda',body:'Há uma atualização na sua agenda. Abra para conferir.'});
   expect(rpc).toHaveBeenCalledWith('finish_appointment_push',{p_queue:'q2',p_device:'d2',p_status:'expired'});
  });
+ it('localiza o push no idioma salvo do destinatário',async()=>{
+  for(const k of ['VAPID_PUBLIC_KEY','VAPID_PRIVATE_KEY','VAPID_SUBJECT'])vi.stubEnv(k,'test-only');
+  const items=[{queueId:'q-en',deviceId:'d-en',endpoint:'https://fcm.googleapis.com/en',keys:{p256dh:'public',auth:'test'},tag:'fio-appointment-en',url:'/client/agenda?appointment=test',kind:'reminder',locale:'en'}];
+  const rpc=vi.fn().mockImplementation(async(name:string)=>({data:name==='claim_appointment_push'?items:null,error:null}));
+  const send=vi.fn().mockResolvedValue({});
+  expect(await dispatchAppointmentPush({rpc} as unknown as SupabaseClient,send)).toEqual({configured:true,sent:1,failed:0});
+  expect(JSON.parse(send.mock.calls[0][1])).toMatchObject({title:'Your schedule',body:'You have an appointment in the next 24 hours. Open your schedule.'});
+ });
  it('nega redirecionamentos externos e preserva apenas destino de agenda validado',()=>{const id='00000000-0000-4000-8000-000000000001',path=`/client/agenda?appointment=${id}&shopId=${id}`;expect(appointmentLink(path)).toBe(path);for(const value of ['https://evil.test'+path,'//evil.test'+path,'/owner/configuracoes','javascript:alert(1)','/client/agenda?appointment=x'])expect(appointmentLink(value)).toBeNull();});
 });

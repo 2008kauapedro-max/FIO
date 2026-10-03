@@ -4,6 +4,7 @@ import type {WorkspaceProps} from '../pages/Workspace';
 import {dayKey} from '../pages/Workspace';
 import {api} from '../lib/api';
 import {Field} from './ui';
+import {useI18n} from '../i18n';
 
 type Period={
  total:number;
@@ -13,14 +14,7 @@ type Period={
  items:Appointment[]
 };
 
-const statusLabel={
- scheduled:'Agendado',
- confirmed:'Confirmado',
- in_service:'Em atendimento',
- completed:'Concluído',
- cancelled:'Cancelado',
- no_show:'Falta'
-} as const;
+
 
 export function AppointmentPeriod(
  p:WorkspaceProps&{
@@ -29,6 +23,7 @@ export function AppointmentPeriod(
  }
 ){
 
+ const {t,formatDate}=useI18n();
  const zone=p.data.shop.timezone;
 
  const [month,setMonth]=
@@ -128,14 +123,13 @@ export function AppointmentPeriod(
   <div className="section-title">
 
    <div>
-    <h2>Movimentação do mês</h2>
+    <h2>{t('period.title')}</h2>
     <small className="muted">
-     Ativos ficam na agenda do dia.
-     Concluídos e cancelados ficam no histórico.
+     {t('period.desc')}
     </small>
    </div>
 
-   <Field label="Período">
+   <Field label={t('period.label')}>
     <input
      type="month"
      value={month}
@@ -152,7 +146,7 @@ export function AppointmentPeriod(
    :!value?
 
    <p role="status">
-    Consultando período…
+    {t('period.loading')}
    </p>
 
    :<>
@@ -160,10 +154,10 @@ export function AppointmentPeriod(
     <dl className="period-counts">
 
      {[
-      ['Agendamentos',value.total],
-      ['Concluídos',value.completed],
-      ['Cancelamentos',value.cancelled],
-      ['Faltas',value.noShow]
+      [t('period.total'),value.total],
+      [t('period.completed'),value.completed],
+      [t('period.cancelled'),value.cancelled],
+      [t('period.noShow'),value.noShow]
      ].map(([label,count])=>
 
       <div key={label}>
@@ -178,12 +172,12 @@ export function AppointmentPeriod(
     <details>
 
      <summary>
-      Ver histórico do mês
+      {t('period.history')}
      </summary>
 
      {value.total>value.items.length&&
       <p>
-       Exibindo {value.items.length} de {value.total}.
+       {t('period.showing',{shown:value.items.length,total:value.total})}
       </p>
      }
 
@@ -204,7 +198,7 @@ export function AppointmentPeriod(
          :undefined;
 
        const name=
-        customer?.name??'Cliente';
+        customer?.name??t('period.client');
 
        return <button
         key={a.id}
@@ -223,7 +217,7 @@ export function AppointmentPeriod(
            />
           :name
             .split(' ')
-            .map(x=>x[0])
+            .map((x:string)=>x[0])
             .slice(0,2)
             .join('')
          }
@@ -235,33 +229,25 @@ export function AppointmentPeriod(
          <strong>
           {name.trim().split(/\s+/)[0]}
           {' · '}
-          {new Date(a.starts_at)
-           .toLocaleString(
-            'pt-BR',
-            {
-             timeZone:zone,
-             dateStyle:'short',
-             timeStyle:'short'
-            }
-           )}
+          {formatDate(a.starts_at,{timeZone:zone,dateStyle:'short',timeStyle:'short'})}
          </strong>
 
          <small>
           {p.data.services.find(
            s=>s.id===a.service_id
-          )?.name??'Serviço'}
+          )?.name??t('period.service')}
 
           {' · '}
 
           {p.data.team.find(
            t=>t.user_id===a.barber_id
-          )?.display_name??'Profissional'}
+          )?.display_name??t('period.professional')}
          </small>
 
         </span>
 
         <span className={`status ${a.status}`}>
-         {statusLabel[a.status]}
+         {t(`status.${a.status}`)}
         </span>
 
        </button>;
@@ -270,7 +256,7 @@ export function AppointmentPeriod(
 
       {!value.total&&
        <p>
-        Nenhum agendamento neste período.
+        {t('period.empty')}
        </p>
       }
 

@@ -65,15 +65,12 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     const localeOption = getLocaleOption(initialLocale);
 
     const storedRegion = readStorage(STORAGE_KEYS.region, "");
-    const storedCurrency = readStorage<SupportedCurrency | "">(STORAGE_KEYS.currency, "");
-
     setLocaleState(initialLocale);
     setRegionState(storedRegion || localeOption.defaultRegion || DEFAULT_REGION);
-    setCurrencyState(
-      (storedCurrency as SupportedCurrency) ||
-      localeOption.defaultCurrency ||
-      DEFAULT_CURRENCY
-    );
+    setCurrencyState(DEFAULT_CURRENCY);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEYS.currency, DEFAULT_CURRENCY);
+    }
 
     document.documentElement.lang = initialLocale;
     setReady(true);
@@ -92,7 +89,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
       if (updateDefaults) {
         setRegionState(localeOption.defaultRegion);
-        setCurrencyState(localeOption.defaultCurrency);
+        setCurrencyState(DEFAULT_CURRENCY);
       }
 
       if (persistLocal && typeof window !== "undefined") {
@@ -102,10 +99,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
             STORAGE_KEYS.region,
             localeOption.defaultRegion
           );
-          window.localStorage.setItem(
-            STORAGE_KEYS.currency,
-            localeOption.defaultCurrency
-          );
+          window.localStorage.setItem(STORAGE_KEYS.currency, DEFAULT_CURRENCY);
         }
       }
     },
@@ -154,10 +148,12 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       options: Intl.DateTimeFormatOptions = {}
     ) => {
       const date = value instanceof Date ? value : new Date(value);
-      return new Intl.DateTimeFormat(dateLocale, {
-        dateStyle: "short",
-        ...options,
-      }).format(date);
+      const hasExplicitDate = Boolean(
+        options.dateStyle || options.weekday || options.era || options.year ||
+        options.month || options.day
+      );
+      const normalized = hasExplicitDate ? options : { dateStyle: "short" as const, ...options };
+      return new Intl.DateTimeFormat(dateLocale, normalized).format(date);
     },
     [dateLocale]
   );
@@ -168,11 +164,9 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       options: Intl.DateTimeFormatOptions = {}
     ) => {
       const date = value instanceof Date ? value : new Date(value);
-      return new Intl.DateTimeFormat(dateLocale, {
-        hour: "2-digit",
-        minute: "2-digit",
-        ...options,
-      }).format(date);
+      const hasExplicitTime = Boolean(options.timeStyle || options.hour || options.minute || options.second);
+      const normalized = hasExplicitTime ? options : { hour: "2-digit" as const, minute: "2-digit" as const, ...options };
+      return new Intl.DateTimeFormat(dateLocale, normalized).format(date);
     },
     [dateLocale]
   );

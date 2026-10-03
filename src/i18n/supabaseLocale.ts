@@ -6,6 +6,7 @@ export type LocalePreferences = {
   preferred_locale: SupportedLocale;
   preferred_region: string;
   preferred_currency: SupportedCurrency;
+  explicit?: boolean;
 };
 
 export async function loadLocalePreferences(
@@ -15,7 +16,7 @@ export async function loadLocalePreferences(
 ): Promise<LocalePreferences | null> {
   const { data, error } = await supabase
     .from("memberships")
-    .select("preferred_locale, preferred_region, preferred_currency")
+    .select("preferred_locale, preferred_region, preferred_currency, locale_preference_set")
     .eq("barbershop_id", shopId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -27,6 +28,7 @@ export async function loadLocalePreferences(
     preferred_locale: isSupportedLocale(data.preferred_locale) ? data.preferred_locale : "pt-BR",
     preferred_region: /^[A-Z]{2}$/.test(data.preferred_region || "") ? data.preferred_region : "BR",
     preferred_currency: (data.preferred_currency || "BRL") as SupportedCurrency,
+    explicit: Boolean(data.locale_preference_set),
   };
 }
 

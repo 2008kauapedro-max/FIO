@@ -20,9 +20,9 @@ test('old shop-only link creates client and retains branding on navigation/reloa
  await page.goto('/login?shop=barbearia-aurora');
  await expect(page.locator('.client-auth-brand')).toContainText('Barbearia Aurora');
  await page.screenshot({path:`docs/reorganization-evidence/auth-client-login-${info.project.name}.png`});
- await page.getByRole('button',{name:'Criar uma conta',exact:true}).click();
- await expect(page.getByRole('heading',{name:'Crie sua conta de cliente.'})).toBeVisible();
- await page.getByLabel('E-mail',{exact:true}).fill('client@example.test');await page.getByLabel('Senha',{exact:true}).fill('test-password');
+ await page.getByRole('button',{name:'Criar conta na Barbearia Aurora',exact:true}).click();
+ await expect(page.getByRole('heading',{name:'Faça parte da Barbearia Aurora.'})).toBeVisible();
+ await page.getByLabel('E-mail',{exact:true}).fill('client@example.test');await page.getByLabel('Senha',{exact:true}).fill('test-password');await page.getByLabel('Telefone',{exact:true}).fill('(61) 99999-9999');
  await page.getByRole('button',{name:'Criar conta',exact:true}).click();
  expect(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('test-signup')!).options.emailRedirectTo)).toContain('audience=client');
  await page.getByRole('button',{name:'Já tenho uma conta'}).click();
@@ -43,7 +43,7 @@ test('Google callback preserves client audience and shop; owner stays owner',asy
  await page.goto('/login?shop=barbearia-aurora');await page.getByRole('button',{name:'Continuar com Google'}).click();
  const callback=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('test-oauth')!).options.redirectTo);
  expect(callback).toContain('audience=client');expect(callback).toContain('shop=barbearia-aurora');
- await page.goto('/login?audience=owner&mode=signup');await expect(page.getByRole('heading',{name:'Seu próximo capítulo.'})).toBeVisible();await expect(page.locator('.client-auth-brand')).toHaveCount(0);
+ await page.goto('/login?audience=owner&mode=signup');await expect(page.getByRole('heading',{name:'Crie sua barbearia com o FIO.'})).toBeVisible();await expect(page.locator('.client-auth-brand')).toHaveCount(0);
 });
 test('public portal sends visitor to client login',async({page})=>{
  await page.goto('/barbearia-aurora');await page.getByRole('button',{name:'Área do cliente'}).click();await expect(page).toHaveURL(/login\?shop=barbearia-aurora&audience=client/);
@@ -58,7 +58,7 @@ test('notification destination survives login and opens authorized appointment',
  await page.getByLabel('E-mail',{exact:true}).fill('client@example.test');await page.getByLabel('Senha',{exact:true}).fill('test-password');
  await page.getByRole('button',{name:'Entrar',exact:true}).click();
  await expect(page).toHaveURL(new RegExp(`/client/agenda\\?appointment=${appointment.id}`));
- await expect(page.getByRole('dialog')).toContainText('Detalhes do atendimento');
+ await expect(page.getByRole('dialog')).toContainText('Seu agendamento');
 });
 test('staff account cannot enter management through a client link',async({page})=>{
  await page.route('**/api/memberships',r=>r.fulfill({json:[{...data.membership,role:'OWNER'}]}));

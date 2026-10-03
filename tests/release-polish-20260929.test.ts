@@ -10,7 +10,7 @@ describe('acabamento do lançamento 2026-09-29',()=>{
   expect(bootstrap).toContain('__fioInstallPrompt');
   expect(bootstrap).toContain('fio-install-ready');
   expect(portal.indexOf("installPlatform('windows')")).toBeLessThan(portal.indexOf("installPlatform('android')"));
-  expect(portal).toContain('Escolha o modelo do seu aparelho e faça o download.');
+  expect(portal).toContain("t('public.chooseDevice')");
   expect(css).toContain('.booking-app-card-platforms .booking-platform-buttons button{grid-column:auto!important');
  });
 
@@ -26,9 +26,13 @@ describe('acabamento do lançamento 2026-09-29',()=>{
   const server=readFileSync(resolve('server/app.ts'),'utf8');
   const auth=readFileSync(resolve('src/pages/Auth.tsx'),'utf8');
   expect(workspace).toContain('HomeCarousel');
-  expect(workspace).toContain('Destaques do FIO');
+  expect(workspace).toContain("t('home.carouselAria')");
   expect(server).toContain("rpc('claim_account_phone'");
   expect(auth).toContain('account_phone');
-  expect(auth).toContain('Este e-mail já está vinculado a uma conta FIO.');
+  expect(auth).toContain("t('auth.existingAccount')");
+  const dict=readFileSync(resolve('src/i18n/dictionaries.ts'),'utf8');
+  expect(dict).toContain('Escolha o modelo do seu aparelho e faça o download.');
+  expect(dict).toContain('Destaques do FIO');
+  expect(dict).toContain('Este e-mail já está vinculado a uma conta FIO.');
  });
 });

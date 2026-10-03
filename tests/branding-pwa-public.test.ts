@@ -28,9 +28,14 @@ describe('branding público e PWA por barbearia',()=>{
  it('explica a marca FIO e identifica o cliente pela barbearia',()=>{
   const portal=readFileSync(resolve('src/pages/PublicPortal.tsx'),'utf8');
   const auth=readFileSync(resolve('src/pages/Auth.tsx'),'utf8');
-  expect(portal).toContain('Crie sua barbearia com o FIO.');
-  expect(portal).toContain('Começar agora');
-  expect(auth).toContain('Faça parte da ${clientBrand}.');
-  expect(auth).toContain('Criar minha barbearia');
+  expect(portal).toContain("t('public.createShop')");
+  expect(portal).toContain("t('public.startNow')");
+  expect(auth).toContain("t('auth.headingClientSignup',{name:clientBrand})");
+  expect(auth).toContain("t('auth.createMyShop')");
+  const dict=readFileSync(resolve('src/i18n/dictionaries.ts'),'utf8');
+  expect(dict).toContain('Crie sua barbearia com o FIO.');
+  expect(dict).toContain('Começar agora');
+  expect(dict).toContain('Faça parte da {{name}}.');
+  expect(dict).toContain('Criar minha barbearia');
  });
 });

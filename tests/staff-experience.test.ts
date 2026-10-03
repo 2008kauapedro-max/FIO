@@ -23,7 +23,7 @@ describe('experiência diária da equipe',()=>{
 
  it('mostra próximo atendimento na visão geral',()=>{
   expect(workspace)
-   .toContain('PRÓXIMO ATENDIMENTO');
+   .toContain("t('home.nextService')");
 
   expect(workspace)
    .toContain('next-appointment-card');
@@ -31,13 +31,13 @@ describe('experiência diária da equipe',()=>{
 
  it('usa primeiro nome e perfil do cliente',()=>{
   expect(workspace)
-   .toContain('firstName(customer?.name)');
+   .toContain("firstName(customer?.name,t('ws.client'))");
 
   expect(workspace)
-   .toContain('Perfil do cliente');
+   .toContain("t('staffAgenda.customerProfile')");
 
   expect(workspace)
-   .toContain('Chamar no WhatsApp');
+   .toContain("t('staffAgenda.whatsapp')");
  });
 
  it('remove etapa manual de iniciar',()=>{
@@ -45,7 +45,7 @@ describe('experiência diária da equipe',()=>{
    .not.toContain('Iniciar atendimento');
 
   expect(workspace)
-   .toContain('Finalizar atendimento');
+   .toContain("t('staffAgenda.finish')");
  });
 
  it('histórico possui avatar e cards próprios',()=>{
@@ -53,7 +53,14 @@ describe('experiência diária da equipe',()=>{
    .toContain('period-client-avatar');
 
   expect(period)
-   .toContain('Ver histórico do mês');
+   .toContain("t('period.history')");
+
+  const dict=readFileSync('src/i18n/dictionaries.ts','utf8');
+  expect(dict).toContain('PRÓXIMO ATENDIMENTO');
+  expect(dict).toContain('Perfil do cliente');
+  expect(dict).toContain('Chamar no WhatsApp');
+  expect(dict).toContain('Finalizar atendimento');
+  expect(dict).toContain('Ver histórico do mês');
  });
 
  it('remove textura e corrige fundos',()=>{

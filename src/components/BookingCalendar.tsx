@@ -1,3 +1,4 @@
+import {useI18n} from '../i18n';
 import {useEffect,useMemo,useState} from 'react';
 import {ChevronLeft,ChevronRight,Clock3} from 'lucide-react';
 import {api} from '../lib/api';
@@ -5,11 +6,7 @@ import {api} from '../lib/api';
 type Availability={day:string;available_count:number};
 type Period='morning'|'afternoon'|'night';
 
-const labels:Record<Period,string>={
- morning:'Manhã',
- afternoon:'Tarde',
- night:'Noite'
-};
+const labelKeys:Record<Period,string>={morning:'calendar.morning',afternoon:'calendar.afternoon',night:'calendar.night'};
 
 function moveMonth(value:string,amount:number){
  const [year,month]=value.split('-').map(Number);
@@ -17,14 +14,6 @@ function moveMonth(value:string,amount:number){
  return `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,'0')}`;
 }
 
-function monthName(value:string){
- const [year,month]=value.split('-').map(Number);
- return new Intl.DateTimeFormat('pt-BR',{
-  month:'long',
-  year:'numeric',
-  timeZone:'UTC'
- }).format(new Date(Date.UTC(year,month-1,1)));
-}
 
 export function BookingCalendar(p:{
  shopId:string;
@@ -41,6 +30,7 @@ export function BookingCalendar(p:{
  onSlotChange:(value:string)=>void;
  onRefresh:()=>void;
 }){
+ const {t,locale,formatTime}=useI18n();
  const dateFormatter=new Intl.DateTimeFormat('en-CA',{
   timeZone:p.zone,
   year:'numeric',
@@ -115,7 +105,7 @@ export function BookingCalendar(p:{
    night:[]
   };
 
-  const formatter=new Intl.DateTimeFormat('pt-BR',{
+  const formatter=new Intl.DateTimeFormat(locale==='en'?'en-US':locale,{
    timeZone:p.zone,
    hour:'2-digit',
    hour12:false
@@ -159,12 +149,7 @@ export function BookingCalendar(p:{
   )
  ];
 
- const clock=(value:string)=>
-  new Date(value).toLocaleTimeString('pt-BR',{
-   timeZone:p.zone,
-   hour:'2-digit',
-   minute:'2-digit'
-  });
+ const clock=(value:string)=>formatTime(value,{timeZone:p.zone,hour:'2-digit',minute:'2-digit'});
 
  const previous=moveMonth(month,-1);
  const next=moveMonth(month,1);
@@ -178,14 +163,14 @@ export function BookingCalendar(p:{
     className="icon-button"
     disabled={previous<today.slice(0,7)}
     onClick={()=>setMonth(previous)}
-    aria-label="Mês anterior"
+    aria-label={t('calendar.previousMonth')}
    >
     <ChevronLeft/>
    </button>
 
    <div>
-    <span className="eyebrow">DATA DO AGENDAMENTO</span>
-    <strong>{monthName(month)}</strong>
+    <span className="eyebrow">{t('calendar.dateEyebrow')}</span>
+    <strong>{new Intl.DateTimeFormat(locale==='en'?'en-US':locale,{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(Date.UTC(year,monthNumber-1,1)))}</strong>
    </div>
 
    <button
@@ -193,7 +178,7 @@ export function BookingCalendar(p:{
     className="icon-button"
     disabled={next>maxDate.slice(0,7)}
     onClick={()=>setMonth(next)}
-    aria-label="Próximo mês"
+    aria-label={t('calendar.nextMonth')}
    >
     <ChevronRight/>
    </button>
@@ -201,8 +186,7 @@ export function BookingCalendar(p:{
   </div>
 
   <div className="booking-calendar-weekdays">
-   {['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
-    .map(day=><span key={day}>{day}</span>)}
+   {['calendar.mon','calendar.tue','calendar.wed','calendar.thu','calendar.fri','calendar.sat','calendar.sun'].map(key=><span key={key}>{t(key)}</span>)}
   </div>
 
   <div className="booking-calendar-grid">
@@ -242,23 +226,23 @@ export function BookingCalendar(p:{
   </div>
 
   <div className="calendar-legend">
-   <span><i className="available"/>Tem horário</span>
-   <span><i className="full"/>Lotado</span>
+   <span><i className="available"/>{t('calendar.available')}</span>
+   <span><i className="full"/>{t('calendar.full')}</span>
 
    {monthLoading&&
-    <small>Atualizando disponibilidade…</small>}
+    <small>{t('calendar.updating')}</small>}
   </div>
 
   {monthError&&
    <p className="booking-calendar-warning">
-    Não foi possível carregar os indicadores do mês.
+    {t('calendar.monthError')}
    </p>}
 
   <div className="booking-time-section">
 
    <div>
-    <span className="eyebrow">HORÁRIOS DISPONÍVEIS</span>
-    <h3>Escolha o melhor horário</h3>
+    <span className="eyebrow">{t('calendar.timesEyebrow')}</span>
+    <h3>{t('calendar.chooseTime')}</h3>
    </div>
 
    <div className="booking-period-tabs">
@@ -272,7 +256,7 @@ export function BookingCalendar(p:{
        className={period===key?'selected':''}
        onClick={()=>setPeriod(key)}
       >
-       {labels[key]}
+       {t(labelKeys[key])}
        <small>{grouped[key].length||'—'}</small>
       </button>
      )}
@@ -283,7 +267,7 @@ export function BookingCalendar(p:{
 
     {p.loading?
 
-     <p role="status">Buscando horários…</p>
+     <p role="status">{t('calendar.searching')}</p>
 
      :grouped[period].length?
 
@@ -302,9 +286,9 @@ export function BookingCalendar(p:{
 
      <div className="booking-no-slots">
       <Clock3 size={21}/>
-      <strong>Nenhum horário neste período</strong>
+      <strong>{t('calendar.nonePeriod')}</strong>
       <small>
-       Escolha outro período, dia ou profissional.
+       {t('calendar.nonePeriodDesc')}
       </small>
      </div>
 
@@ -314,7 +298,7 @@ export function BookingCalendar(p:{
 
    {!p.loading&&!p.slots.length&&!p.error&&
     <p className="booking-calendar-empty">
-     Este dia não possui horários livres.
+     {t('calendar.noneDay')}
     </p>}
 
    {p.error&&
@@ -326,7 +310,7 @@ export function BookingCalendar(p:{
     disabled={p.loading}
     onClick={p.onRefresh}
    >
-    Atualizar horários
+    {t('calendar.refresh')}
    </button>
 
   </div>

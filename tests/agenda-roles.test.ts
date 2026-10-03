@@ -22,6 +22,8 @@ describe('agenda premium',()=>{
    'utf8'
   );
 
+ const dict=readFileSync(resolve('src/i18n/dictionaries.ts'),'utf8');
+
  const sql=
   readFileSync(
    resolve(
@@ -36,23 +38,28 @@ describe('agenda premium',()=>{
    .toContain("const lockedProvider=role==='BARBER'");
 
   expect(booking)
-   .toContain('Escolha o profissional');
+   .toContain("t('booking.chooseProfessional')");
+  expect(dict).toContain('Escolha o profissional');
 
  });
 
  it('usa calendário mensal',()=>{
 
   expect(calendar)
-   .toContain('DATA DO AGENDAMENTO');
+   .toContain("t('calendar.dateEyebrow')");
 
   expect(calendar)
-   .toContain('Manhã');
+   .toContain("morning:'calendar.morning'");
 
   expect(calendar)
-   .toContain('Tarde');
+   .toContain("afternoon:'calendar.afternoon'");
 
   expect(calendar)
-   .toContain('Noite');
+   .toContain("night:'calendar.night'");
+  expect(dict).toContain('DATA DO AGENDAMENTO');
+  expect(dict).toContain('Manhã');
+  expect(dict).toContain('Tarde');
+  expect(dict).toContain('Noite');
 
   expect(calendar)
    .toContain('/slots/month?');
@@ -62,29 +69,34 @@ describe('agenda premium',()=>{
  it('cliente vê alterações e status',()=>{
 
   expect(workspace)
-   .toContain('Agendado');
+   .toContain('t(`status.${');
+  expect(dict).toContain('\"status.scheduled\":\"Agendado\"');
 
   expect(workspace)
-   .toContain('Alterações recentes');
+   .toContain("t('clientAgenda.recent')");
 
   expect(workspace)
-   .toContain('Agendar outro horário');
+   .toContain("t('clientAgenda.bookAnother')");
+  expect(dict).toContain('Alterações recentes');
+  expect(dict).toContain('Agendar outro horário');
 
  });
 
  it('equipe separa cancelados e confirma atendimento',()=>{
 
   expect(workspace)
-   .toContain('Histórico do dia');
+   .toContain("t('staffAgenda.history')");
 
   expect(workspace)
    .not.toContain('Confirmar horário');
 
   expect(workspace)
-   .not.not.toContain('Iniciar atendimento');
+   .not.toContain('Iniciar atendimento');
 
   expect(workspace)
-   .toContain('Finalizar atendimento');
+   .toContain("t('staffAgenda.finish')");
+  expect(dict).toContain('Histórico do dia');
+  expect(dict).toContain('Finalizar atendimento');
 
  });
 
