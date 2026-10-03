@@ -26,21 +26,14 @@ export function AuthCaptcha({onToken,attempt}:{onToken:(token:string)=>void;atte
  const container=useRef<HTMLDivElement>(null);
  const [failed,setFailed]=useState(false),[retry,setRetry]=useState(0);
  const [ready,setReady]=useState(false),[verified,setVerified]=useState(false);
- const [compact,setCompact]=useState(()=>typeof window!=='undefined'&&window.matchMedia('(max-width: 480px)').matches);
- useEffect(()=>{
-  const media=window.matchMedia('(max-width: 480px)');
-  const update=()=>setCompact(media.matches);
-  update();media.addEventListener('change',update);
-  return()=>media.removeEventListener('change',update);
- },[]);
  useEffect(()=>{
   let active=true,widget:string|undefined,api:Turnstile|undefined;
   onToken('');setFailed(false);setReady(false);setVerified(false);
   void loadTurnstile().then(turnstile=>{
    if(!active||!container.current)return;
    api=turnstile;
-   // Compact is the provider's accessible narrow layout; never crop its iframe.
-   widget=turnstile.render(container.current,{sitekey:captchaSiteKey,theme:'auto',size:compact?'compact':'flexible',execution:'render',appearance:'always',retry:'auto',refreshExpired:'auto',
+   // Flexible ocupa a largura do formulário sem deformar nem cortar o iframe.
+   widget=turnstile.render(container.current,{sitekey:captchaSiteKey,theme:'auto',size:'flexible',execution:'render',appearance:'always',retry:'auto',refreshExpired:'auto',
     callback:(token:string)=>{if(active){setFailed(false);setVerified(true);onToken(token);}},
     'expired-callback':()=>{if(active){onToken('');setVerified(false);}},
     'timeout-callback':()=>{if(active){onToken('');setVerified(false);setFailed(true);}},
@@ -49,7 +42,7 @@ export function AuthCaptcha({onToken,attempt}:{onToken:(token:string)=>void;atte
    setReady(true);
   }).catch(()=>{if(active)setFailed(true);});
   return()=>{active=false;if(widget!==undefined)api?.remove(widget);};
- },[onToken,attempt,retry,compact]);
+ },[onToken,attempt,retry]);
  return <div className="auth-captcha">
   <div className="auth-captcha-widget" ref={container}/>
   {verified&&<p className="auth-captcha-status" role="status"><span aria-hidden="true">✓</span> {t('captcha.verified')}</p>}

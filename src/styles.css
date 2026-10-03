@@ -2405,3 +2405,624 @@ body:has(.workspace),
  .simple-appointment-person b{font-size:.94rem}
  .simple-appointment-person small{font-size:.76rem}
 }
+
+
+/* FIO_ANNUAL_FIRST_STYLE_20261003 */
+.fio-cycle-picker .annual-priority{
+ position:relative;
+}
+.fio-cycle-picker .annual-priority.active{
+ border-color:color-mix(in srgb,var(--text) 62%,var(--border));
+ box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 28%,transparent);
+}
+.fio-cycle-picker b{
+ display:flex;
+ align-items:center;
+ gap:8px;
+ flex-wrap:wrap;
+}
+.fio-cycle-badge{
+ display:inline-flex;
+ align-items:center;
+ min-height:20px;
+ padding:3px 7px;
+ border-radius:999px;
+ background:var(--text);
+ color:var(--bg);
+ font-size:.58rem;
+ font-style:normal;
+ font-weight:700;
+ letter-spacing:.04em;
+ text-transform:uppercase;
+}
+.fio-annual-priority-note{
+ margin:10px 0 0;
+ color:var(--muted);
+ font-size:.76rem;
+ line-height:1.5;
+}
+.fio-pricing-compact .fio-saving{
+ font-weight:650;
+}
+@media(max-width:600px){
+ .fio-cycle-badge{font-size:.54rem;padding:3px 6px}
+ .fio-annual-priority-note{font-size:.72rem}
+}
+
+
+/* FIO_UI_FIXES_20261003 */
+
+/* Agenda: nunca ultrapassa a viewport e não "dança". */
+.app-shell:has(.simple-agenda-shell),
+.app-shell:has(.simple-agenda-shell) .workspace,
+.app-shell:has(.simple-agenda-shell) .main-content{
+ max-width:100%;
+ overflow-x:hidden;
+}
+.simple-agenda-shell{
+ width:100%;
+ max-width:760px;
+ min-width:0;
+ overflow-x:hidden;
+ touch-action:pan-y pinch-zoom;
+ padding-bottom:0;
+}
+.simple-agenda-head{
+ width:100%;
+ min-width:0;
+ align-items:flex-start;
+}
+.simple-agenda-head>div{
+ min-width:0;
+ flex:1 1 auto;
+}
+.simple-refresh{
+ position:relative;
+ flex:0 0 42px;
+ width:42px!important;
+ min-width:42px!important;
+ max-width:42px!important;
+ height:42px!important;
+ min-height:42px!important;
+ padding:0!important;
+ overflow:hidden;
+ white-space:nowrap;
+}
+.simple-refresh svg{
+ display:block;
+ margin:auto;
+ flex:0 0 auto;
+}
+.simple-agenda-tabs,
+.simple-agenda-tabs-top{
+ position:relative;
+ inset:auto;
+ bottom:auto;
+ z-index:2;
+ width:100%;
+ min-width:0;
+ display:grid;
+ grid-template-columns:repeat(3,minmax(0,1fr));
+ margin:0 0 20px;
+ padding:0;
+ border-top:0;
+ border-bottom:1px solid var(--border);
+ background:transparent;
+ backdrop-filter:none;
+}
+.simple-agenda-tabs button{
+ min-width:0;
+ min-height:48px;
+ padding:0 6px;
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+}
+.simple-agenda-tabs button.active:before{
+ top:auto;
+ bottom:-1px;
+}
+.simple-agenda-view{
+ width:100%;
+ min-width:0;
+ animation:fioAgendaViewIn .18s ease-out;
+}
+@keyframes fioAgendaViewIn{
+ from{opacity:.55;transform:translateX(5px)}
+ to{opacity:1;transform:translateX(0)}
+}
+.simple-new-booking{
+ margin-bottom:22px;
+}
+.simple-agenda-list{
+ padding-bottom:0!important;
+}
+
+/* Reativa a navegação principal do aplicativo. */
+.app-shell:has(.simple-agenda-shell) .bottom-nav{
+ display:flex!important;
+}
+
+/* Período de cobrança: dois cards = duas colunas completas. */
+.fio-cycle-picker{
+ width:100%;
+ grid-template-columns:repeat(2,minmax(0,1fr))!important;
+}
+.fio-cycle-picker>button{
+ width:100%;
+ min-width:0;
+}
+.fio-cycle-picker>button>span:last-child{
+ min-width:0;
+}
+
+/* Configurações: seções limpas, sem atalhos repetidos. */
+.settings-shortcuts{
+ display:none!important;
+}
+.settings-theme-row{
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ gap:18px;
+ min-height:70px;
+ padding:14px 0;
+}
+.settings-theme-row>div{
+ min-width:0;
+}
+.settings-theme-row strong,
+.settings-theme-row small{
+ display:block;
+}
+.settings-theme-row small{
+ margin-top:5px;
+ color:var(--muted);
+ font-size:.75rem;
+ line-height:1.4;
+}
+.settings-theme-switch{
+ position:relative;
+ flex:0 0 56px;
+ width:56px;
+ height:30px;
+ padding:0;
+ border:1px solid var(--border);
+ border-radius:999px;
+ background:var(--surface-3);
+ transition:background .22s ease,border-color .22s ease;
+}
+.settings-theme-switch span{
+ position:absolute;
+ top:3px;
+ left:3px;
+ width:22px;
+ height:22px;
+ border-radius:50%;
+ background:var(--text);
+ box-shadow:0 2px 8px #0005;
+ transition:transform .24s cubic-bezier(.2,.8,.2,1),background .22s ease;
+}
+.settings-theme-switch.is-dark span{
+ transform:translateX(26px);
+}
+.settings-theme-switch.is-light span{
+ transform:translateX(0);
+}
+.settings-help-card>.primary{
+ margin-top:8px;
+}
+
+@media(max-width:760px){
+ .app-shell:has(.simple-agenda-shell) .main-content{
+  padding:14px 14px calc(86px + env(safe-area-inset-bottom));
+ }
+ .simple-agenda-shell{
+  min-height:0;
+ }
+ .simple-agenda-tabs,
+ .simple-agenda-tabs-top{
+  position:relative!important;
+  left:auto!important;
+  right:auto!important;
+  bottom:auto!important;
+  margin:0 0 18px!important;
+  padding:0!important;
+ }
+ .app-shell:has(.simple-agenda-shell) .bottom-nav{
+  display:flex!important;
+ }
+ .fio-cycle-picker{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:10px;
+ }
+ .fio-cycle-picker>button{
+  min-height:86px;
+  padding:12px;
+ }
+ .settings-theme-row{
+  min-height:64px;
+ }
+}
+
+@media(max-width:390px){
+ .simple-agenda-tabs button{
+  font-size:.72rem;
+  padding-inline:3px;
+ }
+ .fio-cycle-picker{
+  gap:8px;
+ }
+ .fio-cycle-picker>button{
+  padding:10px;
+ }
+}
+
+
+/* FIO_SERVICES_CLEAN_20261003 */
+.service-catalog{
+ width:100%;
+ display:grid;
+ grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));
+ gap:12px;
+}
+.service-card-clean{
+ min-width:0;
+ display:grid;
+ grid-template-columns:minmax(0,1fr) auto;
+ align-items:center;
+ gap:18px;
+ padding:18px;
+ border:1px solid var(--border);
+ border-radius:14px;
+ background:var(--surface);
+}
+.service-card-copy{
+ min-width:0;
+}
+.service-card-copy h2{
+ margin:0;
+ max-width:100%;
+ font-size:1.02rem;
+ line-height:1.25;
+ overflow-wrap:normal!important;
+ word-break:normal!important;
+ hyphens:none;
+}
+.service-card-copy p{
+ margin:7px 0 0;
+ color:var(--muted);
+ font-size:.8rem;
+ line-height:1.45;
+ overflow-wrap:anywhere;
+}
+.service-duration{
+ display:flex;
+ align-items:center;
+ gap:6px;
+ margin-top:9px;
+ color:var(--muted);
+ font-size:.76rem;
+}
+.service-card-side{
+ min-width:max-content;
+ display:grid;
+ justify-items:end;
+ gap:10px;
+}
+.service-card-side>strong{
+ font-size:1rem;
+ font-weight:600;
+ white-space:nowrap;
+}
+.service-edit-button{
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ gap:6px;
+ min-height:36px;
+ padding:7px 9px;
+ border:1px solid var(--border);
+ border-radius:9px;
+ background:transparent;
+ color:var(--muted);
+ font-size:.72rem;
+}
+.service-edit-button:hover{
+ color:var(--text);
+ background:var(--surface-2);
+}
+
+.service-editor{
+ display:grid;
+ gap:16px;
+}
+.service-editor-section{
+ display:grid;
+ gap:14px;
+ padding:16px;
+ border:1px solid var(--border);
+ border-radius:12px;
+ background:color-mix(in srgb,var(--surface) 88%,var(--bg));
+}
+.service-editor-heading{
+ display:grid;
+ grid-template-columns:30px minmax(0,1fr);
+ gap:10px;
+ align-items:start;
+}
+.service-editor-heading>span{
+ width:30px;
+ height:30px;
+ display:grid;
+ place-items:center;
+ border:1px solid var(--border);
+ border-radius:8px;
+ color:var(--muted);
+ font-size:.66rem;
+}
+.service-editor-heading h3{
+ margin:1px 0 3px;
+ font-size:.92rem;
+}
+.service-editor-heading p{
+ margin:0;
+ color:var(--muted);
+ font-size:.72rem;
+ line-height:1.4;
+}
+.service-editor-grid{
+ display:grid;
+ grid-template-columns:1fr 1fr;
+ gap:12px;
+}
+.service-price-input{
+ display:grid;
+ grid-template-columns:auto minmax(0,1fr);
+ align-items:center;
+ border:1px solid var(--border);
+ border-radius:9px;
+ background:var(--surface);
+ overflow:hidden;
+}
+.service-price-input>span{
+ padding-left:12px;
+ color:var(--muted);
+ font-size:.85rem;
+}
+.service-price-input input{
+ border:0!important;
+ background:transparent!important;
+}
+.service-duration-presets{
+ display:grid;
+ gap:8px;
+}
+.service-duration-presets>span{
+ color:var(--muted);
+ font-size:.72rem;
+}
+.service-duration-presets>div{
+ display:flex;
+ flex-wrap:wrap;
+ gap:7px;
+}
+.service-duration-presets button{
+ min-height:34px;
+ padding:6px 10px;
+ border:1px solid var(--border);
+ border-radius:999px;
+ background:transparent;
+ color:var(--muted);
+ font-size:.7rem;
+}
+.service-duration-presets button.active{
+ background:var(--text);
+ color:var(--bg);
+ border-color:var(--text);
+}
+.service-editor-preview{
+ padding:15px 16px;
+ border:1px dashed var(--border);
+ border-radius:12px;
+}
+.service-editor-preview>.eyebrow{
+ display:block;
+ margin-bottom:10px;
+}
+.service-editor-preview>div{
+ display:flex;
+ justify-content:space-between;
+ align-items:flex-start;
+ gap:14px;
+}
+.service-editor-preview>div>div{
+ min-width:0;
+}
+.service-editor-preview strong{
+ display:block;
+ overflow-wrap:anywhere;
+}
+.service-editor-preview small{
+ display:flex;
+ align-items:center;
+ gap:5px;
+ margin-top:5px;
+ color:var(--muted);
+}
+.service-editor-preview b{
+ white-space:nowrap;
+ font-size:1rem;
+}
+.service-editor-preview p{
+ margin:10px 0 0;
+ color:var(--muted);
+ font-size:.75rem;
+ line-height:1.45;
+}
+.service-editor-actions{
+ display:grid;
+ grid-template-columns:1fr 1fr;
+ gap:9px;
+}
+.service-editor-actions button{
+ min-height:44px;
+}
+
+@media(max-width:760px){
+ .service-catalog{
+  grid-template-columns:1fr;
+  gap:10px;
+ }
+ .service-card-clean{
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:12px;
+  padding:15px 14px;
+ }
+ .service-card-copy h2{
+  font-size:.96rem;
+ }
+ .service-card-copy p{
+  font-size:.74rem;
+ }
+ .service-card-side>strong{
+  font-size:.93rem;
+ }
+ .service-edit-button span{
+  display:none;
+ }
+ .service-edit-button{
+  width:36px;
+  padding:0;
+ }
+ .service-editor-section{
+  padding:13px;
+ }
+ .service-editor-grid{
+  grid-template-columns:1fr;
+ }
+}
+
+@media(max-width:380px){
+ .service-card-clean{
+  grid-template-columns:minmax(0,1fr) 86px;
+ }
+ .service-card-side{
+  min-width:0;
+  width:86px;
+ }
+ .service-card-side>strong{
+  max-width:86px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+ }
+}
+
+
+/* FIO_TURNSTILE_FLEXIBLE_20261003 */
+.auth-captcha{
+ width:100%;
+ min-width:0;
+ margin:10px 0 12px;
+}
+.auth-captcha-widget{
+ width:100%;
+ min-width:0;
+ min-height:65px;
+ display:block;
+ overflow:visible;
+}
+.auth-captcha-widget>div,
+.auth-captcha-widget iframe{
+ width:100%!important;
+ max-width:100%!important;
+}
+.auth-captcha-status{
+ margin:6px 0 0!important;
+ line-height:1.35;
+}
+@media(max-width:480px){
+ .auth-card--login .auth-captcha{
+  margin:7px 0 9px!important;
+ }
+ .auth-card--login .auth-captcha-widget{
+  width:100%;
+  min-height:65px;
+ }
+ .auth-card--login .auth-captcha-status{
+  margin-top:5px!important;
+  font-size:.82rem;
+ }
+}
+
+
+/* FIO_ASSISTANT_KEYBOARD_COMPOSER_V2_20261003 */
+@media(max-width:760px){
+ html.chat-keyboard-open .chat-shell .bottom-nav{
+  display:none!important;
+ }
+
+ html.chat-keyboard-open .assistant-chat-screen{
+  padding-bottom:94px;
+ }
+
+ html.chat-keyboard-open .assistant-chat-screen .message-scroll{
+  padding-bottom:112px!important;
+  scroll-padding-bottom:112px;
+ }
+
+ html.chat-keyboard-open .assistant-chat-screen .composer-area{
+  position:fixed!important;
+  left:0;
+  right:0;
+  bottom:calc(var(--chat-keyboard-inset,0px) + env(safe-area-inset-bottom));
+  z-index:120;
+  width:100%;
+  max-width:none;
+  padding:8px 12px 7px;
+  margin:0;
+  background:linear-gradient(to top,var(--bg) 76%,color-mix(in srgb,var(--bg) 94%,transparent));
+ }
+
+ html.chat-keyboard-open .assistant-chat-screen .composer-area>p{
+  display:none!important;
+ }
+
+ html.chat-keyboard-open .assistant-chat-screen .composer{
+  width:min(100%,850px);
+  margin:0 auto;
+  border-radius:22px;
+  padding:6px 8px;
+  box-shadow:0 -10px 28px color-mix(in srgb,#000 28%,transparent);
+ }
+
+ html.chat-keyboard-open .assistant-chat-screen .composer textarea{
+  min-height:44px;
+  max-height:104px;
+  height:auto;
+  line-height:1.4;
+  padding:10px 8px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+ }
+
+ html.chat-keyboard-open .assistant-chat-screen .send-button{
+  align-self:flex-end;
+ }
+
+ html.chat-keyboard-open .assistant-chat-screen .composer-area .notice{
+  width:min(calc(100% - 24px),850px);
+  margin:0 auto 7px;
+  max-height:18dvh;
+ }
+
+ html.chat-keyboard-open .chat-shell{
+  height:var(--chat-viewport-height,100dvh)!important;
+  min-height:0!important;
+ }
+}
+
+.assistant-chat-screen .composer textarea{
+ transition:height .12s ease;
+ scrollbar-width:thin;
+}

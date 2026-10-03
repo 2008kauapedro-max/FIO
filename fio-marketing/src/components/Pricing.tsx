@@ -5,7 +5,7 @@ import { links } from "../data/config";
 import { useMarketingI18n } from "../i18n";
 
 export function Pricing() {
-  const [cycle, setCycle] = useState<Cycle>("monthly");
+  const [cycle, setCycle] = useState<Cycle>("annual");
   const { t, locale, translateFeature } = useMarketingI18n();
   return (
     <section className="section pricing-section light-section" id="planos">
@@ -18,7 +18,7 @@ export function Pricing() {
           </div>
           <fieldset className="billing-switch">
             <legend className="sr-only">{t("billingPeriod")}</legend>
-            {cycles.map((key) => (
+            {(["annual", "monthly"] as Cycle[]).map((key) => (
               <label className={cycle === key ? "active" : ""} key={key}>
                 <input
                   type="radio"
@@ -27,7 +27,7 @@ export function Pricing() {
                   checked={cycle === key}
                   onChange={() => setCycle(key)}
                 />
-                <span>{t(key)}</span>
+                <span>{t(key)}{key === "annual" && <small className="annual-badge">{t("annualBestChoice")}</small>}</span>
               </label>
             ))}
           </fieldset>
@@ -68,6 +68,16 @@ export function Pricing() {
                   )}
                 </span>
               </div>
+              {plan.code !== "FREE" && cycle === "annual" && plan.prices.annual != null && plan.prices.monthly != null && (
+                <div className="annual-value">
+                  <strong>{t("annualEquivalent", {
+                    amount: new Intl.NumberFormat(locale, {style:"currency",currency:"BRL"}).format(plan.prices.annual / 12 / 100),
+                  })}</strong>
+                  <span>{t("annualSaving", {
+                    amount: new Intl.NumberFormat(locale, {style:"currency",currency:"BRL"}).format((plan.prices.monthly * 12 - plan.prices.annual) / 100),
+                  })}</span>
+                </div>
+              )}
               <ul className="plan-features">
                 {plan.groups[0].items.slice(0, 3).map((feature) => (
                   <li key={feature}>

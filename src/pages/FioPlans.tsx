@@ -17,7 +17,7 @@ export function FioPlans(p:WorkspaceProps){
  const providerStatus=(value:string)=>t(`fp.billingStatus.${['pending_first_payment','active','overdue','suspended','cancelled'].includes(value)?value:'default'}`);
  const checkoutMessage=(_error:unknown)=>t('fp.billingError');
  const [changePlan,setChangePlan]=useState<PaidPlan|null>(null),[changeAccepted,setChangeAccepted]=useState(false);
- const [cycle,setCycle]=useState<BillingCycle>('monthly');
+ const [cycle,setCycle]=useState<BillingCycle>('annual');
  const [busy,setBusy]=useState(false);
  const [choiceOpen,setChoiceOpen]=useState(false);
  const [checkoutPlan,setCheckoutPlan]=useState<PaidPlan|null>(null);
@@ -142,8 +142,9 @@ export function FioPlans(p:WorkspaceProps){
   <section className="fio-cycle-section">
    <div className="fio-cycle-heading"><div><span className="eyebrow">{t('fp.billingPeriod')}</span><h2>{t('fp.howPay')}</h2></div><small>{t('fp.reviewBefore')}</small></div>
    <div className="fio-cycle-picker" role="tablist" aria-label={t('fp.subscriptionPeriod')}>
-    {SALE_BILLING_CYCLES.map(key=><button key={key} type="button" role="tab" aria-selected={cycle===key} className={cycle===key?'active':''} onClick={()=>setCycle(key)}><span className="fio-cycle-check">{cycle===key?<Check size={15}/>:null}</span><span><b>{cycleLabel(key)}</b><small>{t(`fp.cycle.${key}Hint`)}</small></span></button>)}
+    {(['annual','monthly'] as BillingCycle[]).map(key=><button key={key} type="button" role="tab" aria-selected={cycle===key} className={`${cycle===key?'active':''} ${key==='annual'?'annual-priority':''}`} onClick={()=>setCycle(key)}><span className="fio-cycle-check">{cycle===key?<Check size={15}/>:null}</span><span><b>{cycleLabel(key)}{key==='annual'&&<em className="fio-cycle-badge">{t('fp.annualBestChoice')}</em>}</b><small>{t(`fp.cycle.${key}Hint`)}</small></span></button>)}
    </div>
+   <p className="fio-annual-priority-note">{cycle==='annual'?t('fp.annualPriorityNote'):t('fp.monthlyAlternativeNote')}</p>
   </section>
 
   <div className="fio-pricing-grid fio-pricing-compact">

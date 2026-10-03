@@ -816,6 +816,7 @@ function StaffAgenda(p:WorkspaceProps){
  const [manualRefreshing,setManualRefreshing]=useState(false);
  const [reloadKey,setReloadKey]=useState(0);
  const [agendaView,setAgendaView]=useState<'today'|'done'|'calendar'>('today');
+ const [agendaSwipeStart,setAgendaSwipeStart]=useState<number|null>(null);
 
 
  useEffect(()=>{
@@ -1068,18 +1069,46 @@ function StaffAgenda(p:WorkspaceProps){
    )[0];
 
  return <>
-  <section className="simple-agenda-shell">
+  <section
+   className="simple-agenda-shell"
+   onTouchStart={e=>setAgendaSwipeStart(e.changedTouches[0]?.clientX??null)}
+   onTouchEnd={e=>{
+    if(agendaSwipeStart===null)return;
+    const end=e.changedTouches[0]?.clientX??agendaSwipeStart;
+    const delta=end-agendaSwipeStart;
+    setAgendaSwipeStart(null);
+    if(Math.abs(delta)<64)return;
+    const views=['today','done','calendar'] as const;
+    const index=views.indexOf(agendaView);
+    const nextIndex=delta<0
+     ?Math.min(index+1,views.length-1)
+     :Math.max(index-1,0);
+    setAgendaView(views[nextIndex]);
+   }}
+  >
    <header className="simple-agenda-head">
     <div>
      <h1>{t('agendaSimple.title')}</h1>
      <p>{formatDate(new Date(),{timeZone:zone,weekday:'long',day:'numeric',month:'long'})}</p>
     </div>
-    <button type="button" className="simple-refresh" disabled={manualRefreshing} onClick={()=>void manualRefresh()} aria-label={t('staffAgenda.refresh')}>
+    <button
+     type="button"
+     className="simple-refresh"
+     disabled={manualRefreshing}
+     onClick={()=>void manualRefresh()}
+     aria-label={`${t('staffAgenda.refresh')} · ${t('staffAgenda.auto')}`}
+    >
      <RefreshCw className={manualRefreshing?'spin':''} size={20}/>
-     <span className="sr-only">{t('staffAgenda.auto')}</span>
     </button>
    </header>
 
+   <nav className="simple-agenda-tabs simple-agenda-tabs-top" aria-label={t('agendaSimple.navigation')}>
+    <button type="button" className={agendaView==='today'?'active':''} onClick={()=>{setAgendaView('today');setDate(dayKey(new Date().toISOString(),zone));}}>{t('agendaSimple.today')}</button>
+    <button type="button" className={agendaView==='done'?'active':''} onClick={()=>setAgendaView('done')}>{t('agendaSimple.done')}</button>
+    <button type="button" className={agendaView==='calendar'?'active':''} onClick={()=>setAgendaView('calendar')}>{t('agendaSimple.appointments')}</button>
+   </nav>
+
+   <div className="simple-agenda-view" key={agendaView}>
    <button type="button" className="simple-new-booking" onClick={()=>setBooking(true)}>
     {t('staffAgenda.new')}
    </button>
@@ -1160,11 +1189,7 @@ function StaffAgenda(p:WorkspaceProps){
     </div>
    </>}
 
-   <nav className="simple-agenda-tabs" aria-label={t('agendaSimple.navigation')}>
-    <button type="button" className={agendaView==='today'?'active':''} onClick={()=>{setAgendaView('today');setDate(dayKey(new Date().toISOString(),zone));}}>{t('agendaSimple.today')}</button>
-    <button type="button" className={agendaView==='done'?'active':''} onClick={()=>setAgendaView('done')}>{t('agendaSimple.done')}</button>
-    <button type="button" className={agendaView==='calendar'?'active':''} onClick={()=>setAgendaView('calendar')}>{t('agendaSimple.appointments')}</button>
-   </nav>
+   </div>
   </section>
 
   {reschedule&&
@@ -1421,10 +1446,227 @@ export function Agenda(p:WorkspaceProps){
 
 export function Services(p:WorkspaceProps){
  const {t,formatCurrency}=useI18n();
- const {data}=p,[modal,setModal]=useState(false),[editing,setEditing]=useState<Service|null>(null),[name,setName]=useState(''),[description,setDescription]=useState(''),[price,setPrice]=useState('65'),[duration,setDuration]=useState('45'),[busy,setBusy]=useState(false),[error,setError]=useState('');
- async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');const values={name,description:description.trim(),duration_minutes:Number(duration),price_cents:Math.round(Number(price)*100)};try{if(p.demo){p.updateDemo(d=>({...d,services:editing?d.services.map(s=>s.id===editing.id?{...s,...values}:s):[...d.services,{...values,id:crypto.randomUUID(),active:true}]}));}else{await api(editing?`/services/${editing.id}`:'/services',data.shop.id,values,editing?'PATCH':'POST');await p.refresh();}setModal(false);p.notify(t('services.saved'));}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- function open(service?:Service){setEditing(service??null);setName(service?.name??'');setDescription(service?.description??'');setPrice(service?String(service.price_cents/100):'65');setDuration(service?String(service.duration_minutes):'45');setError('');setModal(true);}
- return <><PageTitle eyebrow={t('services.eyebrow')} title={t('services.title')} description={t('services.desc')} action={data.membership.role==='OWNER'&&<button className="primary" onClick={()=>open()}><Plus size={18}/>{t('services.new')}</button>}/>{data.services.length?<div className="service-list">{data.services.filter(s=>s.active).map((service,i)=><div className="service-row" key={service.id}><span className="service-number">{String(i+1).padStart(2,'0')}</span><div className="service-name"><h2>{service.name}</h2>{service.description&&<p className="service-description">{service.description}</p>}<span><Clock3 size={14}/>{t('services.minutes',{count:service.duration_minutes})}</span></div><strong>{formatCurrency(service.price_cents/100,'BRL')}</strong>{data.membership.role==='OWNER'&&<button className="icon-button" aria-label={t('services.editAria',{name:service.name})} onClick={()=>open(service)}><SlidersHorizontal size={18}/></button>}</div>)}</div>:<Empty title={t('services.empty')}>{t('services.emptyDesc')}</Empty>}{modal&&<Modal title={editing?t('services.edit'):t('services.new')} onClose={()=>setModal(false)}><form onSubmit={submit}><Field label={t('services.name')}><input required minLength={2} maxLength={100} value={name} onChange={e=>setName(e.target.value)}/></Field><Field label={t('services.description')}><textarea maxLength={500} rows={3} value={description} onChange={e=>setDescription(e.target.value)} placeholder={t('services.placeholder')}/><span className="field-counter">{description.length}/500</span></Field><div className="form-grid"><Field label={t('services.value')}><input required type="number" min="0" max="10000" step="0.01" value={price} onChange={e=>setPrice(e.target.value)}/></Field><Field label={t('services.duration')}><input required type="number" min="10" max="240" value={duration} onChange={e=>setDuration(e.target.value)}/></Field></div>{error&&<p className="notice" role="alert">{error}</p>}<button className="primary full" disabled={busy}>{busy?t('services.saving'):t('services.save')}</button></form></Modal>}</>;
+ const {data}=p;
+ const [modal,setModal]=useState(false);
+ const [editing,setEditing]=useState<Service|null>(null);
+ const [name,setName]=useState('');
+ const [description,setDescription]=useState('');
+ const [price,setPrice]=useState('65');
+ const [duration,setDuration]=useState('45');
+ const [busy,setBusy]=useState(false);
+ const [error,setError]=useState('');
+
+ const durationPresets=[15,30,45,60,90,120];
+ const numericPrice=Number(String(price).replace(',','.'));
+ const previewPrice=Number.isFinite(numericPrice)?numericPrice:0;
+ const previewDuration=Math.max(0,Number(duration)||0);
+
+ async function submit(e:FormEvent){
+  e.preventDefault();
+  setBusy(true);
+  setError('');
+  const values={
+   name:name.trim(),
+   description:description.trim(),
+   duration_minutes:Number(duration),
+   price_cents:Math.round(Number(String(price).replace(',','.'))*100)
+  };
+  try{
+   if(p.demo){
+    p.updateDemo(d=>({
+     ...d,
+     services:editing
+      ?d.services.map(s=>s.id===editing.id?{...s,...values}:s)
+      :[...d.services,{...values,id:crypto.randomUUID(),active:true}]
+    }));
+   }else{
+    await api(editing?`/services/${editing.id}`:'/services',data.shop.id,values,editing?'PATCH':'POST');
+    await p.refresh();
+   }
+   setModal(false);
+   p.notify(t('services.saved'));
+  }catch(e){
+   setError((e as Error).message);
+  }finally{
+   setBusy(false);
+  }
+ }
+
+ function open(service?:Service){
+  setEditing(service??null);
+  setName(service?.name??'');
+  setDescription(service?.description??'');
+  setPrice(service?String(service.price_cents/100):'65');
+  setDuration(service?String(service.duration_minutes):'45');
+  setError('');
+  setModal(true);
+ }
+
+ const services=data.services.filter(s=>s.active);
+
+ return <>
+  <PageTitle
+   eyebrow={t('services.eyebrow')}
+   title={t('services.title')}
+   description={t('services.desc')}
+   action={data.membership.role==='OWNER'&&
+    <button className="primary" onClick={()=>open()}>
+     <Plus size={18}/>{t('services.new')}
+    </button>
+   }
+  />
+
+  {services.length?
+   <div className="service-catalog">
+    {services.map(service=>
+     <article className="service-card-clean" key={service.id}>
+      <div className="service-card-copy">
+       <h2>{service.name}</h2>
+       {service.description&&<p>{service.description}</p>}
+       <span className="service-duration">
+        <Clock3 size={15}/>
+        {t('services.minutes',{count:service.duration_minutes})}
+       </span>
+      </div>
+
+      <div className="service-card-side">
+       <strong>{formatCurrency(service.price_cents/100,'BRL')}</strong>
+       {data.membership.role==='OWNER'&&
+        <button
+         className="service-edit-button"
+         type="button"
+         aria-label={t('services.editAria',{name:service.name})}
+         onClick={()=>open(service)}
+        >
+         <SlidersHorizontal size={18}/>
+         <span>{t('services.editShort')}</span>
+        </button>
+       }
+      </div>
+     </article>
+    )}
+   </div>
+   :
+   <Empty title={t('services.empty')}>{t('services.emptyDesc')}</Empty>
+  }
+
+  {modal&&
+   <Modal title={editing?t('services.edit'):t('services.new')} onClose={()=>setModal(false)}>
+    <form className="service-editor" onSubmit={submit}>
+     <section className="service-editor-section">
+      <div className="service-editor-heading">
+       <span>01</span>
+       <div>
+        <h3>{t('services.basicInfo')}</h3>
+        <p>{t('services.basicInfoDesc')}</p>
+       </div>
+      </div>
+
+      <Field label={t('services.name')}>
+       <input
+        required
+        minLength={2}
+        maxLength={100}
+        value={name}
+        onChange={e=>setName(e.target.value)}
+        placeholder={t('services.namePlaceholder')}
+       />
+      </Field>
+
+      <Field label={t('services.description')}>
+       <textarea
+        maxLength={500}
+        rows={4}
+        value={description}
+        onChange={e=>setDescription(e.target.value)}
+        placeholder={t('services.placeholder')}
+       />
+       <span className="field-counter">{description.length}/500</span>
+      </Field>
+     </section>
+
+     <section className="service-editor-section">
+      <div className="service-editor-heading">
+       <span>02</span>
+       <div>
+        <h3>{t('services.priceTime')}</h3>
+        <p>{t('services.priceTimeDesc')}</p>
+       </div>
+      </div>
+
+      <div className="service-editor-grid">
+       <Field label={t('services.value')}>
+        <div className="service-price-input">
+         <span>R$</span>
+         <input
+          required
+          inputMode="decimal"
+          value={price}
+          onChange={e=>setPrice(e.target.value.replace(/[^0-9,.]/g,''))}
+          placeholder="0,00"
+         />
+        </div>
+       </Field>
+
+       <Field label={t('services.duration')}>
+        <input
+         required
+         type="number"
+         min="10"
+         max="240"
+         inputMode="numeric"
+         value={duration}
+         onChange={e=>setDuration(e.target.value)}
+        />
+       </Field>
+      </div>
+
+      <div className="service-duration-presets">
+       <span>{t('services.quickDuration')}</span>
+       <div>
+        {durationPresets.map(value=>
+         <button
+          key={value}
+          type="button"
+          className={Number(duration)===value?'active':''}
+          onClick={()=>setDuration(String(value))}
+         >
+          {value} min
+         </button>
+        )}
+       </div>
+      </div>
+     </section>
+
+     <section className="service-editor-preview">
+      <span className="eyebrow">{t('services.preview')}</span>
+      <div>
+       <div>
+        <strong>{name.trim()||t('services.previewName')}</strong>
+        <small>
+         <Clock3 size={14}/>
+         {t('services.minutes',{count:previewDuration||45})}
+        </small>
+       </div>
+       <b>{formatCurrency(previewPrice,'BRL')}</b>
+      </div>
+      {description.trim()&&<p>{description.trim()}</p>}
+     </section>
+
+     {error&&<p className="notice" role="alert">{error}</p>}
+
+     <div className="service-editor-actions">
+      <button type="button" className="secondary" disabled={busy} onClick={()=>setModal(false)}>
+       {t('common.cancel')}
+      </button>
+      <button className="primary" disabled={busy||name.trim().length<2||previewDuration<10}>
+       {busy?t('services.saving'):t('services.save')}
+      </button>
+     </div>
+    </form>
+   </Modal>
+  }
+ </>;
 }
 export function Customers(p:WorkspaceProps){
  const {t}=useI18n();
@@ -1481,7 +1723,7 @@ export function Support(p:WorkspaceProps){
 export function Settings(p:WorkspaceProps){
  const {t,formatDate}=useI18n();
  const owner=p.data.membership.role==='OWNER',solo=p.data.shop.operation_mode==='SOLO',navigate=useNavigate();
- const [section,setSection]=useState<'home'|'profile'|'barbershop'|'plan'|'access'|'account'|'notifications'|'language'|'schedule'>('home');
+ const [section,setSection]=useState<'home'|'profile'|'barbershop'|'plan'|'access'|'account'|'notifications'|'language'|'schedule'|'theme'|'help'>('home');
  useEffect(()=>{window.scrollTo({top:0,behavior:'instant'});},[section]);
  const [displayName,setDisplayName]=useState(p.data.membership.display_name);
  const [phone,setPhone]=useState(p.data.membership.phone??'');
@@ -1494,8 +1736,28 @@ export function Settings(p:WorkspaceProps){
  const [backgroundUrl,setBackgroundUrl]=useState(p.data.shop.background_url??'');
  const [accentColor,setAccentColor]=useState(p.data.shop.custom_accent??p.data.shop.accent_color??'#ffffff');
  const [busy,setBusy]=useState(false),[accountEmail,setAccountEmail]=useState('');
+ const [darkTheme,setDarkTheme]=useState(
+  ()=>typeof document==='undefined'
+   ?true
+   :document.documentElement.dataset.theme!=='light'
+ );
  const origin=typeof window==='undefined'?'':window.location.origin;
  const links={gestao:`${origin}/acesso/gestao`,equipe:`${origin}/acesso/equipe`,clientes:`${origin}/${p.data.shop.slug}`};
+
+ useEffect(()=>{
+  const sync=(event:Event)=>{
+   const value=(event as CustomEvent<string>).detail;
+   if(value==='light'||value==='dark')setDarkTheme(value==='dark');
+  };
+  window.addEventListener('fio-theme-change',sync);
+  return()=>window.removeEventListener('fio-theme-change',sync);
+ },[]);
+
+ function toggleSettingsTheme(){
+  const next=darkTheme?'light':'dark';
+  setDarkTheme(next==='dark');
+  window.dispatchEvent(new CustomEvent('fio-theme-change',{detail:next}));
+ }
 
  useEffect(()=>{let active=true;if(!supabase)return;void supabase.auth.getUser().then(({data})=>{if(active)setAccountEmail(data.user?.email??'');});return()=>{active=false;};},[]);
 
@@ -1542,12 +1804,15 @@ export function Settings(p:WorkspaceProps){
   ['notifications',t('settings.notifications'),MessageCircle],
   ['language',t('settings.language'),Languages],
   ...(owner&&!solo?[['schedule',t('settings.teamSchedule'),CalendarDays] as const]:[]),
+  ['theme',t('settings.colors'),Palette],
+  ['help',t('settings.help'),CircleHelp],
  ] as const;
  const groupedSections=[
   {label:t('settings.groupProfile'),items:sections.filter(([key])=>key==='profile'||key==='barbershop')},
   {label:t('settings.groupSecurity'),items:sections.filter(([key])=>key==='account'||key==='access')},
-  {label:t('settings.groupPreferences'),items:sections.filter(([key])=>key==='notifications'||key==='language'||key==='schedule')},
+  {label:t('settings.groupPreferences'),items:sections.filter(([key])=>key==='notifications'||key==='language'||key==='schedule'||key==='theme')},
   {label:t('settings.groupPlan'),items:sections.filter(([key])=>key==='plan')},
+  {label:t('settings.groupSupport'),items:sections.filter(([key])=>key==='help')},
  ].filter(group=>group.items.length>0);
  const roleLabel=owner?(solo?t('settings.soloRole'):t('settings.ownerRole')):p.data.membership.role==='BARBER'?t('settings.staffRole'):t('settings.clientRole');
 
@@ -1565,17 +1830,46 @@ export function Settings(p:WorkspaceProps){
       <span className="settings-group-label">{group.label}</span>
       <div className="settings-home-list">{group.items.map(([key,label,Icon])=><button key={key} type="button" onClick={()=>setSection(key)}><span className="settings-home-icon"><Icon size={18}/></span><span className="settings-home-copy"><strong>{label}</strong></span><ArrowUpRight size={17}/></button>)}</div>
      </section>)}
-     <section className="settings-home-group">
-      <span className="settings-group-label">{t('settings.groupSupport')}</span>
-      <div className="settings-home-list">
-       <button type="button" onClick={()=>{const next=document.documentElement.dataset.theme==='light'?'dark':'light';window.dispatchEvent(new CustomEvent('fio-theme-change',{detail:next}));}}><span className="settings-home-icon"><Palette size={18}/></span><span className="settings-home-copy"><strong>{t('settings.appearance')}</strong></span><ArrowUpRight size={17}/></button>
-       <button type="button" onClick={()=>navigate(p.base+'/suporte')}><span className="settings-home-icon"><CircleHelp size={18}/></span><span className="settings-home-copy"><strong>{t('settings.help')}</strong></span><ArrowUpRight size={17}/></button>
-      </div>
-     </section>
     </>:sections.map(([key,label,Icon])=><button key={key} type="button" className={section===key?'active':''} onClick={()=>setSection(key)}><Icon size={17}/><span>{label}</span></button>)}
    </nav>
 
-   <div className="settings-content">{section==='schedule'&&owner&&<StaffSchedule {...p}/>} {section==='notifications'&&<PushSettings {...p}/>} {section==='language'&&<section className="settings-card"><LanguageSettings onSave={async preferences=>{if(!supabase)throw new Error(t('errors.generic'));await saveLocalePreferences(supabase,p.data.shop.id,preferences);p.notify(t('language.saved'));}}/></section>}{section!=='home'&&<div className="settings-shortcuts">{owner&&!solo&&<button className="secondary" onClick={()=>navigate(p.base+'/equipe')}><Users size={17}/>{t("settings.team")}</button>}<button className="secondary" onClick={()=>{const next=document.documentElement.dataset.theme==='light'?'dark':'light';window.dispatchEvent(new CustomEvent('fio-theme-change',{detail:next}));}}><Palette size={17}/>{t('settings.appearance')}</button><button className="secondary" onClick={()=>navigate(p.base+'/suporte')}><CircleHelp size={17}/>{t("settings.help")}</button></div>}
+   <div className="settings-content">
+    {section==='theme'&&
+     <section className="settings-card settings-theme-card">
+      <div className="section-title">
+       <h2>{t('settings.colors')}</h2>
+       <span className="muted">{t('settings.colorsDesc')}</span>
+      </div>
+      <div className="settings-theme-row">
+       <div>
+        <strong>{darkTheme?t('settings.dark'):t('settings.light')}</strong>
+        <small>{t('settings.themeHint')}</small>
+       </div>
+       <button
+        type="button"
+        className={`settings-theme-switch ${darkTheme?'is-dark':'is-light'}`}
+        role="switch"
+        aria-checked={darkTheme}
+        aria-label={t('settings.toggleTheme')}
+        onClick={toggleSettingsTheme}
+       >
+        <span/>
+       </button>
+      </div>
+     </section>
+    }
+    {section==='help'&&
+     <section className="settings-card settings-help-card">
+      <div className="section-title">
+       <h2>{t('settings.help')}</h2>
+       <span className="muted">{t('settings.helpDesc')}</span>
+      </div>
+      <p className="muted">{t('settings.helpCopy')}</p>
+      <button className="primary" type="button" onClick={()=>navigate(p.base+'/suporte')}>
+       <CircleHelp size={17}/>{t('settings.support')}
+      </button>
+     </section>
+    }{section==='schedule'&&owner&&<StaffSchedule {...p}/>} {section==='notifications'&&<PushSettings {...p}/>} {section==='language'&&<section className="settings-card"><LanguageSettings onSave={async preferences=>{if(!supabase)throw new Error(t('errors.generic'));await saveLocalePreferences(supabase,p.data.shop.id,preferences);p.notify(t('language.saved'));}}/></section>}
     {section==='profile'&&<>
      <section className="settings-card settings-profile-card">
       <div className="settings-profile-head">

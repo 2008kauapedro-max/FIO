@@ -1,4 +1,4 @@
-import { useEffect,useRef,useState,type FormEvent,type ReactNode } from 'react';
+import { useEffect,useLayoutEffect,useRef,useState,type FormEvent,type KeyboardEvent,type ReactNode } from 'react';
 import { ArrowUp, Plus, Sparkles, History, WifiOff, LockKeyhole, TriangleAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api,RequestError } from '../lib/api';
@@ -23,7 +23,44 @@ export function AssistantMessage({message}:{message:Message}){const {t}=useI18n(
 export function AssistantSuggestions({role,onSelect}:{role:Role;onSelect:(text:string)=>void}){const {t}=useI18n();return <div className="suggestions">{suggestionKeys[role].map(key=>{const text=t(key);return <button key={key} onClick={()=>onSelect(text)}>{text}<ArrowUp size={16}/></button>;})}</div>;}
 export function AssistantEmptyState({role,onSelect}:{role:Role;onSelect:(text:string)=>void}){const {t}=useI18n();const description=role==='OWNER'?t('ai.ownerDesc'):role==='BARBER'?t('ai.barberDesc'):t('ai.clientDesc');return <div className="assistant-empty"><div className="ai-symbol"><Sparkles size={20} strokeWidth={1.5}/></div><div className="assistant-empty-copy"><strong>{t('ai.greeting')}</strong><p className="muted">{description}</p><AssistantSuggestions role={role} onSelect={onSelect}/></div></div>;}
 export function AssistantErrorState({error,onRetry}:{error:RequestError;onRetry?:()=>void}){const {t}=useI18n();const Icon=error.code==='OFFLINE'?WifiOff:error.code==='PLAN_REQUIRED'?LockKeyhole:TriangleAlert;return <div className="notice" role="alert"><Icon size={18}/><span>{error.message}</span>{onRetry&&<button type="button" className="notice-retry" onClick={onRetry}>{t('ai.retry')}</button>}</div>;}
-export function AssistantComposer({value,onChange,onSubmit,busy}:{value:string;onChange:(v:string)=>void;onSubmit:(e:FormEvent)=>void;busy:boolean}){const {t}=useI18n();return <form className="composer" onSubmit={onSubmit}><textarea aria-label={t('ai.messageLabel')} placeholder={t('ai.placeholder')} maxLength={2000} rows={1} value={value} onChange={e=>onChange(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(value.trim()&&!busy)onSubmit(e);}}}/><button className="send-button" aria-label={t('ai.send')} disabled={!value.trim()||busy}><ArrowUp size={20}/></button></form>;}
+export function AssistantComposer({value,onChange,onSubmit,busy}:{value:string;onChange:(v:string)=>void;onSubmit:(e:FormEvent)=>void;busy:boolean}){
+ const {t}=useI18n();
+ const textarea=useRef<HTMLTextAreaElement>(null);
+
+ useLayoutEffect(()=>{
+  const el=textarea.current;
+  if(!el)return;
+  el.style.height='auto';
+  const nextHeight=Math.min(el.scrollHeight,104);
+  el.style.height=`${nextHeight}px`;
+  el.style.overflowY=el.scrollHeight>104?'auto':'hidden';
+ },[value]);
+
+ function handleKeyDown(e:KeyboardEvent<HTMLTextAreaElement>){
+  if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){
+   e.preventDefault();
+   if(value.trim()&&!busy)onSubmit(e as unknown as FormEvent);
+  }
+ }
+
+ return <form className="composer" onSubmit={onSubmit}>
+  <textarea
+   ref={textarea}
+   aria-label={t('ai.messageLabel')}
+   placeholder={t('ai.placeholder')}
+   maxLength={2000}
+   rows={1}
+   value={value}
+   onFocus={()=>window.setTimeout(()=>textarea.current?.scrollIntoView({block:'nearest',behavior:'smooth'}),120)}
+   onChange={e=>onChange(e.target.value)}
+   onKeyDown={handleKeyDown}
+  />
+  <button className="send-button" aria-label={t('ai.send')} disabled={!value.trim()||busy}>
+   <ArrowUp size={20}/>
+  </button>
+ </form>;
+}
+
 export function AssistantChat({role,plan,aiEnabled,shopId,demo,base,shopName,shopLogo}:{role:Role;plan:Plan;aiEnabled:boolean;shopId:string;demo:boolean;base:string;shopName?:string;shopLogo?:string}) {
  const {locale,t}=useI18n();
  const [messages,setMessages]=useState<Message[]>([]),[value,setValue]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState<RequestError|null>(null),[conversationId,setConversationId]=useState<string>(),[history,setHistory]=useState<{id:string;title:string}[]|null>(null),[failedText,setFailedText]=useState<string>();

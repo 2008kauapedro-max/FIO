@@ -1220,3 +1220,54 @@ summary::-webkit-details-marker {
 .information-page .legal-section li{line-height:1.7;margin-bottom:10px;color:#485049}
 .information-page .legal-contact{margin-top:30px;padding:20px;border:1px solid #d7ddd8;border-radius:12px;display:flex;flex-direction:column;gap:5px}
 .information-page .legal-contact a{text-decoration:underline;text-underline-offset:3px}
+
+
+/* FIO_MARKETING_ANNUAL_FIRST_20261003 */
+.billing-switch label>span{
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ gap:7px;
+ flex-wrap:wrap;
+}
+.annual-badge{
+ display:inline-flex;
+ align-items:center;
+ padding:2px 6px;
+ border-radius:999px;
+ background:#111;
+ color:#fff;
+ font-size:.58rem;
+ font-weight:700;
+ line-height:1.3;
+ text-transform:uppercase;
+ letter-spacing:.03em;
+}
+.billing-switch label.active .annual-badge{
+ background:#fff;
+ color:#111;
+}
+.annual-value{
+ display:grid;
+ gap:4px;
+ margin:-2px 0 12px;
+}
+.annual-value strong{
+ font-size:.78rem;
+ font-weight:600;
+}
+.annual-value span{
+ width:max-content;
+ max-width:100%;
+ padding:4px 7px;
+ border-radius:7px;
+ background:#edf8ef;
+ color:#246b36;
+ font-size:.7rem;
+ font-weight:650;
+}
+@media(max-width:640px){
+ .annual-badge{font-size:.53rem}
+ .annual-value strong{font-size:.74rem}
+ .annual-value span{font-size:.67rem}
+}

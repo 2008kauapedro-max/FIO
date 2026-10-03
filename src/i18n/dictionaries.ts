@@ -1152,3 +1152,174 @@ Object.assign(es,{"agendaSimple.title":"Agenda","agendaSimple.navigation":"Naveg
 Object.assign(fr,{"agendaSimple.title":"Agenda","agendaSimple.navigation":"Navigation de l’agenda","agendaSimple.today":"Aujourd’hui","agendaSimple.done":"Terminés","agendaSimple.appointments":"Rendez-vous"});
 Object.assign(de,{"agendaSimple.title":"Termine","agendaSimple.navigation":"Termin-Navigation","agendaSimple.today":"Heute","agendaSimple.done":"Erledigt","agendaSimple.appointments":"Termine"});
 Object.assign(it,{"agendaSimple.title":"Agenda","agendaSimple.navigation":"Navigazione agenda","agendaSimple.today":"Oggi","agendaSimple.done":"Completati","agendaSimple.appointments":"Appuntamenti"});
+
+
+/* FIO_ANNUAL_FIRST_20261003 */
+Object.assign(ptBR,{
+ "fp.annualBestChoice":"Melhor escolha",
+ "fp.annualPriorityNote":"Plano anual em destaque: você paga uma vez, economiza no ano e garante 12 meses de FIO.",
+ "fp.monthlyAlternativeNote":"Prefere pagar mês a mês? Sem problema — o mensal continua disponível."
+});
+Object.assign(en,{
+ "fp.annualBestChoice":"Best value",
+ "fp.annualPriorityNote":"Annual is highlighted: pay once, save over the year, and secure 12 months of FIO.",
+ "fp.monthlyAlternativeNote":"Prefer month-to-month? The monthly option remains available."
+});
+Object.assign(es,{
+ "fp.annualBestChoice":"Mejor opción",
+ "fp.annualPriorityNote":"Destacamos el anual: pagas una vez, ahorras durante el año y aseguras 12 meses de FIO.",
+ "fp.monthlyAlternativeNote":"¿Prefieres pagar mes a mes? El mensual sigue disponible."
+});
+Object.assign(fr,{
+ "fp.annualBestChoice":"Meilleur choix",
+ "fp.annualPriorityNote":"L'annuel est mis en avant : payez une fois, économisez sur l'année et profitez de 12 mois de FIO.",
+ "fp.monthlyAlternativeNote":"Vous préférez payer chaque mois ? L'option mensuelle reste disponible."
+});
+Object.assign(de,{
+ "fp.annualBestChoice":"Beste Wahl",
+ "fp.annualPriorityNote":"Der Jahrestarif steht im Fokus: einmal zahlen, im Jahr sparen und 12 Monate FIO sichern.",
+ "fp.monthlyAlternativeNote":"Lieber monatlich zahlen? Die Monatsoption bleibt verfügbar."
+});
+Object.assign(it,{
+ "fp.annualBestChoice":"Scelta migliore",
+ "fp.annualPriorityNote":"Il piano annuale è in evidenza: paghi una volta, risparmi nell'anno e hai 12 mesi di FIO.",
+ "fp.monthlyAlternativeNote":"Preferisci pagare mese per mese? Il mensile resta disponibile."
+});
+
+
+/* FIO_SETTINGS_THEME_HELP_20261003 */
+Object.assign(ptBR,{
+ "settings.colors":"Cores",
+ "settings.colorsDesc":"Aparência do FIO",
+ "settings.dark":"Escuro",
+ "settings.light":"Claro",
+ "settings.themeHint":"Alterne entre o tema escuro e o tema claro.",
+ "settings.toggleTheme":"Alternar entre tema escuro e claro",
+ "settings.helpDesc":"Central de ajuda",
+ "settings.helpCopy":"Precisa falar com o FIO ou resolver algum problema? Abra o suporte.",
+ "settings.support":"Suporte"
+});
+Object.assign(en,{
+ "settings.colors":"Colors",
+ "settings.colorsDesc":"FIO appearance",
+ "settings.dark":"Dark",
+ "settings.light":"Light",
+ "settings.themeHint":"Switch between dark and light themes.",
+ "settings.toggleTheme":"Switch between dark and light theme",
+ "settings.helpDesc":"Help center",
+ "settings.helpCopy":"Need to contact FIO or solve a problem? Open support.",
+ "settings.support":"Support"
+});
+Object.assign(es,{
+ "settings.colors":"Colores",
+ "settings.colorsDesc":"Apariencia de FIO",
+ "settings.dark":"Oscuro",
+ "settings.light":"Claro",
+ "settings.themeHint":"Cambia entre el tema oscuro y el claro.",
+ "settings.toggleTheme":"Cambiar entre tema oscuro y claro",
+ "settings.helpDesc":"Centro de ayuda",
+ "settings.helpCopy":"¿Necesitas contactar con FIO o resolver un problema? Abre soporte.",
+ "settings.support":"Soporte"
+});
+Object.assign(fr,{
+ "settings.colors":"Couleurs",
+ "settings.colorsDesc":"Apparence de FIO",
+ "settings.dark":"Sombre",
+ "settings.light":"Clair",
+ "settings.themeHint":"Passez du thème sombre au thème clair.",
+ "settings.toggleTheme":"Basculer entre thème sombre et clair",
+ "settings.helpDesc":"Centre d'aide",
+ "settings.helpCopy":"Besoin de contacter FIO ou de résoudre un problème ? Ouvrez l'assistance.",
+ "settings.support":"Assistance"
+});
+Object.assign(de,{
+ "settings.colors":"Farben",
+ "settings.colorsDesc":"FIO-Darstellung",
+ "settings.dark":"Dunkel",
+ "settings.light":"Hell",
+ "settings.themeHint":"Zwischen dunklem und hellem Design wechseln.",
+ "settings.toggleTheme":"Zwischen dunklem und hellem Design wechseln",
+ "settings.helpDesc":"Hilfecenter",
+ "settings.helpCopy":"Du brauchst Hilfe von FIO oder möchtest ein Problem lösen? Öffne den Support.",
+ "settings.support":"Support"
+});
+Object.assign(it,{
+ "settings.colors":"Colori",
+ "settings.colorsDesc":"Aspetto di FIO",
+ "settings.dark":"Scuro",
+ "settings.light":"Chiaro",
+ "settings.themeHint":"Passa dal tema scuro a quello chiaro.",
+ "settings.toggleTheme":"Passa dal tema scuro a quello chiaro",
+ "settings.helpDesc":"Centro assistenza",
+ "settings.helpCopy":"Devi contattare FIO o risolvere un problema? Apri il supporto.",
+ "settings.support":"Supporto"
+});
+
+
+/* FIO_SERVICES_EDITOR_20261003 */
+Object.assign(ptBR,{
+ "services.editShort":"Editar",
+ "services.basicInfo":"Informações do serviço",
+ "services.basicInfoDesc":"Nome e descrição que o cliente vai enxergar.",
+ "services.namePlaceholder":"Ex.: Corte + Barba",
+ "services.priceTime":"Valor e duração",
+ "services.priceTimeDesc":"Defina quanto custa e quanto tempo ocupa na agenda.",
+ "services.quickDuration":"Duração rápida",
+ "services.preview":"PRÉVIA",
+ "services.previewName":"Nome do serviço"
+});
+Object.assign(en,{
+ "services.editShort":"Edit",
+ "services.basicInfo":"Service information",
+ "services.basicInfoDesc":"Name and description shown to clients.",
+ "services.namePlaceholder":"E.g. Haircut + Beard",
+ "services.priceTime":"Price and duration",
+ "services.priceTimeDesc":"Set the price and how much schedule time it uses.",
+ "services.quickDuration":"Quick duration",
+ "services.preview":"PREVIEW",
+ "services.previewName":"Service name"
+});
+Object.assign(es,{
+ "services.editShort":"Editar",
+ "services.basicInfo":"Información del servicio",
+ "services.basicInfoDesc":"Nombre y descripción que verá el cliente.",
+ "services.namePlaceholder":"Ej.: Corte + Barba",
+ "services.priceTime":"Precio y duración",
+ "services.priceTimeDesc":"Define el precio y cuánto tiempo ocupa en la agenda.",
+ "services.quickDuration":"Duración rápida",
+ "services.preview":"VISTA PREVIA",
+ "services.previewName":"Nombre del servicio"
+});
+Object.assign(fr,{
+ "services.editShort":"Modifier",
+ "services.basicInfo":"Informations du service",
+ "services.basicInfoDesc":"Nom et description visibles par le client.",
+ "services.namePlaceholder":"Ex. Coupe + Barbe",
+ "services.priceTime":"Prix et durée",
+ "services.priceTimeDesc":"Définissez le prix et le temps occupé dans l’agenda.",
+ "services.quickDuration":"Durée rapide",
+ "services.preview":"APERÇU",
+ "services.previewName":"Nom du service"
+});
+Object.assign(de,{
+ "services.editShort":"Bearbeiten",
+ "services.basicInfo":"Serviceinformationen",
+ "services.basicInfoDesc":"Name und Beschreibung für Kunden.",
+ "services.namePlaceholder":"Z. B. Schnitt + Bart",
+ "services.priceTime":"Preis und Dauer",
+ "services.priceTimeDesc":"Preis und belegte Zeit im Kalender festlegen.",
+ "services.quickDuration":"Schnelle Dauer",
+ "services.preview":"VORSCHAU",
+ "services.previewName":"Servicename"
+});
+Object.assign(it,{
+ "services.editShort":"Modifica",
+ "services.basicInfo":"Informazioni del servizio",
+ "services.basicInfoDesc":"Nome e descrizione visibili al cliente.",
+ "services.namePlaceholder":"Es.: Taglio + Barba",
+ "services.priceTime":"Prezzo e durata",
+ "services.priceTimeDesc":"Definisci prezzo e tempo occupato in agenda.",
+ "services.quickDuration":"Durata rapida",
+ "services.preview":"ANTEPRIMA",
+ "services.previewName":"Nome del servizio"
+});
