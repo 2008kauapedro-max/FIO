@@ -17,6 +17,7 @@ import { Feed } from './pages/Feed';
 import { PublicPortal } from './pages/PublicPortal';
 import { GuidedTour } from './components/GuidedTour';
 import { FioPlans } from './pages/FioPlans';
+import { LegalPage } from './pages/Legal';
 const PlatformApp=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformApp})));
 const PlatformLogin=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformLogin})));
 
@@ -50,7 +51,7 @@ export default function App(){
  const {t,locale,region,setLocale,setRegion,setCurrency}=useI18n();
  const location=useLocation(),navigate=useNavigate();
  const isPlatform=location.pathname==='/acesso/plataforma'||location.pathname==='/platform'||location.pathname.startsWith('/platform/');
- const reservedPublicSlugs=new Set(['owner','barber','client','login','reset-password','confirm-email','acesso','b','barbearia','platform','api']);
+ const reservedPublicSlugs=new Set(['owner','barber','client','login','reset-password','confirm-email','privacidade','termos','acesso','b','barbearia','platform','api']);
  const singleSlug=location.pathname.match(/^\/([a-z0-9-]{3,60})\/?$/)?.[1]??'';
  const isCleanPublicSlug=Boolean(singleSlug&&!reservedPublicSlugs.has(singleSlug));
  const isPublicPortal=location.pathname.startsWith('/b/')||location.pathname.startsWith('/barbearia/')||isCleanPublicSlug;
@@ -170,6 +171,8 @@ export default function App(){
   manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':`/api/public/manifest/${encodeURIComponent(data.shop.slug)}?v=client-brand-v2`;
  },[data?.membership.role,data?.shop.slug,isPlatform,isPublicPortal]);
 
+ if(location.pathname==='/privacidade')return <LegalPage kind="privacy"/>;
+ if(location.pathname==='/termos')return <LegalPage kind="terms"/>;
  if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<AppLoading/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
  if(isPlatform)return <Suspense fallback={<AppLoading/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
  if(isPublicPortal)return <PublicPortal/>;

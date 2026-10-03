@@ -74,6 +74,30 @@ describe('release authorization regressions',()=>{
   await expect(db.query('select fio_private.guard_new_client_subscription()')).rejects.toThrow();
   await expect(db.query("insert into public.subscription_plans(barbershop_id,name,cuts,validity_days,price_cents) values($1,'Fraude',4,30,1)",[shop])).rejects.toThrow('row-level security');
  });
+ it('texto com sintaxe SQL continua sendo apenas dado parametrizado',async()=>{
+  await billing('PRO');
+
+  const malicious="Roberto'); DROP TABLE customers;--";
+
+  const id=await scalar<string>(
+   'insert into public.customers(barbershop_id,name) values($1,$2) returning id',
+   [shop,malicious]
+  );
+
+  expect(
+   await scalar<string>(
+    'select name from public.customers where id=$1',
+    [id]
+   )
+  ).toBe(malicious);
+
+  expect(
+   await scalar<number>(
+    'select count(*)::integer from public.customers where barbershop_id=$1',
+    [shop]
+   )
+  ).toBeGreaterThan(0);
+ });
 });
 
 describe('plan changes preserve paid access until proof',()=>{

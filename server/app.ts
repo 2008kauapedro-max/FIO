@@ -35,11 +35,61 @@ function secureLog(requestId:string,error:unknown){
  if(!(error instanceof ApiError)&&!(error instanceof ZodError))console.error(JSON.stringify({event:'api_error',requestId,status:500,code:'INTERNAL_ERROR'}));
 }
 
+
+function normalizedOrigin(value:string|undefined){
+ if(!value)return '';
+ try{return new URL(value).origin.toLowerCase();}catch{return '';}
+}
+
+function allowedBrowserWriteOrigin(req:express.Request){
+ if(['GET','HEAD','OPTIONS'].includes(req.method.toUpperCase()))return true;
+
+ // SyncPay é servidor-servidor e possui validação própria de assinatura.
+ if(req.originalUrl.startsWith('/api/webhooks/syncpay'))return true;
+
+ const rawOrigin=req.get('origin');
+ if(!rawOrigin)return true;
+
+ const origin=normalizedOrigin(rawOrigin);
+ if(!origin)return false;
+
+ const host=(req.get('x-forwarded-host')||req.get('host')||'')
+  .split(',')[0].trim().toLowerCase();
+
+ const proto=(req.get('x-forwarded-proto')||(req.secure?'https':'http'))
+  .split(',')[0].trim().toLowerCase();
+
+ const sameHost=host?normalizedOrigin(proto+'://'+host):'';
+
+ const configured=(process.env.FIO_ALLOWED_ORIGINS??'')
+  .split(',')
+  .map(item=>normalizedOrigin(item.trim()))
+  .filter(Boolean);
+
+ const local=process.env.NODE_ENV==='production'
+  ?[]
+  :['http://localhost:5173','http://127.0.0.1:5173'];
+
+ return [sameHost,...configured,...local]
+  .filter(Boolean)
+  .includes(origin);
+}
+
 export function createApp(authenticator: Authenticator=authenticate) {
  const app=express();
  app.disable('x-powered-by');
  app.use(helmet({referrerPolicy:{policy:'strict-origin-when-cross-origin'},strictTransportSecurity:process.env.NODE_ENV==='production'?undefined:false,contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'",'https://challenges.cloudflare.com'],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'",'https://*.supabase.co','wss://*.supabase.co'],imgSrc:["'self'",'data:','blob:','https://*.supabase.co'],frameSrc:['https://challenges.cloudflare.com'],objectSrc:["'none'"],frameAncestors:["'none'"]}}}));
  app.use((_,res,next)=>{res.setHeader('X-Request-Id',randomUUID());res.setHeader('Cache-Control','no-store');next();});
+ app.use('/api',(req,res,next)=>{
+  if(!allowedBrowserWriteOrigin(req)){
+   res.status(403).json({
+    code:'ORIGIN_FORBIDDEN',
+    message:'Origem não autorizada.'
+   });
+   return;
+  }
+  next();
+ });
  app.use('/api',rateLimit('api-ingress',{windowMs:60_000,max:300}));
  // O webhook precisa do corpo bruto para validar a assinatura antes do JSON parser global.
  app.post('/api/webhooks/syncpay',express.raw({type:'*/*',limit:'64kb'}),async(req,res)=>handleSyncpayWebhook(req,res));

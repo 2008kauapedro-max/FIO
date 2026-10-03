@@ -1925,3 +1925,23 @@ body:has(.workspace),
  }
 }
 /* END FIO_CLIENT_AREA_ACTIONS_20261002 */
+/* FIO LEGAL PAGES */
+.legal-page{min-height:100dvh;background:#090909;color:#f4f4f4}
+.legal-header{height:76px;padding:0 max(24px,5vw);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #242424}
+.legal-logo img{display:block;width:88px;height:auto}
+.legal-back{font-size:.82rem;color:#b5b5b5}
+.legal-back:hover{color:#fff}
+.legal-content{width:min(860px,calc(100% - 40px));margin:0 auto;padding:64px 0 100px}
+.legal-content>h1{font-size:clamp(2.2rem,6vw,4.2rem);max-width:760px;margin-bottom:10px}
+.legal-updated{color:#777;font-size:.82rem;margin-bottom:34px}
+.legal-intro{font-size:1.02rem;color:#c6c6c6;border-bottom:1px solid #292929;padding-bottom:24px;margin-bottom:38px}
+.legal-content section{padding:28px 0;border-bottom:1px solid #242424}
+.legal-content section h2{font-size:1.18rem;margin-bottom:15px}
+.legal-content section p,.legal-content li{color:#aaa;font-size:.92rem;line-height:1.75}
+.legal-content ul{padding-left:22px;margin:12px 0 0}
+.legal-content li+li{margin-top:10px}
+.legal-contact{margin-top:38px;padding:20px;border:1px solid #303030;border-radius:12px;background:#111;display:flex;flex-direction:column;gap:6px}
+.legal-contact strong{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:#888}
+.legal-contact a{font-size:.95rem;text-decoration:underline;text-underline-offset:3px}
+.fio-legal-inline{text-decoration:underline;text-underline-offset:3px;font-weight:600}
+@media(max-width:760px){.legal-content{padding-top:42px}.legal-header{padding-inline:20px}.legal-content section p,.legal-content li{font-size:.88rem}}

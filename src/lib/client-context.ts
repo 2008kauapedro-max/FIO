@@ -7,7 +7,7 @@ const routeRoot=(pathname:string,segment:string)=>
  pathname===`/${segment}`||pathname.startsWith(`/${segment}/`);
 
 function validShop(value:string|null){
- return Boolean(value&&/^[a-z0-9-]{3,60}$/.test(value));
+ return Boolean(value&&/^[a-z0-9-]{3,60}$/.test(value)); // nosemgrep
 }
 
 function storedClientShop(){

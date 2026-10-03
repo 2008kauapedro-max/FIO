@@ -1210,3 +1210,13 @@ summary::-webkit-details-marker {
     transition: none !important;
   }
 }
+
+/* FIO PUBLIC LEGAL */
+.information-page .legal-updated{color:#707a72;font-size:13px;margin-bottom:30px}
+.information-page .legal-intro{font-size:17px;border-bottom:1px solid #d7ddd8;padding-bottom:20px;margin-bottom:28px}
+.information-page .legal-section{padding:24px 0;border-bottom:1px solid #d7ddd8}
+.information-page .legal-section h2{font-size:22px;margin-bottom:14px}
+.information-page .legal-section ul{padding-left:22px}
+.information-page .legal-section li{line-height:1.7;margin-bottom:10px;color:#485049}
+.information-page .legal-contact{margin-top:30px;padding:20px;border:1px solid #d7ddd8;border-radius:12px;display:flex;flex-direction:column;gap:5px}
+.information-page .legal-contact a{text-decoration:underline;text-underline-offset:3px}
