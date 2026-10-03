@@ -19,6 +19,26 @@ describe('onboarding do OWNER',()=>{
  it('paletas são sistemas completos com contraste explícito',async()=>{await asUser(1);const r=await db.query<{palette_key:string;light_background:string;light_text:string;dark_background:string;dark_text:string}>('select palette_key,light_background,light_text,dark_background,dark_text from public.shop_palettes');expect(r.rows.length).toBeGreaterThanOrEqual(6);for(const p of r.rows){expect(p.light_background).toMatch(/^#[0-9a-f]{6}$/i);expect(p.light_text).toMatch(/^#[0-9a-f]{6}$/i);expect(p.dark_background).toMatch(/^#[0-9a-f]{6}$/i);expect(p.dark_text).toMatch(/^#[0-9a-f]{6}$/i);}});
  it('RLS impede cliente de ler ou alterar o rascunho do OWNER',async()=>{await asUser(3);expect(await scalar<number>('select count(*)::int from public.onboarding_progress')).toBe(0);await expect(db.query("insert into public.onboarding_progress(barbershop_id,owner_id) values($1,$2)",[shop,uid(3)])).rejects.toThrow('row-level security');});
 });
+describe('perfil do responsável e modo solo',()=>{
+ it('separa identidade pessoal do contato público e salva antes de recarregar o workspace',()=>{
+  const tsx=readFileSync(resolve('src/pages/OwnerOnboarding.tsx'),'utf8');
+  expect(tsx).toContain('ownerPhone');
+  expect(tsx).toContain('phone:ownerPhone.trim()');
+  expect(tsx).toContain("setWhatsapp(s.shop.whatsapp??'')");
+  expect(tsx).toContain("'/profile/contact'");
+  expect(tsx).toContain('if(creating)setShopId(id)');
+ });
+
+ it('modo solo continua sem equipe e usa o OWNER como profissional',()=>{
+  const app=readFileSync(resolve('src/App.tsx'),'utf8');
+  const workspace=readFileSync(resolve('src/pages/Workspace.tsx'),'utf8');
+
+  expect(app).toContain("!(solo&&n.path==='/equipe')");
+  expect(workspace).toContain("(solo&&t.role==='OWNER')");
+  expect(workspace).toContain("owner&&!solo");
+ });
+});
+
 describe('contratos mobile e publicação',()=>{
  it('fluxo e layout evitam overflow horizontal estrutural',()=>{const css=readFileSync(resolve('src/styles.css'),'utf8'),tsx=readFileSync(resolve('src/pages/OwnerOnboarding.tsx'),'utf8');expect(css).toContain('.owner-onboarding');expect(css).toContain('overflow-x:hidden');expect(css).toContain('max-width:760px');expect(css).toContain('@media(max-width:430px)');for(const width of [320,360,390,430])expect(width).toBeGreaterThan(0);expect(tsx).toContain("t('onboarding.step',{step})");const dict=readFileSync(resolve('src/i18n/dictionaries.ts'),'utf8');expect(dict).toContain('Passo {{step}} de 5');expect(tsx).toContain('onboarding/activate');});
  it('portal público recebe as configurações de identidade pelo endpoint existente',()=>{const app=readFileSync(resolve('server/app.ts'),'utf8');expect(app).toContain('shop_palettes');expect(app).toContain('logo_asset_path');expect(app).toContain('instagram');expect(app).toContain('address');});

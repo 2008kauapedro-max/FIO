@@ -1945,3 +1945,26 @@ body:has(.workspace),
 .legal-contact a{font-size:.95rem;text-decoration:underline;text-underline-offset:3px}
 .fio-legal-inline{text-decoration:underline;text-underline-offset:3px;font-weight:600}
 @media(max-width:760px){.legal-content{padding-top:42px}.legal-header{padding-inline:20px}.legal-content section p,.legal-content li{font-size:.88rem}}
+
+/* FIO OWNER PROFILE ONBOARDING */
+.ob-owner-profile-edit{
+  padding:18px;
+  margin:18px 0 22px;
+  border:1px solid var(--line,#2b2b2b);
+  border-radius:14px;
+  background:rgba(255,255,255,.025);
+}
+.ob-owner-profile-edit h2{
+  margin:3px 0 7px;
+  font-size:1.15rem;
+}
+.ob-owner-profile-edit>label{
+  display:block;
+  margin-top:14px;
+}
+.ob-owner-profile-edit small{
+  display:block;
+  margin-top:6px;
+  opacity:.7;
+  line-height:1.4;
+}

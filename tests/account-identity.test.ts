@@ -34,6 +34,8 @@ describe('fluxo de conta na interface',()=>{
   const auth=readFileSync(resolve('src/pages/Auth.tsx'),'utf8');
   const server=readFileSync(resolve('server/app.ts'),'utf8');
   expect(auth).toContain('account_phone:signupPhone.trim()');
+  expect(auth).toContain('display_name:signupName.trim()');
+  expect(auth).toContain('value={signupName}');
   expect(auth).toContain("t('auth.existingAccount')");
   const dict=readFileSync(resolve('src/i18n/dictionaries.ts'),'utf8');
   expect(dict).toContain('Este e-mail já está vinculado a uma conta FIO.');

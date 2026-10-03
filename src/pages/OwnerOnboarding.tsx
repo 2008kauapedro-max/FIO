@@ -46,7 +46,7 @@ function scheduleSummary(days:DaySchedule[],t:Translate){
 export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  const {t,formatCurrency}=useI18n();
  const [shopId,setShopId]=useState(initialShopId??''),[step,setStep]=useState(1),[completed,setCompleted]=useState<number[]>([]),[draft,setDraft]=useState<Record<string,unknown>>({}),[snapshot,setSnapshot]=useState<Snapshot|null>(null),[loading,setLoading]=useState(Boolean(initialShopId)),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[success,setSuccess]=useState(false);
- const [operationMode,setOperationMode]=useState<'SHOP'|'SOLO'>('SHOP'),[name,setName]=useState(''),[slug,setSlug]=useState(''),[slugTouched,setSlugTouched]=useState(false),[displayName,setDisplayName]=useState(''),[whatsapp,setWhatsapp]=useState(''),[instagram,setInstagram]=useState(''),[address,setAddress]=useState(''),[amenities,setAmenities]=useState<string[]>([]),[services,setServices]=useState<Service[]>(()=>serviceDefaults(t)),[schedules,setSchedules]=useState<DaySchedule[]>(scheduleDefaults),[hoursSaved,setHoursSaved]=useState(false),[paletteKey,setPaletteKey]=useState('fio-black'),[themeMode,setThemeMode]=useState<'light'|'dark'>('dark'),[customAccent,setCustomAccent]=useState('#ffffff'),[logoPath,setLogoPath]=useState<string|null>(null),[coverPath,setCoverPath]=useState<string|null>(null),[backgroundPath,setBackgroundPath]=useState<string|null>(null);
+ const [operationMode,setOperationMode]=useState<'SHOP'|'SOLO'>('SHOP'),[name,setName]=useState(''),[slug,setSlug]=useState(''),[slugTouched,setSlugTouched]=useState(false),[displayName,setDisplayName]=useState(''),[ownerPhone,setOwnerPhone]=useState(''),[whatsapp,setWhatsapp]=useState(''),[instagram,setInstagram]=useState(''),[address,setAddress]=useState(''),[amenities,setAmenities]=useState<string[]>([]),[services,setServices]=useState<Service[]>(()=>serviceDefaults(t)),[schedules,setSchedules]=useState<DaySchedule[]>(scheduleDefaults),[hoursSaved,setHoursSaved]=useState(false),[paletteKey,setPaletteKey]=useState('fio-black'),[themeMode,setThemeMode]=useState<'light'|'dark'>('dark'),[customAccent,setCustomAccent]=useState('#ffffff'),[logoPath,setLogoPath]=useState<string|null>(null),[coverPath,setCoverPath]=useState<string|null>(null),[backgroundPath,setBackgroundPath]=useState<string|null>(null);
  const publicLink=shopId&&slug?`${window.location.origin}/${slug}`:'';
  const qrRef=useRef<HTMLDivElement>(null);
 
@@ -61,7 +61,7 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
    const metaName=[meta?.display_name,meta?.full_name,meta?.name].find(v=>typeof v==='string'&&v.trim().length>=2);
    const accountPhone=typeof meta?.account_phone==='string'?meta.account_phone.trim():'';
    if(metaName)setDisplayName(current=>current||String(metaName).trim());
-   if(accountPhone)setWhatsapp(current=>current||accountPhone);
+   if(accountPhone)setOwnerPhone(current=>current||accountPhone);
   });
   return()=>{active=false;};
  },[shopId]);
@@ -77,13 +77,13 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
    setStep(s.progress?.current_step??s.shop.onboarding_step??1);
    setCompleted(s.progress?.completed_steps??[]);
    setDraft(d);
-   setOperationMode(s.shop.operation_mode??'SHOP');setName(s.shop.name);setSlug(s.shop.slug);setWhatsapp(s.shop.whatsapp??s.owner.phone??'');setInstagram(cleanInstagram(s.shop.instagram??''));setAddress(s.shop.address??'');setAmenities(s.amenities);
+   setOperationMode(s.shop.operation_mode??'SHOP');setName(s.shop.name);setSlug(s.shop.slug);setWhatsapp(s.shop.whatsapp??'');setInstagram(cleanInstagram(s.shop.instagram??''));setAddress(s.shop.address??'');setAmenities(s.amenities);
    setServices(s.services.length?s.services.map(service=>({...service,_key:service.id??newKey()})):serviceDefaults(t));
    const nextSchedules=scheduleDefaults();
    for(const hour of s.hours){const target=nextSchedules.find(x=>x.weekday===hour.weekday);if(target){target.enabled=true;target.opensAt=hour.opens_at.slice(0,5);target.closesAt=hour.closes_at.slice(0,5);}}
    if(s.hours.length){for(const day of nextSchedules)if(!s.hours.some(h=>h.weekday===day.weekday))day.enabled=false;}
    setSchedules(nextSchedules);setHoursSaved(s.hours.length>0);
-   setPaletteKey(s.shop.palette_key);setThemeMode(s.shop.theme_mode);setCustomAccent(s.shop.custom_accent??'#ffffff');setLogoPath(s.shop.logo_asset_path);setCoverPath(s.shop.cover_asset_path);setBackgroundPath(s.shop.background_asset_path);setDisplayName(s.owner.display_name??'');setLoading(false);
+   setPaletteKey(s.shop.palette_key);setThemeMode(s.shop.theme_mode);setCustomAccent(s.shop.custom_accent??'#ffffff');setLogoPath(s.shop.logo_asset_path);setCoverPath(s.shop.cover_asset_path);setBackgroundPath(s.shop.background_asset_path);setDisplayName(s.owner.display_name??'');setOwnerPhone(s.owner.phone??'');setLoading(false);
   }).catch(e=>{if(active){setError((e as Error).message);setLoading(false);}});
   return()=>{active=false;};
  },[shopId]);
@@ -111,18 +111,52 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  async function createFirst(){
   setBusy(true);setError('');setNotice('');
   try{
-   let ownerName=displayName.trim();
-   if(!ownerName&&supabase){const current=await supabase.auth.getUser();const user=current.data.user;const meta=user?.user_metadata as Record<string,unknown>|undefined;const fromMeta=[meta?.display_name,meta?.full_name,meta?.name].find(v=>typeof v==='string'&&v.trim().length>=2);const fromEmail=user?.email?.split('@')[0]?.replace(/[._-]+/g,' ').trim();ownerName=typeof fromMeta==='string'?fromMeta.trim():(fromEmail&&fromEmail.length>=2?fromEmail:t('onboarding.ownerFallback'));}
-   if(!ownerName)ownerName=t('onboarding.ownerFallback');setDisplayName(ownerName);
-   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'create',name:name.trim(),slug,displayName:ownerName,operationMode,phone:whatsapp.trim()});
-   setShopId(r.barbershopId);sessionStorage.setItem('fio-shop',r.barbershopId);return r.barbershopId;
+   const ownerName=displayName.trim();
+   const r=await api<{barbershopId:string}>('/onboarding',undefined,{
+    mode:'create',
+    name:name.trim(),
+    slug,
+    displayName:ownerName,
+    operationMode,
+    phone:ownerPhone.trim()
+   });
+   sessionStorage.setItem('fio-shop',r.barbershopId);
+   return r.barbershopId;
   }catch(e){setError((e as Error).message);return '';}finally{setBusy(false);}
  }
 
  async function continueFromFirst(){
-  const id=shopId||await createFirst();if(!id)return;
+  const creating=!shopId;
+  const id=shopId||await createFirst();
+  if(!id)return;
+
   setBusy(true);setError('');
-  try{await saveSetup(id,2,true);setServices(list=>list.length?list:serviceDefaults(t));}catch(e){setError((e as Error).message);}finally{setBusy(false);}
+
+  try{
+   // Perfil da pessoa e perfil público do negócio são coisas diferentes.
+   await api(
+    '/profile/contact',
+    id,
+    {
+     displayName:displayName.trim(),
+     phone:ownerPhone.trim()
+    },
+    'PATCH'
+   );
+
+   // Salva os dados públicos ANTES de disparar o recarregamento
+   // do workspace recém-criado. Isso evita WhatsApp/Instagram/endereço
+   // voltarem vazios por uma corrida entre requests.
+   await saveSetup(id,2,true);
+
+   if(creating)setShopId(id);
+
+   setServices(list=>list.length?list:serviceDefaults(t));
+  }catch(e){
+   setError((e as Error).message);
+  }finally{
+   setBusy(false);
+  }
  }
 
  async function persistServices(){
@@ -191,7 +225,7 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
   const anchor=document.createElement('a');anchor.href=url;anchor.download=`${slug||'fio'}-qr-code.svg`;document.body.appendChild(anchor);anchor.click();anchor.remove();
   window.setTimeout(()=>URL.revokeObjectURL(url),1000);
  };
- const canContinue=step===1?Boolean(name.trim().length>=2&&/^[a-z0-9-]{3,60}$/.test(slug)&&whatsapp.replace(/\D/g,'').length>=10):step===2?services.some(s=>s.active&&validService(s)):step===3?validSchedules.length>0:step===4?Boolean(paletteKey&&logoPath):true;
+ const canContinue=step===1?Boolean(displayName.trim().length>=2&&ownerPhone.replace(/\D/g,'').length>=10&&ownerPhone.replace(/\D/g,'').length<=13&&name.trim().length>=2&&/^[a-z0-9-]{3,60}$/.test(slug)&&whatsapp.replace(/\D/g,'').length>=10):step===2?services.some(s=>s.active&&validService(s)):step===3?validSchedules.length>0:step===4?Boolean(paletteKey&&logoPath):true;
 
  if(loading)return <div className="owner-onboarding ob-loading">{t('onboarding.loading')}</div>;
  if(success)return <div className="owner-onboarding ob-success"><span className="ob-success-mark"><Check/></span><p className="eyebrow">{t('onboarding.readyEyebrow')}</p><h1>{operationMode==='SOLO'?t('onboarding.soloReady'):t('onboarding.shopReady')}</h1><p className="ob-muted">{t('onboarding.spaceAvailable')}</p><div className="ob-success-actions"><a href={`/${slug}`} target="_blank" rel="noreferrer"><ExternalLink size={16}/>{t('onboarding.viewClient')}</a><button onClick={()=>void copy()}><Copy size={16}/>{t('onboarding.copyLink')}</button><button onClick={()=>void share()}><Share2 size={16}/>{t('onboarding.share')}</button><button onClick={onDone}>{t('onboarding.enterManagement')}</button></div><div className="ob-qr"><div className="ob-qr-code" ref={qrRef} aria-label={t('onboarding.qrLabel')}><QRCodeSVG value={publicLink} size={180} level="M" includeMargin bgColor="#ffffff" fgColor="#000000"/></div><button type="button" className="secondary" onClick={downloadQr}>{t('onboarding.downloadQr')}</button></div></div>;
@@ -204,12 +238,44 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
    {notice&&<p className="ob-notice" role="status">{notice}</p>}
    {step===1&&<>
     <p className="ob-eyebrow">{t('onboarding.workEyebrow')}</p><h1>{t('onboarding.chooseSpace')}</h1><p className="ob-muted">{t('onboarding.workDesc')}</p>
+    <div className="ob-owner-profile-edit">
+     <p className="ob-eyebrow">{t('auth.profileEyebrow')}</p>
+     <h2>{t('auth.profileQuestion')}</h2>
+     <p className="ob-muted">{t('auth.profileDesc')}</p>
+
+     <label>
+      {t('auth.yourName')}
+      <input
+       value={displayName}
+       autoComplete="name"
+       minLength={2}
+       maxLength={100}
+       placeholder={t('auth.yourName')}
+       onChange={e=>setDisplayName(e.target.value)}
+      />
+     </label>
+
+     <label>
+      {t('auth.phone')}
+      <input
+       value={ownerPhone}
+       type="tel"
+       inputMode="tel"
+       autoComplete="tel"
+       maxLength={24}
+       placeholder="(61) 99999-9999"
+       onInput={e=>setOwnerPhone(e.currentTarget.value)}
+      />
+      <small>{t('auth.phoneIdentityHint')}</small>
+     </label>
+    </div>
+
     <div className="ob-mode-grid">
      <button type="button" disabled={Boolean(shopId)} className={operationMode==='SHOP'?'selected':''} onClick={()=>setOperationMode('SHOP')}><strong>{t('onboarding.shopTeam')}</strong><span>{t('onboarding.shopTeamDesc')}</span></button>
-     <button type="button" disabled={Boolean(shopId)} className={operationMode==='SOLO'?'selected':''} onClick={()=>setOperationMode('SOLO')}><strong>{t('onboarding.solo')}</strong><span>{t('onboarding.soloDesc')}</span></button>
+     <button type="button" disabled={Boolean(shopId)} className={operationMode==='SOLO'?'selected':''} onClick={()=>{setOperationMode('SOLO');if(!whatsapp.trim()&&ownerPhone.trim())setWhatsapp(ownerPhone);}}><strong>{t('onboarding.solo')}</strong><span>{t('onboarding.soloDesc')}</span></button>
     </div>
     <label>{operationMode==='SOLO'?t('onboarding.professionalName'):t('onboarding.shopName')}<input autoFocus value={name} maxLength={100} placeholder={operationMode==='SOLO'?t('onboarding.professionalNamePlaceholder'):t('onboarding.shopNamePlaceholder')} onChange={e=>{const next=e.target.value;setName(next);if(!shopId&&!slugTouched)setSlug(slugify(next));}}/></label>
-    <label>WhatsApp<input value={whatsapp} inputMode="tel" type="tel" placeholder="(11) 99999-9999" onChange={e=>setWhatsapp(e.target.value)}/></label>
+    <label>WhatsApp<input value={whatsapp} inputMode="tel" type="tel" autoComplete="tel" placeholder="(11) 99999-9999" onInput={e=>setWhatsapp(e.currentTarget.value)}/></label>
     <label>Instagram <small>{t('onboarding.instagramHint')}</small><div className="ob-instagram-field"><span>@</span><input value={instagram} autoCapitalize="none" autoCorrect="off" placeholder="sua_barbearia" onChange={e=>setInstagram(cleanInstagram(e.target.value))}/></div></label>
     <label>{operationMode==='SOLO'?t('onboarding.soloAddress'):t('onboarding.address')} <small>{t('onboarding.optional')}</small><input value={address} placeholder={operationMode==='SOLO'?t('onboarding.soloAddressPlaceholder'):t('onboarding.addressPlaceholder')} onChange={e=>setAddress(e.target.value)}/></label>
     <label>{t('onboarding.siteLink')}<div className="ob-public-link-field"><span>{host()}/</span><input className="ob-slug" value={slug} maxLength={60} autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="nome-da-barbearia" onChange={e=>{setSlugTouched(true);setSlug(slugify(e.target.value));}}/></div><small className="ob-link-preview">{t('onboarding.yourLink')} <b>{host()}/{slug||'nome-da-barbearia'}</b></small></label>

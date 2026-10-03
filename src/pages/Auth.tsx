@@ -34,6 +34,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
  const [mode,setMode]=useState<AuthMode>(initialMode);
  const [email,setEmail]=useState(params.get('email')??'');
+ const [signupName,setSignupName]=useState('');
  const [signupPhone,setSignupPhone]=useState('');
  const [password,setPassword]=useState('');
  const [confirmPassword,setConfirmPassword]=useState('');
@@ -213,7 +214,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     const result=await supabase.auth.signUp({
      email,
      password,
-     options:{captchaToken:captchaToken||undefined,emailRedirectTo:`${window.location.origin}/confirm-email?${query.toString()}`,data:{account_phone:signupPhone.trim()}}
+     options:{captchaToken:captchaToken||undefined,emailRedirectTo:`${window.location.origin}/confirm-email?${query.toString()}`,data:{account_phone:signupPhone.trim(),...(audience!=='client'?{display_name:signupName.trim()}: {})}}
     });
 
     if(result.error){
@@ -328,6 +329,18 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    <p className="muted">{description}</p>
 
    <form onSubmit={submit}>
+    {!reset&&mode==='signup'&&audience!=='client'&&<Field label={t('auth.yourName')}>
+     <input
+      type="text"
+      autoComplete="name"
+      minLength={2}
+      maxLength={100}
+      value={signupName}
+      onChange={e=>setSignupName(e.target.value)}
+      required
+     />
+    </Field>}
+
     {!reset&&<Field label={t('auth.email')}>
      <input
       type="email"
