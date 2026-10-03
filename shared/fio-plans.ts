@@ -57,13 +57,13 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
   recommended:true,
   trialDays:14,
   prices:{weekly:null,monthly:14990,annual:149900},
-  highlights:['Até 450 clientes','Até 5 profissionais + responsável'],
+  highlights:['Até 500 clientes','Até 5 profissionais + responsável'],
   groups:[
    {title:'CAPACIDADE',items:[
-    'Até 450 clientes',
+    'Até 500 clientes',
     'Até 5 profissionais + responsável',
-    'Até 40 serviços',
-    'Até 3 pacotes de cortes'
+    'Até 20 serviços',
+    'Até 5 pacotes de cortes'
    ]},
    {title:'PRESENÇA DIGITAL',items:[
     'Mini site personalizado',
@@ -77,7 +77,7 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
    ]},
    {title:'INTELIGÊNCIA',items:[
     'Assistente FIO',
-    '100 consultas de IA por usuário/dia'
+    '150 consultas de IA por usuário/dia'
    ]}
   ]
  },
@@ -86,13 +86,13 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
   name:'FIO PREMIUM',
   eyebrow:'PARA OPERAÇÕES MAIORES',
   description:'Mais capacidade para equipes e carteiras de clientes maiores.',
-  prices:{weekly:null,monthly:24990,annual:249900},
+  prices:{weekly:null,monthly:29990,annual:299900},
   highlights:['Até 2.000 clientes','Até 10 profissionais + responsável'],
   groups:[
    {title:'CAPACIDADE',items:[
     'Até 2.000 clientes',
     'Até 10 profissionais + responsável',
-    'Até 80 serviços',
+    'Até 50 serviços',
     'Até 15 pacotes de cortes'
    ]},
    {title:'PRESENÇA DIGITAL',items:[

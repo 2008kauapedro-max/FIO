@@ -5,10 +5,13 @@ import "@fontsource/dm-sans/latin-500.css";
 import "@fontsource/dm-sans/latin-600.css";
 import "@fontsource/dm-sans/latin-700.css";
 import { App } from "./App";
+import { MarketingI18nProvider } from "./i18n";
 import "./styles/global.css";
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <MarketingI18nProvider>
+      <App />
+    </MarketingI18nProvider>
   </React.StrictMode>,
 );

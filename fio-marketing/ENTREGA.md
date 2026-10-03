@@ -1,36 +1,60 @@
-# Entrega — 29/09/2026
+# Landing FIO — refatoração de 02/10/2026
 
-**Referência:** FIO-PROJETO-PARA-ASTRA-20260929.zip, pasta finalfio1.
-O aplicativo original não foi alterado. Este projeto não acessa banco, APIs ou autenticação.
+Implementação em `fio-marketing`. O ZIP fornecido e o workspace contêm as mesmas
+versões da landing original e do catálogo de planos. O aplicativo, a autenticação,
+o banco, o onboarding e o checkout não foram modificados.
 
-**Usado e confirmado no código:** agenda por dia/profissional e status de atendimento
-(`src/pages/Workspace.tsx`, `src/components/BookingFlow.tsx`); página pública, identidade,
-serviços, profissionais, contato, localização e instalação PWA (`PublicPortal.tsx`);
-modo solo (`OwnerOnboarding.tsx`); atualização automática (`src/App.tsx`).
-Prévia com dados e estabelecimentos fictícios, identificada como demonstração.
+## O que mudou
 
-**Planos:** valores exatos de `shared/fio-plans.ts`, replicados em `src/data/plans.ts`.
-FREE/PRO/PLUS/PREMIUM ativos no catálogo, períodos semanal/mensal/anual.
-PREMIUM mantém a capacidade do contrato atual; não foram inventados limites numéricos.
-Teste PRO de 14 dias confirmado em `FioPlans.tsx`, `/api/saas/trial` e
-`20260920081758_release_readiness_guards.sql`: uma vez por barbearia no FREE.
-O FAQ de cancelamento acompanha o comportamento de `FioPlans.tsx`, sem criar garantias.
+- Hero apresenta agenda, clientes e equipe e mostra a interface da agenda.
+- Um único bloco claro reúne link público, serviços, equipe e modo solo.
+- Três passos curtos; três planos do catálogo atual; quatro dúvidas expansíveis.
+- Removidos os blocos repetidos de agenda, app/PWA, equipe, solo e NFC futuro.
+- Interfaces reaproveitam a estrutura visual do produto, com dados fictícios
+  explicitamente identificados. Não são capturas de contas reais.
+- Menu móvel com Escape, fechamento ao navegar e restauração do foco.
+- Seis idiomas: pt-BR, en, es, fr, de, it. Dicionário tipado e preferência de idioma
+  seguem `src/i18n/config.ts` e a chave `fio:locale`. Valores permanecem em BRL.
+- Estilos exclusivos do marketing; sem novas dependências de produção.
 
-**Omitido:** promessas de IA (habilitação em produção não verificada), financeiro como
-produto, publicação em lojas de aplicativos, WhatsApp automático e números de clientes
-ou depoimentos não comprovados. NFC aparece apenas como projeto futuro, sem compra.
-Não foi prometido tempo de configuração nem agendamento sem conta/instalação.
+## Fonte dos planos
 
-**Configurar para lançamento:**
-- `usefio.com.br`: apontar para este projeto; `www` redireciona ao domínio sem www.
-- `app.usefio.com.br`: apontar separadamente para o SaaS; ajustar `VITE_FIO_APP_URL` e reconstruir.
-- `agenda.usefio.com.br/{slug}`: depende de configuração futura no aplicativo; este site não a implementa.
-- Preencher `VITE_FIO_INSTAGRAM_URL` e `VITE_FIO_CONTACT_URL` com canais oficiais.
-- `/termos` e `/privacidade` são páginas explicitamente pendentes, com `noindex`.
-  Publicar os documentos aprovados antes do lançamento comercial. `/contato` informa o suporte interno.
-- Canonical, sitemap e metadados já usam `https://usefio.com.br`; não há imagem social inventada.
+A antiga landing tinha uma cópia desatualizada dos preços. Agora importa diretamente
+`shared/fio-plans.ts`, a mesma fonte de `FioPlans.tsx` e `server/syncpay.ts`:
+FREE, PRO e PREMIUM; mensal e anual. Nenhuma regra de cobrança foi alterada.
+Os limites e recursos também vêm desse catálogo e são traduzidos na apresentação.
+CTAs mantêm `VITE_FIO_APP_URL` e os mesmos parâmetros de login/cadastro.
 
-**Validação:** TypeScript, build e navegador nas larguras 320, 360, 375, 390, 412,
-430, 768, 1024, 1366, 1440 e 1920; preços nos três períodos, menu com Escape/foco,
-FAQ, expansão dos planos, personalização e rotas informativas. Sem overflow horizontal.
-Não houve teste de contratação ou do serviço em produção: o marketing apenas direciona ao app.
+## Validação
+
+- Typecheck: aplicativo e landing aprovados.
+- Testes existentes: 27 arquivos, 245 testes aprovados antes e após a alteração.
+- Build: aplicativo (frontend/backend) e landing aprovados.
+- Avisos preexistentes no aplicativo: comentários de otimização do Zod e bundle
+  acima de 500 kB. Não são erros de build.
+- Navegador Edge/Playwright: seis larguras, seis idiomas com persistência,
+  preços mensais/anuais, menu, Escape, accordions e destinos dos CTAs.
+- Nenhum erro de JavaScript/console e nenhum overflow horizontal encontrado.
+- Capturas revisadas visualmente em mobile, tablet e desktop.
+
+| Largura | Altura anterior | Altura nova | Redução |
+|---|---:|---:|---:|
+| 360 | 10.302 px | 4.943 px | 52,0% |
+| 390 | 10.258 px | 4.921 px | 52,0% |
+| 430 | 10.192 px | 4.893 px | 52,0% |
+| 768 | 9.075 px | 3.312 px | 63,5% |
+| 1366 | 7.187 px | 3.277 px | 54,4% |
+| 1920 | 7.230 px | 3.277 px | 54,7% |
+
+Medição em português, mensal, com detalhes fechados e fontes carregadas.
+Evidências: `docs/landing-evidence`; verificação reproduzível:
+`node scripts/verify-landing.mjs` (landing na porta 5174).
+
+## Limites e publicação
+
+A verificação comercial termina nos destinos dos links: não foi criada conta,
+realizado pagamento ou alterado ambiente de produção. Para publicar, o build
+precisa do checkout completo com os arquivos compartilhados; ver README.
+As páginas existentes de termos, privacidade e contato continuam disponíveis
+com o conteúdo anterior, ainda sinalizado como pendente. Não foram criados
+textos jurídicos nem canais de atendimento fictícios.

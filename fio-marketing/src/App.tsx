@@ -1,10 +1,12 @@
 import { useEffect } from "react";
+import { useMarketingI18n } from "./i18n";
 import { Header } from "./components/Header";
 import { Footer } from "./components/Footer";
 import { Home } from "./pages/Home";
 import { Information } from "./pages/Information";
 
 export function App() {
+  const { t } = useMarketingI18n();
   const path = window.location.pathname.replace(/\/$/, "") || "/";
   useEffect(() => {
     if (path === "/") return;
@@ -34,7 +36,7 @@ export function App() {
   return (
     <>
       <a href="#conteudo" className="skip-link">
-        Pular para o conteúdo
+        {t("skip")}
       </a>
       <Header />
       {path === "/" ? <Home /> : <Information page={path} />}

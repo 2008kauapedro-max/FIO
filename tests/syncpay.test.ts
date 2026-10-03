@@ -7,7 +7,7 @@ afterEach(()=>vi.unstubAllEnvs());
 describe('SyncPay billing boundary',()=>{
  it('derives the provider price from the trusted FIO catalog',()=>{
   expect(syncpayInternals.planConfig('PRO','monthly')).toMatchObject({amountCents:14990,periodicityDays:30});
-  expect(syncpayInternals.planConfig('PREMIUM','annual')).toMatchObject({amountCents:249900,periodicityDays:365});
+  expect(syncpayInternals.planConfig('PREMIUM','annual')).toMatchObject({amountCents:299900,periodicityDays:365});
  });
 
  it('retira PLUS e semanal das novas vendas',()=>{

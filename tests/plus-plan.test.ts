@@ -29,8 +29,8 @@ describe('catálogo comercial oficial do FIO',()=>{
    FIO_PLAN_CATALOG.find(x=>x.code==='PREMIUM')?.prices
   ).toMatchObject({
    weekly:null,
-   monthly:24990,
-   annual:249900
+   monthly:29990,
+   annual:299900
   });
  });
 

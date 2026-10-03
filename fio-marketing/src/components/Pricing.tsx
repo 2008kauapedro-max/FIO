@@ -1,87 +1,102 @@
 import { useState } from "react";
 import { Check, Plus } from "lucide-react";
-import { cycles, money, plans, type Cycle } from "../data/plans";
+import { cycles, plans, type Cycle } from "../data/plans";
 import { links } from "../data/config";
+import { useMarketingI18n } from "../i18n";
 
 export function Pricing() {
   const [cycle, setCycle] = useState<Cycle>("monthly");
-  const suffix = cycles.find((item) => item.key === cycle)!.suffix;
+  const { t, locale, translateFeature } = useMarketingI18n();
   return (
-    <section className="section pricing-section" id="planos">
+    <section className="section pricing-section light-section" id="planos">
       <div className="container">
-        <div className="section-heading pricing-heading">
+        <div className="pricing-heading">
           <div>
-            <span className="eyebrow">05 / SEU PRÓXIMO PASSO</span>
-            <h2>
-              Comece pequeno.
-              <br />
-              Tenha espaço para crescer.
-            </h2>
+            <span className="eyebrow">{t("plans")}</span>
+            <h2>{t("pricingTitle")}</h2>
+            <p>{t("pricingDescription")}</p>
           </div>
-          <p>
-            Uma agenda gratuita para começar.
-            <br />
-            Mais recursos quando fizer sentido.
-          </p>
+          <fieldset className="billing-switch">
+            <legend className="sr-only">{t("billingPeriod")}</legend>
+            {cycles.map((key) => (
+              <label className={cycle === key ? "active" : ""} key={key}>
+                <input
+                  type="radio"
+                  name="billing"
+                  value={key}
+                  checked={cycle === key}
+                  onChange={() => setCycle(key)}
+                />
+                <span>{t(key)}</span>
+              </label>
+            ))}
+          </fieldset>
         </div>
-        <fieldset className="billing-switch">
-          <legend className="sr-only">Período de cobrança</legend>
-          {cycles.map((item) => (
-            <label
-              className={cycle === item.key ? "active" : ""}
-              key={item.key}
-            >
-              <input
-                type="radio"
-                name="billing"
-                value={item.key}
-                checked={cycle === item.key}
-                onChange={() => setCycle(item.key)}
-              />
-              <span>{item.label}</span>
-            </label>
-          ))}
-        </fieldset>
         <div className="plans-grid">
           {plans.map((plan) => (
             <article
               className={`plan ${plan.recommended ? "recommended" : ""}`}
-              key={plan.name}
+              key={plan.code}
             >
               <div className="plan-name">
-                <h3>FIO {plan.name}</h3>
-                {plan.recommended && <span>Recomendado</span>}
+                <h3>{plan.name}</h3>
+                {plan.recommended && <span>{t("recommended")}</span>}
               </div>
-              <p className="plan-description">{plan.description}</p>
+              <p className="plan-description">
+                {t(
+                  plan.code === "FREE"
+                    ? "freeDescription"
+                    : plan.code === "PRO"
+                      ? "proDescription"
+                      : "premiumDescription",
+                )}
+              </p>
               <div className="price" aria-live="polite">
-                <strong>{money(plan.prices[cycle])}</strong>
-                <span>{plan.name === "FREE" ? "sem mensalidade" : suffix}</span>
+                <strong>
+                  {new Intl.NumberFormat(locale, {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(plan.prices[cycle]! / 100)}
+                </strong>
+                <span>
+                  {t(
+                    plan.code === "FREE"
+                      ? "noFee"
+                      : cycle === "monthly"
+                        ? "perMonth"
+                        : "perYear",
+                  )}
+                </span>
               </div>
+              <ul className="plan-features">
+                {plan.groups[0].items.slice(0, 3).map((feature) => (
+                  <li key={feature}>
+                    <Check size={15} />
+                    {translateFeature(feature)}
+                  </li>
+                ))}
+              </ul>
               <a
                 className={`button ${plan.recommended ? "" : "outline"}`}
                 href={links.signup}
               >
-                {plan.name === "FREE"
-                  ? "Começar grátis"
-                  : `Começar com ${plan.name}`}
+                {plan.code === "FREE"
+                  ? t("start")
+                  : t("choose", { plan: plan.code })}
               </a>
-              <ul className="plan-features">
-                {plan.features.map((feature) => (
-                  <li key={feature}>
-                    <Check size={14} />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
               <details className="plan-details">
                 <summary>
-                  Ver mais recursos <Plus size={14} />
+                  {t("moreFeatures")}
+                  <Plus size={16} />
                 </summary>
                 <ul className="plan-features">
-                  {plan.more.map((feature) => (
+                  {[
+                    ...plan.groups[0].items.slice(3),
+                    ...plan.groups.slice(1).flatMap((group) => group.items),
+                  ].map((feature) => (
                     <li key={feature}>
                       <Check size={14} />
-                      {feature}
+                      {translateFeature(feature)}
                     </li>
                   ))}
                 </ul>
@@ -91,13 +106,11 @@ export function Pricing() {
         </div>
         <div className="pricing-note">
           <p>
-            <b>Quer conhecer o PRO?</b> Teste por 14 dias, ativando pelo painel.
-            Disponível uma vez por barbearia no plano FREE.
+            {t("trialNote", {
+              days: plans.find((plan) => plan.code === "PRO")!.trialDays!,
+            })}
           </p>
-          <span>
-            Valores totais por período.
-            <br />A contratação acontece no aplicativo.
-          </span>
+          <span>{t("billingNote")}</span>
         </div>
       </div>
     </section>

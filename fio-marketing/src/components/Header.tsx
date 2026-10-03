@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { links } from "../data/config";
+import { useMarketingI18n } from "../i18n";
 
 export function Logo() {
+  const { t } = useMarketingI18n();
   return (
-    <a className="logo" href="/" aria-label="FIO — página inicial">
+    <a className="logo" href="/" aria-label={`FIO — ${t("home")}`}>
       <img src="/fio-logo.png" width="89" height="30" alt="FIO" />
     </a>
   );
 }
 export function Header() {
+  const { t } = useMarketingI18n();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const header = useRef<HTMLElement>(null);
@@ -40,7 +43,7 @@ export function Header() {
           ref={trigger}
           aria-expanded={open}
           aria-controls="main-nav"
-          aria-label={open ? "Fechar menu" : "Abrir menu"}
+          aria-label={open ? t("closeMenu") : t("openMenu")}
           onClick={() => setOpen(!open)}
         >
           {open ? <X /> : <Menu />}
@@ -48,19 +51,19 @@ export function Header() {
         <nav
           id="main-nav"
           className={open ? "main-nav is-open" : "main-nav"}
-          aria-label="Navegação principal"
+          aria-label={t("navigation")}
           onClick={() => setOpen(false)}
         >
           <div className="nav-sections">
-            <a href="/#produto">Produto</a>
-            <a href="/#como-funciona">Como funciona</a>
-            <a href="/#planos">Planos</a>
-            <a href="/#duvidas">Dúvidas</a>
+            <a href="/#produto">{t("product")}</a>
+
+            <a href="/#planos">{t("plans")}</a>
+            <a href="/#duvidas">{t("faq")}</a>
           </div>
           <div className="nav-actions">
-            <a href={links.login}>Entrar</a>
+            <a href={links.login}>{t("login")}</a>
             <a className="button small" href={links.signup}>
-              Começar grátis
+              {t("start")}
             </a>
           </div>
         </nav>
