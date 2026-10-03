@@ -259,6 +259,23 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const c=ctx(res),v=z.object({appointmentId:z.uuid(),rating:z.number().int().min(1).max(5),comment:z.string().trim().max(1000).default('')}).strict().parse(req.body);
   const r=await c.db.rpc('submit_review',{p_shop:c.shopId,p_appointment:v.appointmentId,p_rating:v.rating,p_comment:v.comment});dbError(r.error);res.status(201).json({id:r.data});
  });
+ app.get('/api/slots/month',async(req,res)=>{
+  const c=ctx(res);
+  const v=z.object({
+   barberId:z.union([z.uuid(),z.literal('any')]),
+   serviceId:z.uuid(),
+   monthStart:z.iso.date()
+  }).parse(req.query);
+
+  const r=await c.db.rpc('available_days',{
+   p_shop:c.shopId,
+   p_barber:v.barberId==='any'?null:v.barberId,
+   p_service:v.serviceId,
+   p_month:v.monthStart
+  });
+  dbError(r.error);
+  res.json(r.data??[]);
+ });
  app.get('/api/slots',async(req,res)=>{
   const c=ctx(res);const v=z.object({barberId:z.union([z.uuid(),z.literal('any')]),serviceId:z.uuid(),day:z.iso.date()}).parse(req.query);
   const r=await c.db.rpc('available_slots',{p_shop:c.shopId,p_barber:v.barberId==='any'?null:v.barberId,p_service:v.serviceId,p_day:v.day});dbError(r.error);res.json(r.data);

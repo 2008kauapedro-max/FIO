@@ -1143,3 +1143,12 @@ Object.assign(es,{"settings.groupProfile":"PERFIL Y NEGOCIO","settings.groupSecu
 Object.assign(fr,{"settings.groupProfile":"PROFIL ET ACTIVITÉ","settings.groupSecurity":"SÉCURITÉ","settings.groupPreferences":"PRÉFÉRENCES","settings.groupPlan":"OFFRE FIO","settings.groupSupport":"AIDE"});
 Object.assign(de,{"settings.groupProfile":"PROFIL & BETRIEB","settings.groupSecurity":"SICHERHEIT","settings.groupPreferences":"EINSTELLUNGEN","settings.groupPlan":"FIO TARIF","settings.groupSupport":"HILFE"});
 Object.assign(it,{"settings.groupProfile":"PROFILO E ATTIVITÀ","settings.groupSecurity":"SICUREZZA","settings.groupPreferences":"PREFERENZE","settings.groupPlan":"PIANO FIO","settings.groupSupport":"AIUTO"});
+
+
+/* FIO_SIMPLE_AGENDA_20261003 */
+Object.assign(ptBR,{"agendaSimple.title":"Agenda","agendaSimple.navigation":"Navegação da agenda","agendaSimple.today":"Hoje","agendaSimple.done":"Realizados","agendaSimple.appointments":"Agendamentos"});
+Object.assign(en,{"agendaSimple.title":"Schedule","agendaSimple.navigation":"Schedule navigation","agendaSimple.today":"Today","agendaSimple.done":"Completed","agendaSimple.appointments":"Appointments"});
+Object.assign(es,{"agendaSimple.title":"Agenda","agendaSimple.navigation":"Navegación de agenda","agendaSimple.today":"Hoy","agendaSimple.done":"Realizados","agendaSimple.appointments":"Citas"});
+Object.assign(fr,{"agendaSimple.title":"Agenda","agendaSimple.navigation":"Navigation de l’agenda","agendaSimple.today":"Aujourd’hui","agendaSimple.done":"Terminés","agendaSimple.appointments":"Rendez-vous"});
+Object.assign(de,{"agendaSimple.title":"Termine","agendaSimple.navigation":"Termin-Navigation","agendaSimple.today":"Heute","agendaSimple.done":"Erledigt","agendaSimple.appointments":"Termine"});
+Object.assign(it,{"agendaSimple.title":"Agenda","agendaSimple.navigation":"Navigazione agenda","agendaSimple.today":"Oggi","agendaSimple.done":"Completati","agendaSimple.appointments":"Appuntamenti"});

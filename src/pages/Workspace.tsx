@@ -3,7 +3,7 @@ import { saveLocalePreferences } from '../i18n/supabaseLocale';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { LanguageSettings } from '../components/LanguageSettings';
 import {StaffSchedule} from '../components/StaffSchedule';
-import {AppointmentPeriod} from '../components/AppointmentPeriod';
+import {AgendaMonthCalendar} from '../components/AgendaMonthCalendar';
 import {PushSettings} from '../components/PushSettings';
 import {BookingFlow as BookingModal} from '../components/BookingFlow';
 import { useState,useEffect,type FormEvent,type CSSProperties } from 'react';
@@ -815,6 +815,8 @@ function StaffAgenda(p:WorkspaceProps){
  const [dailyLoading,setDailyLoading]=useState(true);
  const [manualRefreshing,setManualRefreshing]=useState(false);
  const [reloadKey,setReloadKey]=useState(0);
+ const [agendaView,setAgendaView]=useState<'today'|'done'|'calendar'>('today');
+
 
  useEffect(()=>{
 
@@ -1066,189 +1068,103 @@ function StaffAgenda(p:WorkspaceProps){
    )[0];
 
  return <>
-
-  <PageTitle
-   eyebrow={owner?t('staffAgenda.ownerEyebrow'):t('staffAgenda.staffEyebrow')}
-   title={
-    owner?(solo?t('staffAgenda.myAgenda'):t('staffAgenda.shopAgenda')):t('staffAgenda.myAgenda')
-   }
-   description={
-    owner?t('staffAgenda.ownerDesc'):t('staffAgenda.staffDesc')
-   }
-   action={
-    <div className="page-actions">
-
-     <button
-      className="secondary agenda-refresh-button"
-      disabled={manualRefreshing}
-      onClick={()=>void manualRefresh()}
-     >
-      <RefreshCw
-       className={manualRefreshing?'spin':''}
-       size={18}
-      />
-      <span>{t('staffAgenda.refresh')}</span>
-     </button>
-
-     <button
-      className="primary"
-      onClick={()=>setBooking(true)}
-     >
-      <Plus size={18}/>
-      {owner?t('staffAgenda.new'):t('staffAgenda.bookClient')}
-     </button>
-
+  <section className="simple-agenda-shell">
+   <header className="simple-agenda-head">
+    <div>
+     <h1>{t('agendaSimple.title')}</h1>
+     <p>{formatDate(new Date(),{timeZone:zone,weekday:'long',day:'numeric',month:'long'})}</p>
     </div>
-   }
-  />
-
-  <div className="agenda-controls">
-
-   <div className="agenda-day">
-
-    <button
-     className="icon-button"
-     onClick={()=>changeDay(-1)}
-    >
-     <ChevronLeft/>
+    <button type="button" className="simple-refresh" disabled={manualRefreshing} onClick={()=>void manualRefresh()} aria-label={t('staffAgenda.refresh')}>
+     <RefreshCw className={manualRefreshing?'spin':''} size={20}/>
+     <span className="sr-only">{t('staffAgenda.auto')}</span>
     </button>
+   </header>
 
-    <Field label={t('staffAgenda.day')}>
-     <input
-      type="date"
-      value={date}
-      onChange={e=>setDate(e.target.value)}
-     />
-    </Field>
+   <button type="button" className="simple-new-booking" onClick={()=>setBooking(true)}>
+    {t('staffAgenda.new')}
+   </button>
 
-    <button
-     className="icon-button"
-     onClick={()=>changeDay(1)}
-    >
-     <ChevronRight/>
-    </button>
+   {agendaView==='today'&&<>
+    <div className="simple-agenda-list">
+     {activeAppointments.length?activeAppointments.map(a=>{
+      const customer=data.customers.find(c=>c.id===a.client_id);
+      const service=data.services.find(s=>s.id===a.service_id);
+      return <button type="button" className="simple-appointment-card" key={a.id} onClick={()=>setSelected(a)}>
+       <strong className="simple-appointment-time">{formatTime(a.starts_at,{timeZone:zone})}</strong>
+       <span className="simple-appointment-person">
+        <b>{customer?.name??t('ws.client')}</b>
+        <small>{service?.name??t('ws.service')}</small>
+       </span>
+       <span className="simple-appointment-price">{formatCurrency(a.price_cents/100,'BRL')}</span>
+      </button>;
+     }):<Empty title={t('staffAgenda.none')}>{t('staffAgenda.noneDesc')}</Empty>}
+    </div>
+   </>}
 
-    <button
-     className="secondary"
-     onClick={()=>
-      setDate(
-       dayKey(new Date().toISOString(),zone)
-      )
-     }
-    >
-     {t('staffAgenda.today')}
-    </button>
+   {agendaView==='done'&&<>
+    <div className="simple-agenda-list">
+     {data.appointments.filter(a=>a.status==='completed').sort((a,b)=>Date.parse(b.starts_at)-Date.parse(a.starts_at)).slice(0,30).map(a=>{
+      const customer=data.customers.find(c=>c.id===a.client_id);
+      const service=data.services.find(s=>s.id===a.service_id);
+      const day=dayKey(a.starts_at,zone);
+      const today=dayKey(new Date().toISOString(),zone);
+      const yesterdayDate=new Date(today+'T12:00:00Z');yesterdayDate.setUTCDate(yesterdayDate.getUTCDate()-1);
+      const yesterday=yesterdayDate.toISOString().slice(0,10);
+      const prefix=day===today?'Hoje':day===yesterday?'Ontem':formatDate(a.starts_at,{timeZone:zone,day:'2-digit',month:'short'});
+      return <button type="button" className="simple-appointment-card" key={a.id} onClick={()=>setSelected(a)}>
+       <strong className="simple-appointment-time">{prefix} {formatTime(a.starts_at,{timeZone:zone})}</strong>
+       <span className="simple-appointment-person">
+        <b>{customer?.name??t('ws.client')}</b>
+        <small>{service?.name??t('ws.service')}</small>
+       </span>
+       <span className="simple-appointment-price">{formatCurrency(a.price_cents/100,'BRL')}</span>
+      </button>;
+     })}
+    </div>
+   </>}
 
-   </div>
+   {agendaView==='calendar'&&<>
+    <AgendaMonthCalendar
+     shopId={data.shop.id}
+     barberId={professional||'any'}
+     serviceId={[...data.services].filter(s=>s.active).sort((a,b)=>a.duration_minutes-b.duration_minutes)[0]?.id??''}
+     zone={zone}
+     date={date}
+     demo={p.demo}
+     onDateChange={setDate}
+    />
 
-   {owner&&!solo&&
-    <Field label={t('staffAgenda.filterProfessional')}>
-     <select
-      value={professional}
-      onChange={e=>setProfessional(e.target.value)}
-     >
-      <option value="">{t('staffAgenda.allTeam')}</option>
-
-      {providers.map(t=>
-       <option
-        key={t.user_id}
-        value={t.user_id}
-       >
-        {t.display_name}
-       </option>
-      )}
-
-     </select>
-    </Field>
-   }
-
-   <span className="muted">
-    {t('staffAgenda.active',{count:activeAppointments.length,suffix:activeAppointments.length===1?'':'s'})}
-   </span>
-
-   <span className="agenda-live-status">
-    <i/>
-    {t('staffAgenda.auto')}
-   </span>
-
-  </div>
-
-  <AppointmentPeriod
-   {...p}
-   professional={professional}
-   onSelect={setSelected}
-  />
-
-  <section className="staff-day-agenda">
-
-   <div className="section-title">
-
-    <h2>{t('staffAgenda.dayServices')}</h2>
-
-    <span className="muted">
-     {activeAppointments.length} ativo
-     {activeAppointments.length===1?'':'s'}
-    </span>
-
-   </div>
-
-   {dailyLoading?
-
-    <p role="status">{t('staffAgenda.loading')}</p>
-
-    :dailyError?
-
-    <p role="alert" className="notice">
-     {dailyError}
-    </p>
-
-    :activeAppointments.length?
-
-    <div className="appointment-list">
-
-     {activeAppointments.map(a=>
-      <AppointmentRow
-       key={a.id}
-       appointment={a}
-       data={data}
-       onClick={()=>setSelected(a)}
-      />
-     )}
-
+    <div className="simple-agenda-stats">
+     <div><strong>{daily.filter(a=>a.status==='completed').length}</strong><span>{t('period.completed')}</span></div>
+     <div><strong>{daily.filter(a=>a.status==='cancelled').length}</strong><span>{t('period.cancelled')}</span></div>
+     <div><strong>{daily.filter(a=>a.status==='no_show').length}</strong><span>{t('period.noShow')}</span></div>
     </div>
 
-    :
-
-    <Empty title={t('staffAgenda.none')}>{t('staffAgenda.noneDesc')}</Empty>
-
-   }
-
-   {archivedAppointments.length>0&&
-
-    <details className="staff-archive">
-
-     <summary>
-      {t('staffAgenda.history')}
-      <span>{archivedAppointments.length}</span>
-     </summary>
-
-     <div className="appointment-list">
-
-      {archivedAppointments.map(a=>
-       <AppointmentRow
-        key={a.id}
-        appointment={a}
-        data={data}
-        onClick={()=>setSelected(a)}
-       />
-      )}
-
+    <div className="simple-selected-day">
+     <span className="sr-only">{t('staffAgenda.history')}</span>
+     <h2>{formatDate(date+'T12:00:00Z',{timeZone:'UTC',weekday:'long',day:'numeric',month:'long'})}</h2>
+     <div className="simple-agenda-list">
+      {dailyLoading?<p role="status">{t('staffAgenda.loading')}</p>:dailyError?<p role="alert" className="notice">{dailyError}</p>:daily.length?daily.sort((a,b)=>Date.parse(a.starts_at)-Date.parse(b.starts_at)).map(a=>{
+       const customer=data.customers.find(c=>c.id===a.client_id);
+       const service=data.services.find(s=>s.id===a.service_id);
+       return <button type="button" className="simple-appointment-card" key={a.id} onClick={()=>setSelected(a)}>
+        <strong className="simple-appointment-time">{formatTime(a.starts_at,{timeZone:zone})}</strong>
+        <span className="simple-appointment-person">
+         <b>{customer?.name??t('ws.client')}</b>
+         <small>{service?.name??t('ws.service')}</small>
+        </span>
+        <span className={`status ${a.status}`}>{t(`status.${a.status}`)}</span>
+       </button>;
+      }):<Empty title={t('staffAgenda.none')}>{t('staffAgenda.noneDesc')}</Empty>}
      </div>
+    </div>
+   </>}
 
-    </details>
-
-   }
-
+   <nav className="simple-agenda-tabs" aria-label={t('agendaSimple.navigation')}>
+    <button type="button" className={agendaView==='today'?'active':''} onClick={()=>{setAgendaView('today');setDate(dayKey(new Date().toISOString(),zone));}}>{t('agendaSimple.today')}</button>
+    <button type="button" className={agendaView==='done'?'active':''} onClick={()=>setAgendaView('done')}>{t('agendaSimple.done')}</button>
+    <button type="button" className={agendaView==='calendar'?'active':''} onClick={()=>setAgendaView('calendar')}>{t('agendaSimple.appointments')}</button>
+   </nav>
   </section>
 
   {reschedule&&

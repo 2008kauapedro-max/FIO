@@ -2100,3 +2100,308 @@ body:has(.workspace),
  .app-shell .page-actions{grid-template-columns:1fr}
  .category-settings.in-category .settings-shortcuts{grid-template-columns:1fr}
 }
+
+
+/* FIO_SIMPLE_AGENDA_CLAUDE_REFERENCE_20261003 */
+.simple-agenda-shell{
+ width:min(100%,760px);
+ margin:0 auto;
+ padding-bottom:76px;
+}
+.simple-agenda-head{
+ display:flex;
+ align-items:flex-start;
+ justify-content:space-between;
+ gap:16px;
+ margin-bottom:20px;
+}
+.simple-agenda-head h1{
+ margin:0;
+ font-size:1.55rem;
+ line-height:1.05;
+ letter-spacing:-.035em;
+}
+.simple-agenda-head p{
+ margin:6px 0 0;
+ color:var(--muted);
+ font-size:.82rem;
+ text-transform:lowercase;
+}
+.simple-refresh{
+ width:42px;
+ height:42px;
+ display:grid;
+ place-items:center;
+ border:1px solid var(--border);
+ border-radius:11px;
+ background:transparent;
+ color:var(--text);
+}
+.simple-new-booking{
+ width:100%;
+ min-height:49px;
+ margin-bottom:23px;
+ border:0;
+ border-radius:11px;
+ background:var(--text);
+ color:var(--bg);
+ font-weight:500;
+}
+.simple-agenda-list{
+ display:grid;
+ gap:12px;
+}
+.simple-appointment-card{
+ width:100%;
+ min-height:84px;
+ display:grid;
+ grid-template-columns:minmax(76px,auto) minmax(0,1fr) auto;
+ align-items:center;
+ gap:18px;
+ padding:17px 18px;
+ border:0;
+ border-radius:13px;
+ background:var(--surface);
+ color:var(--text);
+ text-align:left;
+}
+.simple-appointment-card:hover{
+ background:color-mix(in srgb,var(--surface) 92%,var(--text) 8%);
+}
+.simple-appointment-time{
+ font-size:1rem;
+ white-space:nowrap;
+}
+.simple-appointment-person{
+ min-width:0;
+ display:grid;
+ gap:5px;
+}
+.simple-appointment-person b{
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+ font-size:.98rem;
+}
+.simple-appointment-person small{
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+ color:var(--muted);
+ font-size:.82rem;
+}
+.simple-appointment-price{
+ color:var(--muted);
+ font-size:.8rem;
+ white-space:nowrap;
+}
+.simple-agenda-tabs{
+ position:sticky;
+ bottom:0;
+ z-index:20;
+ display:grid;
+ grid-template-columns:repeat(3,1fr);
+ margin:36px -1px 0;
+ border-top:1px solid var(--border);
+ background:color-mix(in srgb,var(--bg) 96%,transparent);
+ backdrop-filter:blur(16px);
+}
+.simple-agenda-tabs button{
+ position:relative;
+ min-height:60px;
+ border:0;
+ background:transparent;
+ color:var(--muted);
+ font-size:.78rem;
+}
+.simple-agenda-tabs button.active{
+ color:var(--text);
+ font-weight:650;
+}
+.simple-agenda-tabs button.active:before{
+ content:"";
+ position:absolute;
+ left:0;
+ right:0;
+ top:-1px;
+ height:2px;
+ background:var(--text);
+}
+.simple-month-calendar{
+ margin:0 0 18px;
+ padding:0;
+}
+.simple-month-head{
+ display:grid;
+ grid-template-columns:40px 1fr 40px;
+ align-items:center;
+ gap:10px;
+ margin-bottom:12px;
+}
+.simple-month-head strong{
+ text-align:center;
+ font-size:1.06rem;
+ text-transform:capitalize;
+}
+.simple-month-head button{
+ width:40px;
+ height:40px;
+ display:grid;
+ place-items:center;
+ border:1px solid var(--border);
+ border-radius:10px;
+ background:transparent;
+ color:var(--text);
+}
+.simple-month-weekdays,
+.simple-month-grid{
+ display:grid;
+ grid-template-columns:repeat(7,minmax(0,1fr));
+ gap:3px;
+}
+.simple-month-weekdays span{
+ padding:6px 0;
+ text-align:center;
+ color:var(--muted);
+ font-size:.68rem;
+}
+.simple-month-grid>button{
+ aspect-ratio:1;
+ min-width:0;
+ display:grid;
+ place-items:center;
+ align-content:center;
+ gap:5px;
+ padding:3px;
+ border:1px solid transparent;
+ border-radius:10px;
+ background:transparent;
+ color:var(--text);
+}
+.simple-month-grid>button strong{
+ font-size:.78rem;
+ font-weight:450;
+}
+.simple-month-grid>button i{
+ width:6px;
+ height:6px;
+ border-radius:50%;
+ background:#2fbc70;
+}
+.simple-month-grid>button.full i{background:#ef4b55}
+.simple-month-grid>button.selected{
+ border-color:var(--text);
+}
+.simple-month-grid>button.selected.available,
+.simple-month-grid>button.selected.full{
+ background:var(--text);
+ color:var(--bg);
+}
+.simple-month-grid>button.selected i{
+ box-shadow:0 0 0 1px color-mix(in srgb,var(--bg) 55%,transparent);
+}
+.simple-month-grid>button.past:not(.selected){opacity:.55}
+.simple-month-legend{
+ display:flex;
+ justify-content:center;
+ gap:20px;
+ margin-top:12px;
+ color:var(--muted);
+ font-size:.7rem;
+}
+.simple-month-legend span{display:flex;align-items:center;gap:7px}
+.simple-month-legend i{width:8px;height:8px;border-radius:50%;background:#2fbc70}
+.simple-month-legend i.full{background:#ef4b55}
+.simple-agenda-stats{
+ display:grid;
+ grid-template-columns:repeat(3,1fr);
+ gap:8px;
+ margin:15px 0 18px;
+}
+.simple-agenda-stats>div{
+ min-height:70px;
+ display:grid;
+ place-items:center;
+ align-content:center;
+ gap:5px;
+ border-radius:11px;
+ background:var(--surface);
+}
+.simple-agenda-stats strong{font-size:1.18rem}
+.simple-agenda-stats span{color:var(--muted);font-size:.72rem}
+.simple-selected-day h2{
+ margin:0 0 13px;
+ font-size:1.02rem;
+ text-transform:lowercase;
+}
+.booking-calendar-grid>button.available i{background:#2fbc70}
+.booking-calendar-grid>button.full i{background:#ef4b55}
+.calendar-legend i.available{background:#2fbc70}
+.calendar-legend i.full{background:#ef4b55}
+
+/* No calendário do cliente, a cor significa disponibilidade real:
+   verde = pelo menos um horário; vermelho = nenhum horário. */
+.booking-calendar-grid>button.selected.available,
+.booking-calendar-grid>button.selected.full{
+ background:var(--text);
+ color:var(--bg);
+ border-color:var(--text);
+}
+.booking-calendar-grid>button.selected i{
+ box-shadow:0 0 0 1px color-mix(in srgb,var(--bg) 55%,transparent);
+}
+
+@media(max-width:760px){
+ .app-shell:has(.simple-agenda-shell) .main-content{
+  padding:14px 10px 0;
+ }
+ .app-shell:has(.simple-agenda-shell) .bottom-nav{
+  display:none;
+ }
+ .simple-agenda-shell{
+  width:100%;
+  min-height:calc(100dvh - 58px);
+  padding-bottom:0;
+ }
+ .simple-agenda-tabs{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  margin:0;
+  padding-bottom:env(safe-area-inset-bottom);
+ }
+ .simple-agenda-head{
+  margin-bottom:18px;
+ }
+ .simple-new-booking{
+  margin-bottom:22px;
+ }
+ .simple-appointment-card{
+  min-height:84px;
+  padding:15px 17px;
+  grid-template-columns:minmax(70px,auto) minmax(0,1fr) auto;
+  gap:14px;
+ }
+ .simple-agenda-list{
+  padding-bottom:82px;
+ }
+ .simple-month-calendar{
+  padding-bottom:0;
+ }
+ .simple-selected-day .simple-agenda-list{
+  padding-bottom:82px;
+ }
+}
+
+@media(max-width:430px){
+ .simple-agenda-head h1{font-size:1.45rem}
+ .simple-appointment-card{
+  grid-template-columns:minmax(64px,auto) minmax(0,1fr) auto;
+  padding:14px 16px;
+  gap:12px;
+ }
+ .simple-appointment-time{font-size:.94rem}
+ .simple-appointment-person b{font-size:.94rem}
+ .simple-appointment-person small{font-size:.76rem}
+}
