@@ -4090,3 +4090,66 @@ body:has(.workspace),
 .auth-captcha-retry{
  justify-self:stretch;
 }
+
+/* ===== AJUSTE FINO TURNSTILE + CARD MOBILE ===== */
+@media (max-width: 640px) {
+  .cf-turnstile,
+  .auth-captcha {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  .cf-turnstile {
+    max-width: 320px !important;
+    margin: 10px auto 8px !important;
+    transform: translateX(-8px) !important;
+  }
+
+  .auth-page,
+  .auth-shell {
+    padding-top: 10px !important;
+    padding-bottom: 14px !important;
+  }
+
+  .auth-card,
+  .auth-panel {
+    padding: 18px 14px !important;
+  }
+
+  .auth-card h1,
+  .auth-panel h1 {
+    margin-bottom: 8px !important;
+    line-height: 1.05 !important;
+  }
+
+  .auth-card p,
+  .auth-panel p {
+    margin-bottom: 10px !important;
+  }
+
+  .auth-card form,
+  .auth-panel form {
+    gap: 10px !important;
+  }
+
+  .auth-card label,
+  .auth-panel label {
+    margin-bottom: 4px !important;
+  }
+
+  .auth-card .actions,
+  .auth-panel .actions,
+  .auth-card .auth-links,
+  .auth-panel .auth-links {
+    margin-top: 8px !important;
+    gap: 8px !important;
+  }
+
+  .auth-card button,
+  .auth-panel button {
+    min-height: 48px !important;
+  }
+}
+/* ===== FIM AJUSTE FINO TURNSTILE + CARD MOBILE ===== */
+
