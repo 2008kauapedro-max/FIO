@@ -3,7 +3,7 @@ import {useEffect,useMemo,useState} from 'react';
 import {ChevronLeft,ChevronRight,Clock3} from 'lucide-react';
 import {api} from '../lib/api';
 
-type Availability={day:string;available_count:number};
+type Availability={day:string;available_count:number;closed?:boolean};
 type Period='morning'|'afternoon'|'night';
 
 const labelKeys:Record<Period,string>={morning:'calendar.morning',afternoon:'calendar.afternoon',night:'calendar.night'};
@@ -43,6 +43,7 @@ export function BookingCalendar(p:{
 
  const [month,setMonth]=useState((p.date||today).slice(0,7));
  const [availability,setAvailability]=useState<Record<string,number>>({});
+ const [closedDays,setClosedDays]=useState<Set<string>>(new Set());
  const [monthLoading,setMonthLoading]=useState(false);
  const [monthError,setMonthError]=useState('');
  const [period,setPeriod]=useState<Period>('morning');
@@ -56,6 +57,7 @@ export function BookingCalendar(p:{
   let alive=true;
 
   setAvailability({});
+  setClosedDays(new Set());
   setMonthError('');
 
   if(!p.barberId||!p.serviceId)return;
@@ -87,6 +89,7 @@ export function BookingCalendar(p:{
      rows.map(row=>[row.day,Number(row.available_count)])
     )
    );
+   setClosedDays(new Set(rows.filter(row=>row.closed).map(row=>row.day)));
   })
   .catch(e=>{
    if(alive)setMonthError(e.message);
@@ -196,13 +199,16 @@ export function BookingCalendar(p:{
     if(!key)
      return <span key={`blank-${index}`}/>;
 
+    const isClosed=closedDays.has(key);
+
     const disabled=
      key<today||
      key>maxDate||
-     monthLoading;
+     monthLoading||
+     isClosed;
 
     const available=
-     Number(availability[key]??0)>0;
+     !isClosed&&Number(availability[key]??0)>0;
 
     return <button
      type="button"
@@ -210,7 +216,7 @@ export function BookingCalendar(p:{
      disabled={disabled}
      className={
       `${p.date===key?'selected ':''}`+
-      `${available?'available':'full'}`
+      `${isClosed?'closed':available?'available':'full'}`
      }
      onClick={()=>p.onDateChange(key)}
     >
@@ -228,6 +234,7 @@ export function BookingCalendar(p:{
   <div className="calendar-legend">
    <span><i className="available"/>{t('calendar.available')}</span>
    <span><i className="full"/>{t('calendar.full')}</span>
+   <span><i className="closed"/>Fechado</span>
 
    {monthLoading&&
     <small>{t('calendar.updating')}</small>}
@@ -237,6 +244,8 @@ export function BookingCalendar(p:{
    <p className="booking-calendar-warning">
     {t('calendar.monthError')}
    </p>}
+
+  {closedDays.has(p.date)&&<p className="booking-closed-notice"><strong>Barbearia fechada neste dia.</strong><span>Escolha outro dia disponível para agendar.</span></p>}
 
   <div className="booking-time-section">
 

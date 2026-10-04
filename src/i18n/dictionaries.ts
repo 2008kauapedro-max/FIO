@@ -1323,3 +1323,36 @@ Object.assign(it,{
  "services.preview":"ANTEPRIMA",
  "services.previewName":"Nome del servizio"
 });
+
+
+/* FIO_SOLO_PRICING_20261003 */
+Object.assign(ptBR,{
+ "fp.startSolo":"Começar FIO SOLO",
+ "fp.plan.SOLO.eyebrow":"PARA QUEM TRABALHA SOZINHO",
+ "fp.plan.SOLO.desc":"Tudo para organizar sua rotina, seu app e seus clientes em uma única agenda.",
+ "fp.plan.SOLO.h1":"1 profissional","fp.plan.SOLO.h2":"Até 500 clientes",
+ "fp.plan.SOLO.g0":"CAPACIDADE","fp.plan.SOLO.g0i0":"1 profissional","fp.plan.SOLO.g0i1":"Até 500 clientes","fp.plan.SOLO.g0i2":"Até 20 serviços","fp.plan.SOLO.g0i3":"Até 5 pacotes de cortes",
+ "fp.plan.SOLO.g1":"PRESENÇA DIGITAL","fp.plan.SOLO.g1i0":"Mini site personalizado","fp.plan.SOLO.g1i1":"App/PWA com identidade da barbearia","fp.plan.SOLO.g1i2":"Logo, capa, fundo e cores",
+ "fp.plan.SOLO.g2":"COMUNICAÇÃO","fp.plan.SOLO.g2i0":"Feed da barbearia","fp.plan.SOLO.g2i1":"Campanhas e comunicação","fp.plan.SOLO.g2i2":"Pacotes/planos de cortes",
+ "fp.plan.SOLO.g3":"INTELIGÊNCIA","fp.plan.SOLO.g3i0":"Assistente FIO","fp.plan.SOLO.g3i1":"150 consultas de IA por usuário/dia",
+ "fp.annualBestChoice":"20% OFF · Melhor escolha"
+});
+Object.assign(en,{
+ "fp.startSolo":"Start FIO SOLO","fp.plan.SOLO.eyebrow":"FOR SOLO PROFESSIONALS","fp.plan.SOLO.desc":"Everything to organize your routine, app and clients in one schedule.",
+ "fp.plan.SOLO.h1":"1 professional","fp.plan.SOLO.h2":"Up to 500 clients",
+ "fp.plan.SOLO.g0":"CAPACITY","fp.plan.SOLO.g0i0":"1 professional","fp.plan.SOLO.g0i1":"Up to 500 clients","fp.plan.SOLO.g0i2":"Up to 20 services","fp.plan.SOLO.g0i3":"Up to 5 haircut packages",
+ "fp.plan.SOLO.g1":"DIGITAL PRESENCE","fp.plan.SOLO.g1i0":"Custom mini site","fp.plan.SOLO.g1i1":"App/PWA with your identity","fp.plan.SOLO.g1i2":"Logo, cover, background and colors",
+ "fp.plan.SOLO.g2":"COMMUNICATION","fp.plan.SOLO.g2i0":"Business feed","fp.plan.SOLO.g2i1":"Campaigns and communication","fp.plan.SOLO.g2i2":"Haircut packages/plans",
+ "fp.plan.SOLO.g3":"INTELLIGENCE","fp.plan.SOLO.g3i0":"FIO Assistant","fp.plan.SOLO.g3i1":"150 AI requests per user/day","fp.annualBestChoice":"20% OFF · Best value"
+});
+Object.assign(es,{
+ "fp.startSolo":"Comenzar FIO SOLO","fp.plan.SOLO.eyebrow":"PARA QUIEN TRABAJA SOLO","fp.plan.SOLO.desc":"Todo para organizar tu rutina, app y clientes en una sola agenda.",
+ "fp.plan.SOLO.h1":"1 profesional","fp.plan.SOLO.h2":"Hasta 500 clientes",
+ "fp.plan.SOLO.g0":"CAPACIDAD","fp.plan.SOLO.g0i0":"1 profesional","fp.plan.SOLO.g0i1":"Hasta 500 clientes","fp.plan.SOLO.g0i2":"Hasta 20 servicios","fp.plan.SOLO.g0i3":"Hasta 5 paquetes",
+ "fp.plan.SOLO.g1":"PRESENCIA DIGITAL","fp.plan.SOLO.g1i0":"Mini sitio personalizado","fp.plan.SOLO.g1i1":"App/PWA con tu identidad","fp.plan.SOLO.g1i2":"Logo, portada, fondo y colores",
+ "fp.plan.SOLO.g2":"COMUNICACIÓN","fp.plan.SOLO.g2i0":"Feed","fp.plan.SOLO.g2i1":"Campañas y comunicación","fp.plan.SOLO.g2i2":"Paquetes de cortes",
+ "fp.plan.SOLO.g3":"INTELIGENCIA","fp.plan.SOLO.g3i0":"Asistente FIO","fp.plan.SOLO.g3i1":"150 consultas de IA por usuario/día","fp.annualBestChoice":"20% OFF · Mejor opción"
+});
+Object.assign(fr,{"fp.startSolo":"Démarrer FIO SOLO","fp.plan.SOLO.eyebrow":"POUR LES INDÉPENDANTS","fp.plan.SOLO.desc":"Tout pour organiser votre activité, votre app et vos clients.","fp.plan.SOLO.h1":"1 professionnel","fp.plan.SOLO.h2":"Jusqu’à 500 clients","fp.plan.SOLO.g0":"CAPACITÉ","fp.plan.SOLO.g0i0":"1 professionnel","fp.plan.SOLO.g0i1":"Jusqu’à 500 clients","fp.plan.SOLO.g0i2":"Jusqu’à 20 services","fp.plan.SOLO.g0i3":"Jusqu’à 5 forfaits","fp.plan.SOLO.g1":"PRÉSENCE NUMÉRIQUE","fp.plan.SOLO.g1i0":"Mini site personnalisé","fp.plan.SOLO.g1i1":"App/PWA à votre image","fp.plan.SOLO.g1i2":"Logo, couverture, fond et couleurs","fp.plan.SOLO.g2":"COMMUNICATION","fp.plan.SOLO.g2i0":"Fil d’actualité","fp.plan.SOLO.g2i1":"Campagnes et communication","fp.plan.SOLO.g2i2":"Forfaits de coupes","fp.plan.SOLO.g3":"INTELLIGENCE","fp.plan.SOLO.g3i0":"Assistant FIO","fp.plan.SOLO.g3i1":"150 requêtes IA par utilisateur/jour","fp.annualBestChoice":"-20% · Meilleur choix"});
+Object.assign(de,{"fp.startSolo":"FIO SOLO starten","fp.plan.SOLO.eyebrow":"FÜR SOLO-BARBER","fp.plan.SOLO.desc":"Alles für deinen Alltag, deine App und deine Kunden.","fp.plan.SOLO.h1":"1 Profi","fp.plan.SOLO.h2":"Bis zu 500 Kunden","fp.plan.SOLO.g0":"KAPAZITÄT","fp.plan.SOLO.g0i0":"1 Profi","fp.plan.SOLO.g0i1":"Bis zu 500 Kunden","fp.plan.SOLO.g0i2":"Bis zu 20 Leistungen","fp.plan.SOLO.g0i3":"Bis zu 5 Pakete","fp.plan.SOLO.g1":"DIGITALE PRÄSENZ","fp.plan.SOLO.g1i0":"Individuelle Mini-Website","fp.plan.SOLO.g1i1":"App/PWA mit deiner Identität","fp.plan.SOLO.g1i2":"Logo, Cover, Hintergrund und Farben","fp.plan.SOLO.g2":"KOMMUNIKATION","fp.plan.SOLO.g2i0":"Feed","fp.plan.SOLO.g2i1":"Kampagnen und Kommunikation","fp.plan.SOLO.g2i2":"Schnittpakete","fp.plan.SOLO.g3":"INTELLIGENZ","fp.plan.SOLO.g3i0":"FIO-Assistent","fp.plan.SOLO.g3i1":"150 KI-Anfragen pro Nutzer/Tag","fp.annualBestChoice":"20% RABATT · Beste Wahl"});
+Object.assign(it,{"fp.startSolo":"Inizia FIO SOLO","fp.plan.SOLO.eyebrow":"PER CHI LAVORA DA SOLO","fp.plan.SOLO.desc":"Tutto per organizzare routine, app e clienti.","fp.plan.SOLO.h1":"1 professionista","fp.plan.SOLO.h2":"Fino a 500 clienti","fp.plan.SOLO.g0":"CAPACITÀ","fp.plan.SOLO.g0i0":"1 professionista","fp.plan.SOLO.g0i1":"Fino a 500 clienti","fp.plan.SOLO.g0i2":"Fino a 20 servizi","fp.plan.SOLO.g0i3":"Fino a 5 pacchetti","fp.plan.SOLO.g1":"PRESENZA DIGITALE","fp.plan.SOLO.g1i0":"Mini sito personalizzato","fp.plan.SOLO.g1i1":"App/PWA con la tua identità","fp.plan.SOLO.g1i2":"Logo, copertina, sfondo e colori","fp.plan.SOLO.g2":"COMUNICAZIONE","fp.plan.SOLO.g2i0":"Feed","fp.plan.SOLO.g2i1":"Campagne e comunicazione","fp.plan.SOLO.g2i2":"Pacchetti tagli","fp.plan.SOLO.g3":"INTELLIGENZA","fp.plan.SOLO.g3i0":"Assistente FIO","fp.plan.SOLO.g3i1":"150 richieste IA per utente/giorno","fp.annualBestChoice":"20% OFF · Scelta migliore"});

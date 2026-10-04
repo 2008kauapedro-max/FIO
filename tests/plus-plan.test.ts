@@ -7,10 +7,10 @@ import {
 } from '../shared/fio-plans';
 
 describe('catálogo comercial oficial do FIO',()=>{
- it('vende somente FREE, PRO e PREMIUM',()=>{
+ it('vende FREE, SOLO, PRO e PREMIUM',()=>{
   expect(
    FIO_PLAN_CATALOG.map(plan=>plan.code)
-  ).toEqual(['FREE','PRO','PREMIUM']);
+  ).toEqual(['FREE','SOLO','PRO','PREMIUM']);
 
   expect(SALE_BILLING_CYCLES)
    .toEqual(['monthly','annual']);
@@ -22,7 +22,7 @@ describe('catálogo comercial oficial do FIO',()=>{
   ).toMatchObject({
    weekly:null,
    monthly:14990,
-   annual:149900
+   annual:143904
   });
 
   expect(
@@ -30,16 +30,16 @@ describe('catálogo comercial oficial do FIO',()=>{
   ).toMatchObject({
    weekly:null,
    monthly:29990,
-   annual:299900
+   annual:287904
   });
  });
 
- it('backend não vende PLUS nem semanal',()=>{
+ it('backend vende SOLO, PRO e PREMIUM, mas não PLUS nem semanal',()=>{
   const syncpay=
    readFileSync(resolve('server/syncpay.ts'),'utf8');
 
   expect(syncpay).toContain(
-   "const PAID_PLANS=['PRO','PREMIUM'] as const;"
+   "const PAID_PLANS=['SOLO','PRO','PREMIUM'] as const;"
   );
 
   expect(syncpay).toContain(

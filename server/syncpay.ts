@@ -7,7 +7,7 @@ import { ApiError,dbError } from './errors.js';
 import { FIO_PLAN_CATALOG,type BillingCycle } from '../shared/fio-plans.js';
 
 const BASE='https://api.syncpayments.com.br/api/partner/v1';
-const PAID_PLANS=['PRO','PREMIUM'] as const;
+const PAID_PLANS=['SOLO','PRO','PREMIUM'] as const;
 const CYCLES=['monthly','annual'] as const;
 const CYCLE_DAYS:Record<BillingCycle,number>={weekly:7,monthly:30,annual:365};
 const BILLING_ADVANCE:Record<BillingCycle,number>={weekly:1,monthly:3,annual:7};
@@ -403,6 +403,11 @@ export async function recoverSyncpayEnrollment(ctx:TenantContext,raw:unknown,fet
 export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Esta ação é exclusiva do responsável pela barbearia.');
  const input=subscribeInput.parse(raw),document=digits(input.document);
+ const modeResult=await ctx.db.from('barbershops').select('operation_mode').eq('id',ctx.shopId).single();dbError(modeResult.error);
+ if(!modeResult.data)throw new ApiError(404,'INVALID_SHOP','Barbearia não encontrada.');
+ const operationMode=modeResult.data.operation_mode as 'SHOP'|'SOLO';
+ if(operationMode==='SOLO'&&input.plan!=='SOLO')throw new ApiError(400,'INVALID_PLAN','No modo solo, escolha o FIO SOLO.');
+ if(operationMode!=='SOLO'&&input.plan==='SOLO')throw new ApiError(400,'INVALID_PLAN','O FIO SOLO é exclusivo para quem trabalha sozinho.');
  if(!validDocument(document))throw new ApiError(400,'INVALID_DOCUMENT','Informe um CPF ou CNPJ válido.');
  if(!configured())throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','A cobrança recorrente ainda não está disponível. Tente novamente mais tarde.');
  const recovered=await recoverOpenEnrollment(ctx,fetcher);
@@ -495,6 +500,11 @@ async function reconcilePlanChange(db:SupabaseClient,detail:ProviderDetail){
 export async function changeSyncpayPlan(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode alterar o plano.');
  const input=z.object({plan:z.enum(PAID_PLANS),cycle:z.enum(CYCLES),confirmed:z.literal(true)}).strict().parse(raw);
+ const modeResult=await ctx.db.from('barbershops').select('operation_mode').eq('id',ctx.shopId).single();dbError(modeResult.error);
+ if(!modeResult.data)throw new ApiError(404,'INVALID_SHOP','Barbearia não encontrada.');
+ const operationMode=modeResult.data.operation_mode as 'SHOP'|'SOLO';
+ if(operationMode==='SOLO'&&input.plan!=='SOLO')throw new ApiError(400,'INVALID_PLAN','No modo solo, escolha o FIO SOLO.');
+ if(operationMode!=='SOLO'&&input.plan==='SOLO')throw new ApiError(400,'INVALID_PLAN','O FIO SOLO é exclusivo para quem trabalha sozinho.');
  const db=adminDb(),link=await currentLink(db,ctx.shopId);
  if(!link)throw new ApiError(409,'SYNCPAY_NO_SUBSCRIPTION','Não há assinatura paga para alterar.');
  const existingChange=await pendingPlanChange(db,link.provider_subscription_token);

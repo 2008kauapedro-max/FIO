@@ -230,6 +230,30 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const theme=await c.db.rpc('save_owner_setup',{p_shop:c.shopId,p_setup:{customAccent:v.accentColor}});dbError(theme.error);
   res.set('Cache-Control','no-store').json({ok:true});
  });
+ app.get('/api/shop/closures',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const v=z.object({from:z.iso.date(),to:z.iso.date()}).parse(req.query);
+  if(v.to<v.from)throw new ApiError(400,'INVALID_DATA','Período inválido.');
+  const r=await c.db.from('shop_closures').select('day').eq('barbershop_id',c.shopId).gte('day',v.from).lte('day',v.to).order('day');
+  dbError(r.error);
+  res.json({days:(r.data??[]).map(row=>String(row.day))});
+ });
+ app.post('/api/shop/closures',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const v=z.object({days:z.array(z.iso.date()).min(1).max(30),confirmed:z.literal(true)}).strict().parse(req.body);
+  const unique=[...new Set(v.days)];
+  const rows=unique.map(day=>({barbershop_id:c.shopId,day,created_by:c.userId}));
+  const r=await c.db.from('shop_closures').upsert(rows,{onConflict:'barbershop_id,day'});
+  dbError(r.error);
+  res.status(201).json({days:unique});
+ });
+ app.delete('/api/shop/closures/:day',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const day=z.iso.date().parse(req.params.day);
+  const r=await c.db.from('shop_closures').delete().eq('barbershop_id',c.shopId).eq('day',day);
+  dbError(r.error);
+  res.json({ok:true});
+ });
  app.get('/api/staff/:id/access',rateLimitByUser('staff-access',60_000,15),async(req,res)=>{
   const c=ctx(res);requireOwner(c);const id=z.uuid().parse(req.params.id);
   const member=await c.db.from('memberships').select('user_id').eq('barbershop_id',c.shopId).eq('user_id',id).eq('role','BARBER').eq('active',true).maybeSingle();dbError(member.error);
@@ -274,7 +298,19 @@ export function createApp(authenticator: Authenticator=authenticate) {
    p_month:v.monthStart
   });
   dbError(r.error);
-  res.json(r.data??[]);
+
+  const first=v.monthStart.slice(0,7)+'-01';
+  const monthDate=new Date(first+'T00:00:00Z');
+  const last=new Date(Date.UTC(monthDate.getUTCFullYear(),monthDate.getUTCMonth()+1,0)).toISOString().slice(0,10);
+  const closures=await c.db.from('shop_closures').select('day').eq('barbershop_id',c.shopId).gte('day',first).lte('day',last);
+  dbError(closures.error);
+  const closed=new Set((closures.data??[]).map(row=>String(row.day)));
+
+  const monthRows=(r.data??[]) as {day:string;available_count:number}[];
+  res.json(monthRows.map(row=>({
+   ...row,
+   closed:closed.has(String(row.day))
+  })));
  });
  app.get('/api/slots',async(req,res)=>{
   const c=ctx(res);const v=z.object({barberId:z.union([z.uuid(),z.literal('any')]),serviceId:z.uuid(),day:z.iso.date()}).parse(req.query);

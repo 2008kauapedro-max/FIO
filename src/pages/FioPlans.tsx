@@ -29,6 +29,13 @@ export function FioPlans(p:WorkspaceProps){
  const [checkoutError,setCheckoutError]=useState('');
  const [checkoutCode,setCheckoutCode]=useState('');
  const sub=p.data.fioSubscription;
+ const soloMode=p.data.shop.operation_mode==='SOLO';
+ const primaryPaid:PaidPlan=soloMode?'SOLO':'PRO';
+ const visiblePlans=useMemo(()=>FIO_PLAN_CATALOG.filter(plan=>
+  soloMode
+   ?plan.code==='FREE'||plan.code==='SOLO'||plan.code===p.data.plan
+   :plan.code!=='SOLO'
+ ),[soloMode,p.data.plan]);
  const trialUsed=Boolean(sub.trial_ends_at);
  const trialActive=sub.status==='trialing'&&Boolean(sub.trial_ends_at)&&new Date(sub.trial_ends_at!)>new Date();
  const activeDefinition=useMemo(()=>FIO_PLAN_CATALOG.find(x=>x.code===p.data.plan)??FIO_PLAN_CATALOG[0],[p.data.plan]);
@@ -148,7 +155,7 @@ export function FioPlans(p:WorkspaceProps){
   </section>
 
   <div className="fio-pricing-grid fio-pricing-compact">
-   {FIO_PLAN_CATALOG.map(plan=>{
+   {visiblePlans.map(plan=>{
     const price=plan.prices[cycle],current=p.data.plan===plan.code,unavailable=price===null;
     const annualSaving=plan.code!=='FREE'&&cycle==='annual'&&plan.prices.monthly!=null&&price!=null?plan.prices.monthly*12-price:0;
     const monthlyEquivalent=cycle==='annual'&&price?Math.round(price/12):null;
@@ -158,17 +165,17 @@ export function FioPlans(p:WorkspaceProps){
      <div className="fio-price"><span>{unavailable?'—':price===0?amount(0):amount(price)}</span>{!unavailable&&<small>{price===0?t('fp.freeCost'):cycleSuffix(cycle)}</small>}</div>
      {monthlyEquivalent!==null&&<small className="fio-price-equivalent">{t('fp.monthEquivalent',{amount:amount(monthlyEquivalent)})}</small>}
      {annualSaving>0&&<div className="fio-saving">{t('fp.yearSaving',{amount:amount(annualSaving)})}</div>}
-     {plan.code==='PRO'&&!trialUsed&&<div className="fio-trial-note"><Gift size={15}/><span>{t('fp.trial14')}</span></div>}
+     {plan.code===primaryPaid&&!trialUsed&&<div className="fio-trial-note"><Gift size={15}/><span>{t('fp.trial14')}</span></div>}
      <div className="fio-plan-highlights">{plan.highlights.slice(0,2).map((_,index)=><div key={index}><span className="fio-highlight-check"><Check size={14}/></span><span>{t(`fp.plan.${plan.code}.h${index+1}`)}</span></div>)}</div>
      <details className="fio-plan-details"><summary>{t('fp.allFeatures')}</summary><div className="fio-plan-groups">{plan.groups.map((group,groupIndex)=><section key={group.title}><h3>{t(`fp.plan.${plan.code}.g${groupIndex}`)}</h3><ul>{group.items.map((_,itemIndex)=><li key={itemIndex}><Check size={14}/><span>{t(`fp.plan.${plan.code}.g${groupIndex}i${itemIndex}`)}</span></li>)}</ul></section>)}</div></details>
-     <div className="fio-card-action">{plan.proposal?<><small className="fio-proposal-note">{t('fp.proposal')}</small><button className="secondary full" disabled>{t('fp.soon')}</button></>:plan.code==='FREE'||unavailable?<button className="secondary full" disabled>{current?t('fp.currentPlan'):t('fp.freePlan')}</button>:billing?.providerStatus==='active'&&!billing.change?(billing.plan===plan.code&&billing.cycle===cycle?<button className="secondary full" disabled>{t('fp.currentPlan')}</button>:<button className="primary full" disabled={busy} onClick={()=>{setChangePlan(plan.code as PaidPlan);setChangeAccepted(false);setCheckoutError('');}}>{t('fp.switchTo',{plan:plan.code})}<ArrowRight size={17}/></button>):billingLocked?<button className="secondary full" disabled={busy} onClick={()=>{if(billing)setCheckoutPlan(billing.plan);}}>{t('fp.viewSubscription')}</button>:plan.code==='PRO'&&!trialUsed&&p.data.plan==='FREE'?<button className="primary full" disabled={busy||!billingLoaded||!billingConfigured} onClick={()=>setChoiceOpen(true)}>{t('fp.startPro')}<ArrowRight size={17}/></button>:<button className="primary full" disabled={busy||!billingLoaded||!billingConfigured} onClick={()=>selectPaid(plan.code as PaidPlan)}>{t('fp.subscribePlan',{plan:plan.code})}<ArrowRight size={17}/></button>}</div>
+     <div className="fio-card-action">{plan.proposal?<><small className="fio-proposal-note">{t('fp.proposal')}</small><button className="secondary full" disabled>{t('fp.soon')}</button></>:plan.code==='FREE'||unavailable?<button className="secondary full" disabled>{current?t('fp.currentPlan'):t('fp.freePlan')}</button>:billing?.providerStatus==='active'&&!billing.change?(billing.plan===plan.code&&billing.cycle===cycle?<button className="secondary full" disabled>{t('fp.currentPlan')}</button>:<button className="primary full" disabled={busy} onClick={()=>{setChangePlan(plan.code as PaidPlan);setChangeAccepted(false);setCheckoutError('');}}>{t('fp.switchTo',{plan:plan.code})}<ArrowRight size={17}/></button>):billingLocked?<button className="secondary full" disabled={busy} onClick={()=>{if(billing)setCheckoutPlan(billing.plan);}}>{t('fp.viewSubscription')}</button>:plan.code===primaryPaid&&!trialUsed&&p.data.plan==='FREE'?<button className="primary full" disabled={busy||!billingLoaded||!billingConfigured} onClick={()=>setChoiceOpen(true)}>{soloMode?t('fp.startSolo'):t('fp.startPro')}<ArrowRight size={17}/></button>:<button className="primary full" disabled={busy||!billingLoaded||!billingConfigured} onClick={()=>selectPaid(plan.code as PaidPlan)}>{t('fp.subscribePlan',{plan:plan.code})}<ArrowRight size={17}/></button>}</div>
     </article>;
    })}
   </div>
 
   <section className="fio-plan-explainer"><Info size={18}/><div><strong>{t('fp.pixTitle')}</strong><p>{t('fp.pixDesc')}</p></div></section>
 
-  {choiceOpen&&<Modal title={t('fp.startModal')} onClose={()=>{if(!busy)setChoiceOpen(false);}}><div className="fio-start-options"><p className="muted">{t('fp.startDesc')}</p><button className="fio-start-option" disabled={busy} onClick={()=>void startTrial()}><span className="fio-start-icon"><Gift size={21}/></span><div><strong>{t('fp.try14')}</strong><p>{t('fp.try14Desc')}</p></div><ArrowRight size={18}/></button><button className="fio-start-option" disabled={busy} onClick={()=>selectPaid('PRO')}><span className="fio-start-icon"><WalletCards size={21}/></span><div><strong>{t('fp.subscribeNow')}</strong><p>{t('fp.subscribeNowDesc',{cycle:cycleLabel(cycle).toLowerCase()})}</p></div><ArrowRight size={18}/></button>{busy&&<p className="muted fio-start-wait">{t('fp.activatingTrial')}</p>}</div></Modal>}
+  {choiceOpen&&<Modal title={t('fp.startModal')} onClose={()=>{if(!busy)setChoiceOpen(false);}}><div className="fio-start-options"><p className="muted">{t('fp.startDesc')}</p><button className="fio-start-option" disabled={busy} onClick={()=>void startTrial()}><span className="fio-start-icon"><Gift size={21}/></span><div><strong>{t('fp.try14')}</strong><p>{t('fp.try14Desc')}</p></div><ArrowRight size={18}/></button><button className="fio-start-option" disabled={busy} onClick={()=>selectPaid(primaryPaid)}><span className="fio-start-icon"><WalletCards size={21}/></span><div><strong>{t('fp.subscribeNow')}</strong><p>{t('fp.subscribeNowDesc',{cycle:cycleLabel(cycle).toLowerCase()})}</p></div><ArrowRight size={18}/></button>{busy&&<p className="muted fio-start-wait">{t('fp.activatingTrial')}</p>}</div></Modal>}
 
   {changePlan&&<Modal title={t('fp.changeModal')} onClose={()=>{if(!busy)setChangePlan(null);}}><div className="fio-checkout-placeholder"><h3>FIO {changePlan} · {cycleLabel(cycle)}</h3><p>{t('fp.newValue',{amount:amount(FIO_PLAN_CATALOG.find(x=>x.code===changePlan)!.prices[cycle]!)})}</p><p>{t('fp.changeDesc')}</p><label className="fio-terms"><input type="checkbox" checked={changeAccepted} onChange={e=>setChangeAccepted(e.target.checked)}/>{t('fp.changeConsent')}</label>{checkoutError&&<p role="alert" className="fio-checkout-error">{checkoutError}</p>}<button className="primary full" disabled={busy||!changeAccepted} onClick={()=>void confirmChange()}>{busy?t('fp.requesting'):t('fp.confirmChange')}</button><button disabled={busy} className="secondary full" onClick={()=>setChangePlan(null)}>{t('common.back')}</button></div></Modal>}
   {checkoutPlan&&<Modal title={billing?t('fp.subscriptionTitle',{plan:billing.plan}):t('fp.subscribeTitle',{plan:checkoutPlan})} onClose={closeCheckout}><div className="fio-checkout-placeholder">

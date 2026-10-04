@@ -50,13 +50,45 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
   ]
  },
  {
+  code:'SOLO',
+  name:'FIO SOLO',
+  eyebrow:'PARA QUEM TRABALHA SOZINHO',
+  description:'Tudo para organizar sua rotina, seu app e seus clientes em uma única agenda.',
+  recommended:true,
+  trialDays:14,
+  prices:{weekly:null,monthly:7990,annual:76704},
+  highlights:['1 profissional','Até 500 clientes'],
+  groups:[
+   {title:'CAPACIDADE',items:[
+    '1 profissional',
+    'Até 500 clientes',
+    'Até 20 serviços',
+    'Até 5 pacotes de cortes'
+   ]},
+   {title:'PRESENÇA DIGITAL',items:[
+    'Mini site personalizado',
+    'App/PWA com identidade da barbearia',
+    'Logo, capa, fundo e cores'
+   ]},
+   {title:'COMUNICAÇÃO',items:[
+    'Feed da barbearia',
+    'Campanhas e comunicação',
+    'Pacotes/planos de cortes'
+   ]},
+   {title:'INTELIGÊNCIA',items:[
+    'Assistente FIO',
+    '150 consultas de IA por usuário/dia'
+   ]}
+  ]
+ },
+ {
   code:'PRO',
   name:'FIO PRO',
   eyebrow:'RECOMENDADO',
   description:'Para barbearias que querem crescer com presença digital e comunicação.',
   recommended:true,
   trialDays:14,
-  prices:{weekly:null,monthly:14990,annual:149900},
+  prices:{weekly:null,monthly:14990,annual:143904},
   highlights:['Até 500 clientes','Até 5 profissionais + responsável'],
   groups:[
    {title:'CAPACIDADE',items:[
@@ -86,7 +118,7 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
   name:'FIO PREMIUM',
   eyebrow:'PARA OPERAÇÕES MAIORES',
   description:'Mais capacidade para equipes e carteiras de clientes maiores.',
-  prices:{weekly:null,monthly:29990,annual:299900},
+  prices:{weekly:null,monthly:29990,annual:287904},
   highlights:['Até 2.000 clientes','Até 10 profissionais + responsável'],
   groups:[
    {title:'CAPACIDADE',items:[

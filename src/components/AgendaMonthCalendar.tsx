@@ -4,6 +4,8 @@ import {api} from '../lib/api';
 import {useI18n} from '../i18n';
 
 type Availability={day:string;available_count:number};
+type PeriodItem={starts_at:string;status:string};
+type PeriodResult={items:PeriodItem[]};
 
 function moveMonth(value:string,amount:number){
  const [year,month]=value.split('-').map(Number);
@@ -25,6 +27,7 @@ export function AgendaMonthCalendar(p:{
  const today=dateFormatter.format(new Date());
  const [month,setMonth]=useState((p.date||today).slice(0,7));
  const [availability,setAvailability]=useState<Record<string,number>>({});
+ const [bookedDays,setBookedDays]=useState<Set<string>>(new Set());
  const [loading,setLoading]=useState(false);
 
  useEffect(()=>{
@@ -33,28 +36,62 @@ export function AgendaMonthCalendar(p:{
 
  useEffect(()=>{
   let alive=true;
-  if(!p.barberId||!p.serviceId){setAvailability({});return;}
+  if(!p.barberId||!p.serviceId){setAvailability({});setBookedDays(new Set());return;}
   if(p.demo){
    const [y,m]=month.split('-').map(Number);
    const total=new Date(Date.UTC(y,m,0)).getUTCDate();
    const next:Record<string,number>={};
    for(let d=1;d<=total;d++){
     const key=`${month}-${String(d).padStart(2,'0')}`;
-    if(key>=today)next[key]=d%6===0?0:2;
+    if(key>=today)next[key]=2;
    }
    setAvailability(next);
+   setBookedDays(new Set());
    return;
   }
+
+  const [year,monthNumber]=month.split('-').map(Number);
+  const lastDay=new Date(Date.UTC(year,monthNumber,0)).getUTCDate();
+  const from=`${month}-01`;
+  const to=`${month}-${String(lastDay).padStart(2,'0')}`;
+
   setLoading(true);
-  void api<Availability[]>(
-   `/slots/month?barberId=${encodeURIComponent(p.barberId)}&serviceId=${encodeURIComponent(p.serviceId)}&monthStart=${month}-01`,
-   p.shopId
-  ).then(rows=>{
-   if(alive)setAvailability(Object.fromEntries(rows.map(row=>[row.day,Number(row.available_count)])));
-  }).catch(()=>{if(alive)setAvailability({});})
-   .finally(()=>{if(alive)setLoading(false);});
+
+  void Promise.all([
+   api<Availability[]>(
+    `/slots/month?barberId=${encodeURIComponent(p.barberId)}&serviceId=${encodeURIComponent(p.serviceId)}&monthStart=${month}-01`,
+    p.shopId
+   ),
+   api<PeriodResult>(
+    `/appointments/period?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&barberId=${encodeURIComponent(p.barberId)}`,
+    p.shopId
+   )
+  ]).then(([rows,period])=>{
+   if(!alive)return;
+   setAvailability(Object.fromEntries(rows.map(row=>[row.day,Number(row.available_count)])));
+
+   const formatter=new Intl.DateTimeFormat('en-CA',{
+    timeZone:p.zone,
+    year:'numeric',
+    month:'2-digit',
+    day:'2-digit'
+   });
+
+   const nextBooked=new Set(
+    (period.items??[])
+     .filter(item=>item.status!=='cancelled')
+     .map(item=>formatter.format(new Date(item.starts_at)))
+   );
+
+   setBookedDays(nextBooked);
+  }).catch(()=>{
+   if(alive){setAvailability({});setBookedDays(new Set());}
+  }).finally(()=>{
+   if(alive)setLoading(false);
+  });
+
   return()=>{alive=false};
- },[month,p.barberId,p.serviceId,p.shopId,p.demo]);
+ },[month,p.barberId,p.serviceId,p.shopId,p.demo,p.zone]);
 
  const [year,monthNumber]=month.split('-').map(Number);
  const lastDay=new Date(Date.UTC(year,monthNumber,0)).getUTCDate();
@@ -84,7 +121,8 @@ export function AgendaMonthCalendar(p:{
     const count=Number(availability[key]??0);
     const known=Object.prototype.hasOwnProperty.call(availability,key);
     const available=known&&count>0;
-    const full=known&&count===0;
+    // Vermelho somente quando houve agendamento no dia e não restou nenhum horário.
+    const full=known&&count===0&&bookedDays.has(key);
     return <button
      type="button"
      key={key}
