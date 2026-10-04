@@ -39,6 +39,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  const [password,setPassword]=useState('');
  const [confirmPassword,setConfirmPassword]=useState('');
  const [message,setMessage]=useState('');
+ const [loginHelp,setLoginHelp]=useState(false);
  const [busy,setBusy]=useState(false);
  const [resetReady,setResetReady]=useState(!reset);
  const [resetInvalid,setResetInvalid]=useState(false);
@@ -239,10 +240,32 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 
    setRememberSession(remember);
    const result=await supabase.auth.signInWithPassword({email,password:submittedPassword,options:{captchaToken:captchaToken||undefined}});
+
    if(result.error){
-    setMessage(t('auth.loginFailed'));
+    const authError=
+     result.error as {
+      code?:string;
+      message?:string;
+     };
+
+    const invalid=
+     authError.code==='invalid_credentials'||
+     /invalid login credentials/i.test(
+      authError.message??''
+     );
+
+    setLoginHelp(invalid);
+
+    setMessage(
+     invalid
+      ?t('auth.passwordProviderHelp')
+      :t('auth.loginFailed')
+    );
+
     return;
    }
+
+   setLoginHelp(false);
 
    if(appointmentLink(params.get('next')))navigate(appointmentLink(params.get('next'))!,{replace:true});
    else if(audience==='platform')navigate('/platform',{replace:true});
@@ -346,7 +369,10 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
       type="email"
       autoComplete="email"
       value={email}
-      onChange={e=>setEmail(e.target.value)}
+      onChange={e=>{
+       setEmail(e.target.value);
+       setLoginHelp(false);
+      }}
       required
      />
     </Field>}
@@ -399,6 +425,24 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     {needsCaptcha&&<AuthCaptcha onToken={setCaptchaToken} attempt={captchaAttempt}/>}
     {message&&<p role="status" className="notice">{message}</p>}
 
+    {loginHelp&&mode==='login'&&
+     <div className="auth-login-help">
+      <strong>{t('auth.passwordAccessTitle')}</strong>
+      <span>{t('auth.passwordAccessDesc')}</span>
+      <button
+       type="button"
+       className="secondary full"
+       onClick={()=>{
+        setLoginHelp(false);
+        setMessage('');
+        setMode('forgot');
+       }}
+      >
+       {t('auth.definePassword')}
+      </button>
+     </div>
+    }
+
     <button className="primary full" disabled={busy||(needsCaptcha&&!captchaToken)}>
      {busy
       ?t('auth.wait')
@@ -445,6 +489,9 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
 function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
  const {t}=useI18n();
  const [displayName,setDisplayName]=useState(''),[phone,setPhone]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ const [googleOnly,setGoogleOnly]=useState(false);
+ const [accountPassword,setAccountPassword]=useState('');
+ const [accountPasswordConfirm,setAccountPasswordConfirm]=useState('');
  useEffect(()=>{
   if(!supabase)return;
   let active=true;
@@ -453,18 +500,82 @@ function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
    const meta=user.user_metadata as Record<string,unknown>;
    const metaName=[meta?.display_name,meta?.full_name,meta?.name].find(v=>typeof v==='string'&&v.trim().length>=2);
    const accountPhone=typeof meta?.account_phone==='string'?meta.account_phone.trim():'';
+   const providers=Array.isArray(user.app_metadata?.providers)
+    ?user.app_metadata.providers.map(String)
+    :user.app_metadata?.provider
+     ?[String(user.app_metadata.provider)]
+     :[];
+
+   setGoogleOnly(
+    providers.includes('google')&&
+    !providers.includes('email')
+   );
+
    if(metaName)setDisplayName(current=>current||String(metaName).trim());
    if(accountPhone)setPhone(current=>current||accountPhone);
   });
   return()=>{active=false;};
  },[]);
  async function submit(e:FormEvent){
-  e.preventDefault();setBusy(true);setError('');
+  e.preventDefault();
+  setError('');
+
+  if(
+   googleOnly&&
+   accountPassword.length<8
+  ){
+   setError(t('auth.passwordMin'));
+   return;
+  }
+
+  if(
+   googleOnly&&
+   accountPassword!==accountPasswordConfirm
+  ){
+   setError(t('auth.passwordMismatch'));
+   return;
+  }
+
+  setBusy(true);
+
   try{
-   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'join',slug,displayName:displayName.trim(),phone:phone.trim()});
-   sessionStorage.setItem('fio-shop',r.barbershopId);
+   if(googleOnly){
+    if(!supabase)
+     throw new Error(t('auth.unavailable'));
+
+    const passwordResult=
+     await supabase.auth.updateUser({
+      password:accountPassword
+     });
+
+    if(passwordResult.error)
+     throw new Error(t('auth.passwordChangeFailed'));
+
+    setGoogleOnly(false);
+   }
+
+   const r=await api<{barbershopId:string}>(
+    '/onboarding',
+    undefined,
+    {
+     mode:'join',
+     slug,
+     displayName:displayName.trim(),
+     phone:phone.trim()
+    }
+   );
+
+   sessionStorage.setItem(
+    'fio-shop',
+    r.barbershopId
+   );
+
    onDone();
-  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  }catch(e){
+   setError((e as Error).message);
+  }finally{
+   setBusy(false);
+  }
  }
  return <div className="auth-page">
   <ShopIdentity slug={slug}/>
@@ -473,6 +584,36 @@ function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
    <form onSubmit={submit}>
     <Field label={t('auth.yourName')}><input minLength={2} maxLength={100} autoComplete="name" required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></Field>
     <Field label={t('auth.phone')}><input type="tel" inputMode="tel" autoComplete="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)} required/><small>{t('auth.phoneIdentityHint')}</small></Field>
+
+    {googleOnly&&
+     <div className="auth-google-password">
+      <strong>{t('auth.googlePasswordTitle')}</strong>
+      <p>{t('auth.googlePasswordDesc')}</p>
+
+      <Field label={t('auth.newPassword')}>
+       <input
+        type="password"
+        minLength={8}
+        autoComplete="new-password"
+        value={accountPassword}
+        onChange={e=>setAccountPassword(e.target.value)}
+        required
+       />
+      </Field>
+
+      <Field label={t('auth.confirmNewPassword')}>
+       <input
+        type="password"
+        minLength={8}
+        autoComplete="new-password"
+        value={accountPasswordConfirm}
+        onChange={e=>setAccountPasswordConfirm(e.target.value)}
+        required
+       />
+      </Field>
+     </div>
+    }
+
     {error&&<p className="notice" role="alert">{error}</p>}
     <button className="primary full" disabled={busy}>{busy?t('auth.entering'):t('auth.enterShop')}</button>
    </form>

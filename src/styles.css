@@ -4251,3 +4251,1045 @@ body:has(.workspace),
   }
 }
 /* FIM FIO_TURNSTILE_STABLE_MOBILE_20261004 */
+
+
+/* FIO_LIVE_POLISH_UI_20261004 */
+
+/* Fechado SEMPRE cinza. Verde fica exclusivo para disponibilidade. */
+.booking-calendar-grid>button.closed,
+.booking-calendar-grid>button.closed:disabled,
+.booking-calendar-grid>button.selected.closed{
+ background:color-mix(in srgb,var(--surface) 92%,var(--muted) 8%)!important;
+ border-color:color-mix(in srgb,var(--border) 80%,var(--muted) 20%)!important;
+ color:var(--muted)!important;
+ opacity:.64!important;
+}
+
+.booking-calendar-grid>button.closed i,
+.booking-calendar-grid>button.selected.closed i,
+.calendar-legend i.closed{
+ background:#747474!important;
+ box-shadow:none!important;
+}
+
+
+/* Loading global: aparece só em ações interativas que demoram. */
+.fio-global-busy{
+ position:fixed;
+ inset:0;
+ z-index:20000;
+ display:grid;
+ place-items:center;
+ padding:20px;
+ background:rgba(0,0,0,.44);
+ backdrop-filter:blur(2px);
+ -webkit-backdrop-filter:blur(2px);
+ opacity:0;
+ visibility:hidden;
+ pointer-events:none;
+ transition:opacity .15s ease,visibility .15s ease;
+}
+
+.fio-global-busy.is-visible{
+ opacity:1;
+ visibility:visible;
+ pointer-events:auto;
+}
+
+.fio-global-busy-card{
+ min-width:138px;
+ min-height:52px;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ gap:10px;
+ padding:12px 16px;
+ border:1px solid color-mix(in srgb,var(--text) 15%,transparent);
+ border-radius:13px;
+ background:color-mix(in srgb,var(--bg) 92%,transparent);
+ color:var(--text);
+ box-shadow:0 18px 55px #0008;
+}
+
+.fio-global-busy-card b{
+ font-size:.78rem;
+ font-weight:650;
+}
+
+.fio-global-busy-spinner,
+.fio-loading-spinner{
+ width:20px;
+ height:20px;
+ border:2px solid color-mix(in srgb,currentColor 22%,transparent);
+ border-top-color:currentColor;
+ border-radius:50%;
+ animation:fio-spin .72s linear infinite;
+}
+
+@keyframes fio-spin{
+ to{transform:rotate(360deg)}
+}
+
+.fio-loading-screen{
+ display:grid;
+ place-items:center;
+ align-content:center;
+ gap:12px;
+ min-height:100dvh;
+ background:var(--bg,#080808);
+ color:var(--text,#f5f5f5);
+}
+
+.fio-loading-screen strong{
+ font-size:.78rem;
+ font-weight:600;
+ color:var(--muted,#aaa);
+}
+
+
+/* Plano FIO: leitura rápida, dois ciclos e cards menores. */
+.fio-cycle-section{
+ margin-bottom:16px!important;
+ padding:14px!important;
+ border-radius:14px!important;
+}
+
+.fio-cycle-heading{
+ margin-bottom:10px!important;
+}
+
+.fio-cycle-heading h2{
+ margin-top:3px!important;
+ font-size:1rem!important;
+}
+
+.fio-cycle-heading>small{
+ font-size:.68rem!important;
+}
+
+.fio-cycle-picker{
+ grid-template-columns:repeat(2,minmax(0,1fr))!important;
+ gap:8px!important;
+}
+
+.fio-cycle-picker button{
+ min-height:62px!important;
+ padding:10px!important;
+}
+
+.fio-annual-priority-note{
+ margin:7px 0 0!important;
+}
+
+.fio-plan-current{
+ min-height:auto!important;
+ padding:13px 15px!important;
+ margin-bottom:14px!important;
+ border-radius:14px!important;
+}
+
+.fio-plan-current-icon{
+ width:34px!important;
+ height:34px!important;
+}
+
+.fio-plan-current-copy small{
+ margin-top:2px!important;
+}
+
+.fio-billing-resume{
+ padding:13px 15px!important;
+ margin-bottom:14px!important;
+ border-radius:14px!important;
+}
+
+.fio-pricing-grid.fio-pricing-compact{
+ gap:12px!important;
+}
+
+.fio-pricing-compact .fio-price-card{
+ padding:15px!important;
+ border-radius:15px!important;
+}
+
+.fio-pricing-compact .fio-price-card-top{
+ min-height:0!important;
+}
+
+.fio-pricing-compact .fio-price-card-top p{
+ margin-top:5px!important;
+ line-height:1.4!important;
+}
+
+.fio-pricing-compact .fio-price{
+ margin-top:10px!important;
+}
+
+.fio-pricing-compact .fio-plan-highlights{
+ min-height:0!important;
+ margin:11px 0 8px!important;
+ padding-top:10px!important;
+ gap:7px!important;
+}
+
+.fio-plan-details{
+ margin-bottom:11px!important;
+}
+
+.fio-plan-explainer{
+ margin-top:14px!important;
+ padding:12px 13px!important;
+ border-radius:13px!important;
+}
+
+@media(max-width:760px){
+ .fio-cycle-heading{
+  align-items:flex-start!important;
+ }
+
+ .fio-cycle-heading>small{
+  display:none;
+ }
+
+ .fio-cycle-picker button{
+  min-height:56px!important;
+ }
+
+ .fio-cycle-picker button small{
+  display:none;
+ }
+
+ .fio-cycle-badge{
+  display:none!important;
+ }
+
+ .fio-annual-priority-note{
+  font-size:.67rem!important;
+ }
+
+ .fio-pricing-grid.fio-pricing-compact{
+  display:flex!important;
+  grid-template-columns:none!important;
+  overflow-x:auto!important;
+  margin-right:-14px!important;
+  padding:2px 14px 10px 0!important;
+  scroll-snap-type:x mandatory;
+  scrollbar-width:none;
+ }
+
+ .fio-pricing-grid.fio-pricing-compact::-webkit-scrollbar{
+  display:none;
+ }
+
+ .fio-pricing-compact .fio-price-card{
+  flex:0 0 min(82vw,320px)!important;
+  width:min(82vw,320px)!important;
+  scroll-snap-align:start;
+ }
+
+ .fio-plan-current{
+  display:grid!important;
+  grid-template-columns:auto minmax(0,1fr)!important;
+  gap:10px!important;
+ }
+
+ .fio-plan-current>.fio-billing-status{
+  grid-column:2!important;
+  justify-self:start!important;
+ }
+
+ .fio-billing-resume{
+  align-items:stretch!important;
+  gap:10px!important;
+ }
+
+ .fio-plan-explainer{
+  margin-bottom:6px!important;
+ }
+}
+
+/* FIO_PAYMENT_FLOW_VIDEO_20261004 */
+.fio-payflow{
+ width:min(100%,560px);
+ min-height:calc(100dvh - 118px);
+ margin:0 auto;
+ display:flex;
+ flex-direction:column;
+ color:var(--text);
+}
+
+.fio-payflow-plans-heading{
+ display:flex;
+ align-items:flex-start;
+ justify-content:space-between;
+ gap:14px;
+ margin:2px 0 14px;
+}
+
+.fio-payflow-plans-heading h1,
+.fio-payflow-titlebar h1{
+ margin:0;
+ font-size:1.2rem;
+ line-height:1.15;
+ letter-spacing:-.02em;
+}
+
+.fio-payflow-plans-heading p{
+ margin:5px 0 0;
+ color:var(--muted);
+ font-size:.74rem;
+}
+
+.fio-payflow-current-chip{
+ flex:0 0 auto;
+ display:inline-flex;
+ align-items:center;
+ min-height:27px;
+ padding:5px 9px;
+ border:1px solid var(--border);
+ border-radius:8px;
+ color:var(--muted);
+ font-size:.64rem;
+ font-weight:700;
+ letter-spacing:.02em;
+}
+
+.fio-payflow-cycle{
+ display:grid;
+ grid-template-columns:1fr 1fr;
+ gap:4px;
+ padding:3px;
+ margin-bottom:10px;
+ border:1px solid var(--border);
+ border-radius:11px;
+ background:var(--surface);
+}
+
+.fio-payflow-cycle button,
+.fio-payflow-tabs button{
+ min-height:34px;
+ border:0;
+ border-radius:8px;
+ background:transparent;
+ color:var(--muted);
+ font-size:.72rem;
+ font-weight:700;
+}
+
+.fio-payflow-cycle button.active{
+ background:var(--text);
+ color:var(--bg);
+}
+
+.fio-payflow-cycle small{
+ margin-left:4px;
+ font-size:.6rem;
+ font-weight:800;
+}
+
+.fio-payflow-tabs{
+ display:grid;
+ grid-template-columns:repeat(3,1fr);
+ gap:6px;
+ margin-bottom:12px;
+}
+
+.fio-payflow-tabs button{
+ border:1px solid transparent;
+ text-transform:uppercase;
+}
+
+.fio-payflow-tabs button.active{
+ border-color:var(--text);
+ color:var(--text);
+ background:color-mix(in srgb,var(--surface) 88%,var(--text) 12%);
+}
+
+.fio-payflow-card{
+ min-height:310px;
+ padding:16px 16px 14px;
+ border:1px solid var(--border);
+ border-radius:15px;
+ background:linear-gradient(180deg,color-mix(in srgb,var(--surface) 96%,var(--text) 4%),var(--surface));
+ box-shadow:0 12px 32px #0002;
+}
+
+.fio-payflow-eyebrow{
+ display:block;
+ margin-bottom:4px;
+ color:var(--muted);
+ font-size:.59rem;
+ font-weight:800;
+ letter-spacing:.08em;
+ text-transform:uppercase;
+}
+
+.fio-payflow-card h2{
+ margin:0;
+ font-size:1rem;
+ letter-spacing:-.015em;
+}
+
+.fio-payflow-price{
+ display:flex;
+ align-items:baseline;
+ gap:5px;
+ margin-top:8px;
+}
+
+.fio-payflow-price strong{
+ font-size:1.55rem;
+ letter-spacing:-.035em;
+}
+
+.fio-payflow-price span{
+ color:var(--muted);
+ font-size:.68rem;
+}
+
+.fio-payflow-equivalent{
+ display:block;
+ margin-top:2px;
+ color:var(--muted);
+ font-size:.65rem;
+}
+
+.fio-payflow-badges{
+ min-height:24px;
+ display:flex;
+ align-items:center;
+ gap:6px;
+ flex-wrap:wrap;
+ margin:9px 0 8px;
+}
+
+.fio-payflow-badges span{
+ display:inline-flex;
+ align-items:center;
+ gap:4px;
+ padding:4px 7px;
+ border-radius:999px;
+ background:color-mix(in srgb,#2fbc70 14%,transparent);
+ color:#52cf86;
+ font-size:.59rem;
+ font-weight:700;
+}
+
+.fio-payflow-badges .trial{
+ background:color-mix(in srgb,#e5a84b 15%,transparent);
+ color:#e8b45f;
+}
+
+.fio-payflow-features{
+ display:grid;
+ gap:0;
+ border-top:1px solid var(--border);
+}
+
+.fio-payflow-features>div{
+ min-height:36px;
+ display:flex;
+ align-items:center;
+ gap:8px;
+ border-bottom:1px solid color-mix(in srgb,var(--border) 78%,transparent);
+ font-size:.72rem;
+ line-height:1.25;
+}
+
+.fio-payflow-features svg{
+ flex:0 0 auto;
+ color:#3ec77c;
+ stroke-width:2.4;
+}
+
+.fio-payflow-plan-spacer{
+ flex:1 1 auto;
+ min-height:16px;
+}
+
+.fio-payflow-bottom-action{
+ display:grid;
+ gap:8px;
+ margin-top:auto;
+ padding-top:14px;
+}
+
+.fio-payflow-plan-action{
+ position:sticky;
+ bottom:calc(70px + env(safe-area-inset-bottom));
+ z-index:6;
+ padding-bottom:5px;
+ background:linear-gradient(180deg,transparent 0%,var(--bg) 22%,var(--bg) 100%);
+}
+
+.fio-payflow-primary,
+.fio-payflow-secondary{
+ width:100%;
+ min-height:46px;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ gap:8px;
+ border-radius:9px;
+ font-size:.76rem;
+ font-weight:800;
+}
+
+.fio-payflow-primary{
+ border:1px solid var(--text);
+ background:var(--text);
+ color:var(--bg);
+}
+
+.fio-payflow-primary:disabled{
+ opacity:.38;
+ cursor:not-allowed;
+}
+
+.fio-payflow-secondary{
+ border:1px solid var(--border);
+ background:var(--surface);
+ color:var(--text);
+}
+
+.fio-payflow-trial,
+.fio-payflow-link-danger{
+ min-height:30px;
+ border:0;
+ background:transparent;
+ color:var(--muted);
+ font-size:.67rem;
+ text-decoration:underline;
+ text-underline-offset:3px;
+}
+
+.fio-payflow-link-danger{
+ color:#d97878;
+}
+
+.fio-payflow-bottom-action>small{
+ text-align:center;
+ color:var(--muted);
+ font-size:.59rem;
+}
+
+.fio-payflow-error{
+ margin:10px 0;
+ padding:10px 11px;
+ border:1px solid #743737;
+ border-radius:9px;
+ background:#301b1b;
+ color:#f0b1b1;
+ font-size:.69rem;
+ line-height:1.4;
+}
+
+.fio-payflow-titlebar{
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ gap:12px;
+ padding:5px 0 11px;
+ margin-bottom:12px;
+ border-bottom:1px solid var(--text);
+}
+
+.fio-payflow-titlebar>div{
+ min-width:0;
+ display:flex;
+ align-items:center;
+ gap:9px;
+}
+
+.fio-payflow-titlebar>div>div{
+ min-width:0;
+}
+
+.fio-payflow-titlebar span{
+ display:block;
+ margin-top:3px;
+ color:var(--muted);
+ font-size:.64rem;
+}
+
+.fio-payflow-back,
+.fio-payflow-close{
+ flex:0 0 auto;
+ width:34px;
+ height:34px;
+ display:grid;
+ place-items:center;
+ padding:0;
+ border:0;
+ border-radius:8px;
+ background:transparent;
+ color:var(--text);
+}
+
+.fio-payflow-review-card{
+ display:grid;
+ gap:0;
+ margin-bottom:18px;
+}
+
+.fio-payflow-review-card>div{
+ min-height:42px;
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ gap:12px;
+ border-bottom:1px solid var(--border);
+}
+
+.fio-payflow-review-card span{
+ color:var(--muted);
+ font-size:.69rem;
+}
+
+.fio-payflow-review-card strong{
+ font-size:.72rem;
+ text-align:right;
+}
+
+.fio-payflow-field{
+ display:grid;
+ gap:6px;
+ margin-top:3px;
+}
+
+.fio-payflow-field>span{
+ font-size:.68rem;
+ font-weight:700;
+}
+
+.fio-payflow-field input{
+ width:100%;
+ min-height:46px;
+ padding:0 12px;
+ border:1px solid var(--border);
+ border-radius:10px;
+ background:var(--surface);
+ color:var(--text);
+ font-size:.84rem;
+ outline:none;
+}
+
+.fio-payflow-field input:focus{
+ border-color:var(--text);
+ box-shadow:0 0 0 1px var(--text);
+}
+
+.fio-payflow-field small{
+ color:var(--muted);
+ font-size:.6rem;
+ line-height:1.4;
+}
+
+.fio-payflow-disclosure{
+ margin:16px 0 12px;
+ padding:0 0 10px;
+ border-bottom:1px solid var(--border);
+}
+
+.fio-payflow-disclosure summary{
+ cursor:pointer;
+ font-size:.69rem;
+ font-weight:700;
+}
+
+.fio-payflow-disclosure p{
+ margin:8px 0 0;
+ color:var(--muted);
+ font-size:.64rem;
+ line-height:1.45;
+}
+
+.fio-payflow-consent{
+ display:flex;
+ align-items:flex-start;
+ gap:8px;
+ color:var(--muted);
+ font-size:.64rem;
+ line-height:1.45;
+}
+
+.fio-payflow-consent input{
+ width:16px;
+ height:16px;
+ margin:1px 0 0;
+ accent-color:var(--text);
+}
+
+.fio-payflow-consent a{
+ color:var(--text);
+}
+
+.fio-payflow-note{
+ display:flex;
+ align-items:flex-start;
+ gap:9px;
+ margin:14px 0;
+ padding:11px 12px;
+ border:1px solid var(--border);
+ border-radius:10px;
+ background:var(--surface);
+ color:var(--muted);
+ font-size:.68rem;
+ line-height:1.4;
+}
+
+.fio-payflow-note svg{
+ flex:0 0 auto;
+}
+
+.fio-payflow-pix-center{
+ display:grid;
+ justify-items:center;
+ gap:4px;
+ margin:5px 0 9px;
+}
+
+.fio-payflow-pix-center span{
+ color:var(--muted);
+ font-size:.68rem;
+}
+
+.fio-payflow-pix-center strong{
+ font-size:1.55rem;
+ letter-spacing:-.035em;
+}
+
+.fio-payflow-qr{
+ width:min(250px,78vw);
+ aspect-ratio:1;
+ display:grid;
+ place-items:center;
+ align-self:center;
+ margin:7px auto 8px;
+ padding:8px;
+ border:1px solid var(--border);
+ border-radius:13px;
+ background:#fff;
+}
+
+.fio-payflow-qr svg{
+ width:100%;
+ height:100%;
+}
+
+.fio-payflow-pix-copy{
+ display:grid;
+ grid-template-columns:minmax(0,1fr) auto;
+ align-items:center;
+ gap:8px;
+ min-height:37px;
+ padding:5px 5px 5px 10px;
+ border:1px solid var(--border);
+ border-radius:9px;
+ background:var(--surface);
+}
+
+.fio-payflow-pix-copy code{
+ overflow:hidden;
+ color:var(--muted);
+ font-size:.58rem;
+ white-space:nowrap;
+ text-overflow:ellipsis;
+}
+
+.fio-payflow-pix-copy button{
+ min-height:28px;
+ padding:0 9px;
+ border:0;
+ border-radius:7px;
+ background:transparent;
+ color:var(--text);
+ font-size:.62rem;
+ font-weight:700;
+}
+
+.fio-payflow-wait{
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ gap:6px;
+ flex-wrap:wrap;
+ margin:9px 0;
+ color:var(--muted);
+ font-size:.63rem;
+}
+
+.fio-payflow-wait i{
+ width:6px;
+ height:6px;
+ border-radius:50%;
+ background:#d5a94d;
+ box-shadow:0 0 0 4px color-mix(in srgb,#d5a94d 12%,transparent);
+}
+
+.fio-payflow-wait small{
+ opacity:.82;
+}
+
+.fio-payflow-steps{
+ display:grid;
+ gap:6px;
+ margin:12px 0 6px;
+ padding-left:20px;
+ color:var(--muted);
+ font-size:.64rem;
+ line-height:1.38;
+}
+
+.fio-payflow-success{
+ min-height:calc(100dvh - 118px);
+}
+
+.fio-payflow-success-center{
+ flex:1 1 auto;
+ display:grid;
+ place-items:center;
+ align-content:center;
+ text-align:center;
+ gap:8px;
+ padding:30px 10px;
+}
+
+.fio-payflow-success-icon{
+ width:62px;
+ height:62px;
+ display:grid;
+ place-items:center;
+ border-radius:50%;
+ background:color-mix(in srgb,#4cc878 14%,transparent);
+ color:#54cb7e;
+}
+
+.fio-payflow-success-center h2{
+ margin:5px 0 0;
+ font-size:1.05rem;
+}
+
+.fio-payflow-success-center p{
+ margin:0;
+ color:var(--muted);
+ font-size:.7rem;
+}
+
+.fio-payflow-manage-status{
+ display:flex;
+ align-items:center;
+ gap:11px;
+ margin:6px 0 14px;
+ padding:13px;
+ border:1px solid var(--border);
+ border-radius:12px;
+ background:var(--surface);
+}
+
+.fio-payflow-manage-status div{
+ display:grid;
+ gap:3px;
+}
+
+.fio-payflow-manage-status strong{
+ font-size:.78rem;
+}
+
+.fio-payflow-manage-status span{
+ color:var(--muted);
+ font-size:.66rem;
+}
+
+@media(min-width:761px){
+ .fio-payflow{
+  min-height:680px;
+  padding:4px 0 24px;
+ }
+
+ .fio-payflow-plan-action{
+  bottom:0;
+ }
+
+ .fio-payflow-card{
+  min-height:330px;
+ }
+}
+
+@media(max-width:430px){
+ .fio-payflow{
+  min-height:calc(100dvh - 108px);
+ }
+
+ .fio-payflow-plans-heading{
+  margin-bottom:11px;
+ }
+
+ .fio-payflow-current-chip{
+  min-height:25px;
+  padding:4px 7px;
+  font-size:.58rem;
+ }
+
+ .fio-payflow-card{
+  min-height:288px;
+  padding:14px 14px 12px;
+ }
+
+ .fio-payflow-price strong{
+  font-size:1.42rem;
+ }
+
+ .fio-payflow-features>div{
+  min-height:33px;
+  font-size:.68rem;
+ }
+
+ .fio-payflow-plan-action{
+  bottom:calc(64px + env(safe-area-inset-bottom));
+ }
+
+ .fio-payflow-qr{
+  width:min(225px,72vw);
+ }
+}
+
+
+/* FIO_AUTH_BOOT_UI_20261004 */
+
+.fio-loading-screen--brand{
+ padding:24px;
+ text-align:center;
+}
+
+.fio-loading-brand-logo,
+.fio-loading-brand-placeholder{
+ width:74px;
+ height:74px;
+ display:grid;
+ place-items:center;
+ object-fit:cover;
+ border-radius:20px;
+ border:1px solid color-mix(in srgb,currentColor 15%,transparent);
+ background:var(--surface,#111);
+ box-shadow:0 18px 50px #0005;
+}
+
+.fio-loading-brand-logo.is-fio{
+ object-fit:contain;
+ padding:13px;
+}
+
+.fio-loading-brand-placeholder{
+ font-size:1.05rem;
+ font-weight:750;
+ letter-spacing:.04em;
+}
+
+.fio-loading-copy{
+ display:grid;
+ gap:3px;
+ margin-top:2px;
+}
+
+.fio-loading-copy strong{
+ max-width:min(82vw,320px);
+ overflow:hidden;
+ text-overflow:ellipsis;
+ white-space:nowrap;
+ color:var(--text,#f5f5f5);
+ font-size:.86rem;
+}
+
+.fio-loading-copy span{
+ color:var(--muted,#888);
+ font-size:.68rem;
+}
+
+.fio-loading-progress{
+ width:min(220px,62vw);
+ height:3px;
+ overflow:hidden;
+ border-radius:999px;
+ background:color-mix(in srgb,currentColor 11%,transparent);
+}
+
+.fio-loading-progress i{
+ display:block;
+ width:42%;
+ height:100%;
+ border-radius:inherit;
+ background:currentColor;
+ animation:fio-loading-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes fio-loading-slide{
+ 0%{transform:translateX(-110%)}
+ 50%{transform:translateX(90%)}
+ 100%{transform:translateX(265%)}
+}
+
+.auth-login-help{
+ display:grid;
+ gap:7px;
+ padding:12px;
+ margin-top:8px;
+ border:1px solid var(--border);
+ border-radius:12px;
+ background:var(--surface);
+}
+
+.auth-login-help strong{
+ font-size:.78rem;
+}
+
+.auth-login-help>span{
+ color:var(--muted);
+ font-size:.7rem;
+ line-height:1.45;
+}
+
+.auth-login-help button{
+ margin-top:2px;
+}
+
+.auth-google-password,
+.ob-google-password-copy{
+ display:grid;
+ gap:8px;
+ padding:12px;
+ border:1px solid var(--border);
+ border-radius:12px;
+ background:color-mix(in srgb,var(--surface) 94%,var(--text) 6%);
+}
+
+.auth-google-password>strong,
+.ob-google-password-copy strong{
+ font-size:.78rem;
+}
+
+.auth-google-password>p,
+.ob-google-password-copy small{
+ margin:0;
+ color:var(--muted);
+ font-size:.7rem;
+ line-height:1.45;
+}
+
+@media(max-width:640px){
+ .fio-loading-brand-logo,
+ .fio-loading-brand-placeholder{
+  width:66px;
+  height:66px;
+  border-radius:18px;
+ }
+
+ .fio-loading-progress{
+  width:min(205px,64vw);
+ }
+
+ .auth-login-help,
+ .auth-google-password{
+  padding:10px;
+ }
+}

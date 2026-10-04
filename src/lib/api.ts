@@ -63,30 +63,156 @@ async function renewedToken(rejectedToken:string){
  }
  return refreshInFlight;
 }
+let interactiveRequests=0;
+let interactiveTimer:number|undefined;
+
+function ensureBusyOverlay(){
+ if(typeof document==='undefined')return;
+ let overlay=document.getElementById('fio-global-busy');
+
+ if(!overlay){
+  overlay=document.createElement('div');
+  overlay.id='fio-global-busy';
+  overlay.className='fio-global-busy';
+  overlay.setAttribute('role','status');
+  overlay.setAttribute('aria-live','polite');
+
+  const card=document.createElement('span');
+  card.className='fio-global-busy-card';
+
+  const spinner=document.createElement('i');
+  spinner.className='fio-global-busy-spinner';
+  spinner.setAttribute('aria-hidden','true');
+
+  const label=document.createElement('b');
+  label.textContent='Carregando…';
+
+  card.append(spinner,label);
+  overlay.append(card);
+  document.body.appendChild(overlay);
+ }
+
+ overlay.classList.add('is-visible');
+}
+
+function beginInteractiveRequest(){
+ if(typeof window==='undefined')return;
+
+ interactiveRequests++;
+
+ if(interactiveRequests!==1)return;
+
+ interactiveTimer=window.setTimeout(
+  ensureBusyOverlay,
+  180
+ );
+}
+
+function endInteractiveRequest(){
+ if(typeof window==='undefined')return;
+
+ interactiveRequests=Math.max(0,interactiveRequests-1);
+
+ if(interactiveRequests>0)return;
+
+ if(interactiveTimer!==undefined){
+  window.clearTimeout(interactiveTimer);
+  interactiveTimer=undefined;
+ }
+
+ document.getElementById('fio-global-busy')
+  ?.classList.remove('is-visible');
+}
+
 export async function api<T>(path:string,shopId?:string,body?:unknown,method?:string):Promise<T> {
  if(!supabase) throw new RequestError('SETUP_REQUIRED','A conexão com a barbearia ainda não está configurada.');
- const {data:{session}}=await supabase.auth.getSession();
- if(!session)throw new RequestError('AUTH_REQUIRED','Entre para continuar.');
- const send=async(token:string)=>{
-  try{return await fetch(`/api${path}`,{method:method??(body?'POST':'GET'),headers:{Authorization:`Bearer ${token}`,...(shopId?{'X-Barbershop-Id':shopId}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(40000)});}
-  catch{throw new RequestError('OFFLINE','Não foi possível conectar. Confira sua conexão e tente novamente.');}
- };
- let response=await send(session.access_token);
- let data=await response.json().catch(()=>({code:'INVALID_RESPONSE',message:'Não foi possível concluir agora. Tente novamente.'}));
- // Only authentication rejection before the handler may replay a request.
- if(response.status===401&&data.code==='AUTH_REQUIRED'){
-  let token:string|null=null;
-  try{token=await renewedToken(session.access_token);}catch(e){
-   const status=(e as {status?:number}).status;
-   if(!status||status>=500)throw new RequestError('OFFLINE','Não foi possível renovar sua conexão. Tente novamente.');
+
+ const requestMethod=(method??(body?'POST':'GET')).toUpperCase();
+ const interactive=!['GET','HEAD'].includes(requestMethod);
+
+ if(interactive)beginInteractiveRequest();
+
+ try{
+  const {data:{session}}=await supabase.auth.getSession();
+
+  if(!session)
+   throw new RequestError('AUTH_REQUIRED','Entre para continuar.');
+
+  const send=async(token:string)=>{
+   try{
+    return await fetch(`/api${path}`,{
+     method:requestMethod,
+     headers:{
+      Authorization:`Bearer ${token}`,
+      ...(shopId?{'X-Barbershop-Id':shopId}:{}),
+      ...(body?{'Content-Type':'application/json'}:{})
+     },
+     body:body?JSON.stringify(body):undefined,
+     signal:AbortSignal.timeout(40000)
+    });
+   }catch{
+    throw new RequestError(
+     'OFFLINE',
+     'Não foi possível conectar. Confira sua conexão e tente novamente.'
+    );
+   }
+  };
+
+  let response=await send(session.access_token);
+  let data=await response.json().catch(()=>({
+   code:'INVALID_RESPONSE',
+   message:'Não foi possível concluir agora. Tente novamente.'
+  }));
+
+  if(response.status===401&&data.code==='AUTH_REQUIRED'){
+   let token:string|null=null;
+
+   try{
+    token=await renewedToken(session.access_token);
+   }catch(e){
+    const status=(e as {status?:number}).status;
+
+    if(!status||status>=500)
+     throw new RequestError(
+      'OFFLINE',
+      'Não foi possível renovar sua conexão. Tente novamente.'
+     );
+   }
+
+   if(token){
+    response=await send(token);
+    data=await response.json().catch(()=>({
+     code:'INVALID_RESPONSE'
+    }));
+   }
+
+   if(
+    !token||
+    (
+     response.status===401&&
+     data.code==='AUTH_REQUIRED'
+    )
+   ){
+    await supabase.auth.signOut({scope:'local'});
+
+    throw new RequestError(
+     'AUTH_REQUIRED',
+     'Sua sessão expirou. Entre novamente.'
+    );
+   }
   }
-  if(token){response=await send(token);data=await response.json().catch(()=>({code:'INVALID_RESPONSE'}));}
-  if(!token||(response.status===401&&data.code==='AUTH_REQUIRED')){
-   // End local UI polling and require a fresh login without revoking other devices.
-   await supabase.auth.signOut({scope:'local'});
-   throw new RequestError('AUTH_REQUIRED','Sua sessão expirou. Entre novamente.');
-  }
+
+  if(!response.ok)
+   throw new RequestError(
+    String(data.code??'REQUEST_FAILED'),
+    String(
+     data.message??
+     'Não foi possível concluir agora. Tente novamente.'
+    )
+   );
+
+  return data as T;
+ }finally{
+  if(interactive)endInteractiveRequest();
  }
- if(!response.ok)throw new RequestError(String(data.code??'REQUEST_FAILED'),String(data.message??'Não foi possível concluir agora. Tente novamente.'));
- return data as T;
 }

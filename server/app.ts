@@ -3,6 +3,7 @@ import { platformRouter } from './platform.js';
 import { createClient } from '@supabase/supabase-js';
 import helmet from 'helmet';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { z, ZodError } from 'zod';
 import { authenticate, tenant, requireOwner, requireFioFeature, bootstrap, type AuthContext, type TenantContext } from './context.js';
 import { ApiError,dbError } from './errors.js';
@@ -106,7 +107,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
    db.from('saas_subscriptions').select('plan,status,expires_at').eq('barbershop_id',shop.data.id).maybeSingle()
   ]);dbError(services.error);dbError(team.error);dbError(palette.error);dbError(billing.error);
   const entitlement=billing.data&&['active','trialing','past_due'].includes(billing.data.status)&&(!billing.data.expires_at||new Date(billing.data.expires_at)>new Date());
-  const publicPlans=entitlement&&['PRO','PLUS','PREMIUM'].includes(billing.data?.plan??'')
+  const publicPlans=entitlement&&['SOLO','SOLO_PREMIUM','PRO','PLUS','PREMIUM'].includes(billing.data?.plan??'')
    ?await db.from('subscription_plans').select('id,name,description,cuts,validity_days,price_cents,active').eq('barbershop_id',shop.data.id).eq('active',true).order('name')
    :{data:[],error:null};
   dbError(publicPlans.error);
@@ -128,7 +129,58 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.use('/api',rateLimitByUser('authenticated-api',60_000,180));
  app.get('/api/memberships',async(_req,res)=>{
   const a=res.locals.auth as AuthContext;
-  const result=await a.db.from('memberships').select('*').eq('user_id',a.userId).eq('active',true);dbError(result.error);res.json(result.data);
+
+  const result=await a.db
+   .from('memberships')
+   .select('*')
+   .eq('user_id',a.userId)
+   .eq('active',true);
+
+  dbError(result.error);
+
+  const memberships=result.data??[];
+  const shopIds=[
+   ...new Set(
+    memberships.map(item=>String(item.barbershop_id))
+   )
+  ];
+
+  let brandByShop=new Map<string,{
+   id:string;
+   name:string;
+   slug:string;
+   logo_url:string|null;
+   logo_asset_path:string|null;
+  }>();
+
+  if(shopIds.length){
+   const brands=await serviceDb()
+    .from('barbershops')
+    .select('id,name,slug,logo_url,logo_asset_path')
+    .in('id',shopIds);
+
+   dbError(brands.error);
+
+   brandByShop=new Map(
+    (brands.data??[]).map(shop=>[
+     String(shop.id),
+     {
+      id:String(shop.id),
+      name:String(shop.name),
+      slug:String(shop.slug),
+      logo_url:shop.logo_url?String(shop.logo_url):null,
+      logo_asset_path:shop.logo_asset_path?String(shop.logo_asset_path):null
+     }
+    ])
+   );
+  }
+
+  res.json(
+   memberships.map(item=>({
+    ...item,
+    shop_brand:brandByShop.get(String(item.barbershop_id))??null
+   }))
+  );
  });
  app.post('/api/onboarding',rateLimitByUser('onboarding',600_000,8),async(req,res)=>{
   const v=z.discriminatedUnion('mode',[
@@ -425,6 +477,174 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/assistant',rateLimitByUser('assistant',60_000,12),async(req,res)=>{const c=ctx(res);if(c.member.role==='CLIENT')throw new ApiError(403,'FORBIDDEN','Assistente disponível apenas para a equipe.');requireFioFeature(c,'assistant');res.json(await askAssistant(c,req.body));});
  app.use('/api',(_req,res)=>res.status(404).json({code:'NOT_FOUND',message:'Recurso não encontrado.'}));
  if(process.env.NODE_ENV==='production') {
+  const reservedPublicSlugs=new Set([
+   'owner',
+   'barber',
+   'client',
+   'login',
+   'reset-password',
+   'confirm-email',
+   'privacidade',
+   'termos',
+   'acesso',
+   'b',
+   'barbearia',
+   'platform',
+   'api'
+  ]);
+
+  app.get('/:publicSlug',async(req,res,next)=>{
+   const slug=String(req.params.publicSlug??'').toLowerCase();
+
+   if(
+    reservedPublicSlugs.has(slug)||
+    !/^[a-z0-9-]{3,60}$/.test(slug)
+   ){
+    next();
+    return;
+   }
+
+   const db=serviceDb();
+
+   const shop=await db
+    .from('barbershops')
+    .select(
+     'name,public_title,public_description,logo_url,logo_asset_path,custom_accent,accent_color'
+    )
+    .eq('slug',slug)
+    .eq('onboarding_completed',true)
+    .neq('platform_status','suspended')
+    .maybeSingle();
+
+   dbError(shop.error);
+
+   if(!shop.data){
+    next();
+    return;
+   }
+
+   const esc=(value:unknown)=>
+    String(value??'')
+     .replaceAll('&','&amp;')
+     .replaceAll('<','&lt;')
+     .replaceAll('>','&gt;')
+     .replaceAll('"','&quot;')
+     .replaceAll("'","&#39;");
+
+   const name=
+    shop.data.public_title||
+    shop.data.name;
+
+   const description=
+    shop.data.public_description||
+    `Agende seu horário com ${name}.`;
+
+   const rawImage=
+    shop.data.logo_url||
+    (
+     shop.data.logo_asset_path
+      ?publicStorageUrl(
+       'branding-assets',
+       shop.data.logo_asset_path
+      )
+      :''
+    );
+
+   const proto=
+    (
+     req.get('x-forwarded-proto')||
+     (req.secure?'https':'http')
+    )
+     .split(',')[0]
+     .trim();
+
+   const host=
+    (
+     req.get('x-forwarded-host')||
+     req.get('host')||
+     ''
+    )
+     .split(',')[0]
+     .trim();
+
+   const canonical=
+    host
+     ?`${proto}://${host}/${slug}`
+     :`/${slug}`;
+
+   const image=
+    rawImage&&/^https?:\/\//i.test(rawImage)
+     ?rawImage
+     :rawImage&&host
+      ?`${proto}://${host}${rawImage.startsWith('/')?'':'/'}${rawImage}`
+      :rawImage;
+
+   const accent=
+    shop.data.custom_accent||
+    shop.data.accent_color||
+    '#000000';
+
+   let html=
+    readFileSync(
+     resolve('dist/index.html'),
+     'utf8'
+    );
+
+   html=html
+    .replace(
+     /<title>[\s\S]*?<\/title>/i,
+     `<title>${esc(name)} · Agendamento</title>`
+    )
+    .replace(
+     /<meta\s+name="description"[\s\S]*?\/>/i,
+     `<meta name="description" content="${esc(description)}" />`
+    )
+    .replace(
+     /<meta\s+name="theme-color"[\s\S]*?\/>/i,
+     `<meta name="theme-color" content="${esc(accent)}" />`
+    );
+
+   if(image){
+    html=html
+     .replace(
+      /<link\s+rel="apple-touch-icon"[\s\S]*?\/>/i,
+      `<link rel="apple-touch-icon" href="${esc(image)}" />`
+     )
+     .replace(
+      /<link\s+rel="icon"[\s\S]*?\/>/i,
+      `<link rel="icon" href="${esc(image)}" />`
+     );
+   }
+
+   const social=[
+    `<meta property="og:type" content="website" />`,
+    `<meta property="og:title" content="${esc(name)}" />`,
+    `<meta property="og:description" content="${esc(description)}" />`,
+    `<meta property="og:url" content="${esc(canonical)}" />`,
+    image
+     ?`<meta property="og:image" content="${esc(image)}" />`
+     :'',
+    `<meta name="twitter:card" content="summary" />`,
+    `<meta name="twitter:title" content="${esc(name)}" />`,
+    `<meta name="twitter:description" content="${esc(description)}" />`,
+    image
+     ?`<meta name="twitter:image" content="${esc(image)}" />`
+     :''
+   ]
+    .filter(Boolean)
+    .join('\n    ');
+
+   html=html.replace(
+    '</head>',
+    `    ${social}\n  </head>`
+   );
+
+   res
+    .type('html')
+    .set('Cache-Control','no-store')
+    .send(html);
+  });
+
   app.use(express.static(resolve('dist')));
   app.get('/{*path}',(_req,res)=>res.sendFile(resolve('dist/index.html')));
  }

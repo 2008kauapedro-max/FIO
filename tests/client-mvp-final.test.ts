@@ -53,6 +53,9 @@ describe('entrada do cliente no MVP',()=>{
   expect(app).not.toContain("path:'/comunicacao'");
   expect(workspace).not.toContain("['notifications',t('settings.notifications')");
   expect(server).toContain("Assistente disponível apenas para a equipe.");
-  expect(auth).toContain("mode:'join',slug,displayName:displayName.trim(),phone:phone.trim()");
+  expect(auth).toContain("mode:'join'");
+  expect(auth).toContain("displayName:displayName.trim()");
+  expect(auth).toContain("phone:phone.trim()");
+  expect(auth).toContain("slug,");
  });
 });

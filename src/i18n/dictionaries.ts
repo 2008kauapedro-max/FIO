@@ -1568,3 +1568,124 @@ Object.assign(it,{
  "feed.noReviewComment":"Recensione senza commento.",
  "feed.reviewsEmpty":"Nessuna recensione in questo filtro."
 });
+
+
+/* FIO_LIVE_POLISH_20261004 */
+Object.assign(ptBR,{
+ "fp.plan.SOLO.h1":"Agenda e app profissional",
+ "fp.plan.SOLO.g0i0":"Operação solo organizada",
+ "fp.plan.SOLO_PREMIUM.h1":"Clientes sem limite",
+ "fp.plan.SOLO_PREMIUM.h2":"Serviços sem limite",
+ "fp.plan.SOLO_PREMIUM.g0i0":"Operação solo sem limites",
+ "tour.navigationTitle":"Seu menu",
+ "tour.navigationText":"Use este menu para acessar Agenda, Feed, Clientes, Serviços, Plano FIO e os outros recursos disponíveis na sua conta.",
+ "tour.agendaText":"Esta é sua Agenda. Aqui ficam os horários, atendimentos e os detalhes do seu dia.",
+ "tour.settingsText":"Agora você está em Configurações. Aqui edita perfil, identidade, acesso, aparência e segurança.",
+ "tour.supportText":"Agora você está em Ajuda e suporte. Aqui ficam orientações, termos e o canal para falar com a equipe do FIO."
+});
+
+Object.assign(en,{
+ "fp.plan.SOLO.h1":"Professional calendar and app",
+ "fp.plan.SOLO.g0i0":"Organized solo operation",
+ "fp.plan.SOLO_PREMIUM.h1":"Unlimited clients",
+ "fp.plan.SOLO_PREMIUM.h2":"Unlimited services",
+ "fp.plan.SOLO_PREMIUM.g0i0":"Unlimited solo operation",
+ "tour.navigationTitle":"Your menu",
+ "tour.navigationText":"Use this menu to open Calendar, Feed, Clients, Services, FIO Plan and the other tools available to your account."
+});
+
+Object.assign(es,{
+ "fp.plan.SOLO.h1":"Agenda y app profesional",
+ "fp.plan.SOLO.g0i0":"Operación individual organizada",
+ "fp.plan.SOLO_PREMIUM.h1":"Clientes sin límite",
+ "fp.plan.SOLO_PREMIUM.h2":"Servicios sin límite",
+ "fp.plan.SOLO_PREMIUM.g0i0":"Operación individual sin límites",
+ "tour.navigationTitle":"Tu menú",
+ "tour.navigationText":"Usa este menú para abrir Agenda, Feed, Clientes, Servicios, Plan FIO y las demás herramientas de tu cuenta."
+});
+
+Object.assign(fr,{
+ "fp.plan.SOLO.h1":"Agenda et app professionnelles",
+ "fp.plan.SOLO.g0i0":"Activité solo organisée",
+ "fp.plan.SOLO_PREMIUM.h1":"Clients illimités",
+ "fp.plan.SOLO_PREMIUM.h2":"Services illimités",
+ "fp.plan.SOLO_PREMIUM.g0i0":"Activité solo sans limites",
+ "tour.navigationTitle":"Votre menu",
+ "tour.navigationText":"Utilisez ce menu pour ouvrir Agenda, Feed, Clients, Services, Plan FIO et les autres outils de votre compte."
+});
+
+Object.assign(de,{
+ "fp.plan.SOLO.h1":"Professioneller Kalender und App",
+ "fp.plan.SOLO.g0i0":"Organisierter Solo-Betrieb",
+ "fp.plan.SOLO_PREMIUM.h1":"Unbegrenzte Kunden",
+ "fp.plan.SOLO_PREMIUM.h2":"Unbegrenzte Leistungen",
+ "fp.plan.SOLO_PREMIUM.g0i0":"Solo-Betrieb ohne Limits",
+ "tour.navigationTitle":"Dein Menü",
+ "tour.navigationText":"Über dieses Menü öffnest du Kalender, Feed, Kunden, Leistungen, FIO-Plan und weitere Werkzeuge."
+});
+
+Object.assign(it,{
+ "fp.plan.SOLO.h1":"Agenda e app professionale",
+ "fp.plan.SOLO.g0i0":"Attività individuale organizzata",
+ "fp.plan.SOLO_PREMIUM.h1":"Clienti senza limite",
+ "fp.plan.SOLO_PREMIUM.h2":"Servizi senza limite",
+ "fp.plan.SOLO_PREMIUM.g0i0":"Attività individuale senza limiti",
+ "tour.navigationTitle":"Il tuo menu",
+ "tour.navigationText":"Usa questo menu per aprire Agenda, Feed, Clienti, Servizi, Piano FIO e gli altri strumenti disponibili."
+});
+
+
+/* FIO_AUTH_BOOT_POLISH_20261004 */
+Object.assign(ptBR,{
+ "auth.passwordProviderHelp":"Não foi possível entrar com essa senha. Se você criou a conta com Google, use o Google ou defina uma senha para também entrar por e-mail.",
+ "auth.passwordAccessTitle":"Como você criou sua conta?",
+ "auth.passwordAccessDesc":"Conta criada com Google não nasce com uma senha do FIO. Você pode continuar com Google ou criar uma senha usando seu e-mail.",
+ "auth.definePassword":"Criar ou redefinir senha",
+ "auth.googlePasswordTitle":"Crie uma senha para o FIO",
+ "auth.googlePasswordDesc":"Você entrou com Google. Crie uma senha para também conseguir entrar digitando seu e-mail e senha."
+});
+
+Object.assign(en,{
+ "auth.passwordProviderHelp":"We could not sign you in with that password. If you created the account with Google, use Google or set a password for email sign-in.",
+ "auth.passwordAccessTitle":"How did you create your account?",
+ "auth.passwordAccessDesc":"An account created with Google does not start with a FIO password. Continue with Google or create a password for your email.",
+ "auth.definePassword":"Create or reset password",
+ "auth.googlePasswordTitle":"Create a FIO password",
+ "auth.googlePasswordDesc":"You signed in with Google. Create a password so you can also sign in with your email and password."
+});
+
+Object.assign(es,{
+ "auth.passwordProviderHelp":"No pudimos iniciar sesión con esa contraseña. Si creaste la cuenta con Google, usa Google o define una contraseña.",
+ "auth.passwordAccessTitle":"¿Cómo creaste tu cuenta?",
+ "auth.passwordAccessDesc":"Una cuenta creada con Google no empieza con una contraseña de FIO. Puedes continuar con Google o crear una contraseña.",
+ "auth.definePassword":"Crear o restablecer contraseña",
+ "auth.googlePasswordTitle":"Crea una contraseña para FIO",
+ "auth.googlePasswordDesc":"Entraste con Google. Crea una contraseña para poder entrar también con correo y contraseña."
+});
+
+Object.assign(fr,{
+ "auth.passwordProviderHelp":"Connexion impossible avec ce mot de passe. Si le compte a été créé avec Google, utilisez Google ou définissez un mot de passe.",
+ "auth.passwordAccessTitle":"Comment avez-vous créé votre compte ?",
+ "auth.passwordAccessDesc":"Un compte créé avec Google ne possède pas automatiquement de mot de passe FIO.",
+ "auth.definePassword":"Créer ou réinitialiser le mot de passe",
+ "auth.googlePasswordTitle":"Créez un mot de passe FIO",
+ "auth.googlePasswordDesc":"Vous êtes connecté avec Google. Créez un mot de passe pour pouvoir aussi utiliser votre e-mail."
+});
+
+Object.assign(de,{
+ "auth.passwordProviderHelp":"Die Anmeldung mit diesem Passwort war nicht möglich. Wenn das Konto mit Google erstellt wurde, nutze Google oder lege ein Passwort fest.",
+ "auth.passwordAccessTitle":"Wie wurde dein Konto erstellt?",
+ "auth.passwordAccessDesc":"Ein mit Google erstelltes Konto hat zunächst kein eigenes FIO-Passwort.",
+ "auth.definePassword":"Passwort erstellen oder zurücksetzen",
+ "auth.googlePasswordTitle":"FIO-Passwort erstellen",
+ "auth.googlePasswordDesc":"Du bist mit Google angemeldet. Erstelle ein Passwort, um dich auch mit E-Mail und Passwort anzumelden."
+});
+
+Object.assign(it,{
+ "auth.passwordProviderHelp":"Accesso non riuscito con questa password. Se hai creato l'account con Google, usa Google o imposta una password.",
+ "auth.passwordAccessTitle":"Come hai creato il tuo account?",
+ "auth.passwordAccessDesc":"Un account creato con Google non parte con una password FIO.",
+ "auth.definePassword":"Crea o reimposta password",
+ "auth.googlePasswordTitle":"Crea una password FIO",
+ "auth.googlePasswordDesc":"Hai effettuato l'accesso con Google. Crea una password per poter entrare anche con e-mail e password."
+});

@@ -1958,11 +1958,11 @@ export function Settings(p:WorkspaceProps){
     </>}
    </div>
   </div>
-  <section className="settings-card settings-meta">
+  {p.data.membership.role!=='CLIENT'&&<section className="settings-card settings-meta">
    <div><span>{solo?t('settings.profileMeta'):t('settings.shopMeta')}</span><strong>{p.data.shop.name}</strong></div>
    <div><span>{t('settings.fioPlan')}</span><strong>{p.data.plan}</strong></div>
    <div><span>{t('settings.assistant')}</span><strong>{p.data.aiEnabled?t('settings.included'):t('settings.unavailable')}</strong></div>
-  </section>
+  </section>}
  </>;
 }
 

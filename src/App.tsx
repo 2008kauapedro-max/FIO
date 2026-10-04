@@ -23,9 +23,186 @@ const PlatformApp=lazy(()=>import('./pages/Platform').then(m=>({default:m.Platfo
 const PlatformLogin=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformLogin})));
 
 
+type LoadingBrand={
+ shopId:string;
+ name:string;
+ logo:string;
+};
+
+type MembershipWithBrand=Membership&{
+ shop_brand?:{
+  id:string;
+  name:string;
+  slug:string;
+  logo_url?:string|null;
+  logo_asset_path?:string|null;
+ }|null;
+};
+
+const LOADING_BRANDS_KEY='fio-loading-brands-v1';
+const LOADING_LAST_KEY='fio-loading-last-shop-v1';
+
+function storageLogo(
+ logoUrl?:string|null,
+ assetPath?:string|null
+){
+ if(logoUrl)return logoUrl;
+ if(!assetPath)return '';
+
+ const base=import.meta.env.VITE_SUPABASE_URL;
+ if(!base)return '';
+
+ const encoded=assetPath
+  .split('/')
+  .map((part:string)=>encodeURIComponent(part))
+  .join('/');
+
+ return `${base}/storage/v1/object/public/branding-assets/${encoded}`;
+}
+
+function readLoadingBrands():Record<string,LoadingBrand>{
+ try{
+  const value=localStorage.getItem(LOADING_BRANDS_KEY);
+  if(!value)return {};
+  const parsed=JSON.parse(value);
+  return parsed&&typeof parsed==='object'?parsed:{};
+ }catch{
+  return {};
+ }
+}
+
+function cacheLoadingBrand(brand:LoadingBrand){
+ if(!brand.shopId)return;
+
+ try{
+  const all=readLoadingBrands();
+
+  all[brand.shopId]=brand;
+
+  localStorage.setItem(
+   LOADING_BRANDS_KEY,
+   JSON.stringify(all)
+  );
+
+  localStorage.setItem(
+   LOADING_LAST_KEY,
+   brand.shopId
+  );
+
+  window.dispatchEvent(
+   new CustomEvent(
+    'fio-loading-brand',
+    {detail:brand}
+   )
+  );
+ }catch{}
+}
+
+function currentLoadingBrand(){
+ const brands=readLoadingBrands();
+
+ try{
+  const selected=
+   sessionStorage.getItem('fio-shop')||
+   localStorage.getItem(LOADING_LAST_KEY)||
+   '';
+
+  if(selected&&brands[selected])
+   return brands[selected];
+
+  return Object.values(brands)[0]??null;
+ }catch{
+  return Object.values(brands)[0]??null;
+ }
+}
+
 function AppLoading(){
  const {t}=useI18n();
- return <div className="fio-loading-screen" role="status" aria-label={t('app.loadingAria')}><img src="/FIOlogo/FIObranco.png" alt=""/></div>;
+
+ const platform=
+  window.location.pathname.startsWith('/platform')||
+  window.location.pathname==='/acesso/plataforma';
+
+ const [brand,setBrand]=useState<LoadingBrand|null>(
+  ()=>platform
+   ?null
+   :currentLoadingBrand()
+ );
+
+ useEffect(()=>{
+  if(platform)return;
+
+  const update=(event:Event)=>{
+   const detail=
+    (event as CustomEvent<LoadingBrand>).detail;
+
+   if(detail?.shopId)
+    setBrand(detail);
+   else
+    setBrand(currentLoadingBrand());
+  };
+
+  window.addEventListener(
+   'fio-loading-brand',
+   update
+  );
+
+  return()=>window.removeEventListener(
+   'fio-loading-brand',
+   update
+  );
+ },[platform]);
+
+ return <div
+  className="fio-loading-screen fio-loading-screen--brand"
+  role="status"
+  aria-label={t('app.loadingAria')}
+ >
+  {platform
+   ?<img
+     className="fio-loading-brand-logo is-fio"
+     src="/FIOlogo/FIObranco.png"
+     alt="FIO"
+    />
+   :brand?.logo
+    ?<img
+      className="fio-loading-brand-logo"
+      src={brand.logo}
+      alt={brand.name}
+     />
+    :<span
+      className="fio-loading-brand-placeholder"
+      aria-hidden="true"
+     >
+      {brand?.name
+       ?.split(' ')
+       .filter(Boolean)
+       .map(part=>part[0])
+       .slice(0,2)
+       .join('')
+       .toUpperCase()||''
+      }
+     </span>
+  }
+
+  <div className="fio-loading-copy">
+   <strong>
+    {brand?.name&&!platform
+     ?brand.name
+     :t('ui.loading')
+    }
+   </strong>
+
+   <span>{t('ui.loading')}</span>
+  </div>
+
+  <div
+   className="fio-loading-progress"
+   aria-hidden="true"
+  >
+   <i/>
+  </div>
+ </div>;
 }
 
 type NavItem={path:string;label:string;icon:typeof LayoutDashboard;roles:Role[];feature?:FioFeature};
@@ -59,6 +236,7 @@ export default function App(){
  const [session,setSession]=useState<Session|null>(null),[authReady,setAuthReady]=useState(!supabase),[memberships,setMemberships]=useState<Membership[]|null>(null),[onboardingShopId,setOnboardingShopId]=useState(''),[clientJoinPending,setClientJoinPending]=useState(false),[shopId,setShopId]=useState(sessionStorage.getItem('fio-shop')??''),[data,setData]=useState<Bootstrap|null>(null),[error,setError]=useState(''),[toast,setToast]=useState(''),[menu,setMenu]=useState(false);
  const [theme,setTheme]=useState<Theme>(()=>(localStorage.getItem('fio-theme')==='light'?'light':'dark'));
  const [installPrompt,setInstallPrompt]=useState<InstallPromptEvent|null>(null);
+ const [bootHold,setBootHold]=useState(true);
  const sidebarNavRef=useRef<HTMLElement>(null);
  const localeLoadedRef=useRef('');
  const activeRole=data?.membership.role;
@@ -100,6 +278,15 @@ export default function App(){
  useEffect(()=>{const change=(e:Event)=>setTheme((e as CustomEvent<Theme>).detail);window.addEventListener('fio-theme-change',change);return()=>window.removeEventListener('fio-theme-change',change);},[]);
  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem('fio-theme',theme);},[theme]);
  useEffect(()=>{
+  const timer=window.setTimeout(
+   ()=>setBootHold(false),
+   550
+  );
+
+  return()=>window.clearTimeout(timer);
+ },[]);
+
+ useEffect(()=>{
   type InstallWindow=Window&{__fioInstallPrompt?:InstallPromptEvent|null};
   const installWindow=window as InstallWindow;
   const syncPrompt=()=>setInstallPrompt(installWindow.__fioInstallPrompt??null);
@@ -113,7 +300,24 @@ export default function App(){
  },[]);
  useEffect(()=>{if(!supabase)return;supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{if(s)try{const started=Number(localStorage.getItem('fio-tour:google-signup-started'));const created=Date.parse(s.user.created_at);if(s.user.app_metadata.provider==='google'&&Number.isFinite(started)){if(Number.isFinite(created)&&created>=started-60_000&&created<=started+15*60_000)localStorage.setItem(`fio-tour:new-account:${s.user.id}`,'pending');localStorage.removeItem('fio-tour:google-signup-started');}}catch{}setSession(s);setAuthReady(true);if(!s){setData(null);setMemberships(null);}});return()=>subscription.unsubscribe();},[]);
  const loadMemberships=useCallback(async()=>{try{
-  const m=await api<Membership[]>('/memberships');setMemberships(m);
+  const m=await api<MembershipWithBrand[]>('/memberships');
+
+  for(const membership of m){
+   const brand=membership.shop_brand;
+
+   if(!brand)continue;
+
+   cacheLoadingBrand({
+    shopId:brand.id,
+    name:brand.name,
+    logo:storageLogo(
+     brand.logo_url,
+     brand.logo_asset_path
+    )
+   });
+  }
+
+  setMemberships(m);
   const clientSlug=clientContext(window.location.pathname,window.location.search);
   if(clientSlug)rememberClientShop(clientSlug);
   const requestedShop=new URLSearchParams(window.location.search).get('shopId');
@@ -171,6 +375,25 @@ export default function App(){
   manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':`/api/public/manifest/${encodeURIComponent(data.shop.slug)}?v=client-brand-v2`;
  },[data?.membership.role,data?.shop.slug,isPlatform,isPublicPortal]);
 
+ useEffect(()=>{
+  if(!data?.shop.id)return;
+
+  cacheLoadingBrand({
+   shopId:data.shop.id,
+   name:data.shop.public_title||data.shop.name,
+   logo:storageLogo(
+    data.shop.logo_url,
+    data.shop.logo_asset_path
+   )
+  });
+ },[
+  data?.shop.id,
+  data?.shop.name,
+  data?.shop.public_title,
+  data?.shop.logo_url,
+  data?.shop.logo_asset_path
+ ]);
+
  if(location.pathname==='/privacidade')return <LegalPage kind="privacy"/>;
  if(location.pathname==='/termos')return <LegalPage kind="terms"/>;
  if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<AppLoading/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
@@ -179,10 +402,83 @@ export default function App(){
  if(location.pathname==='/acesso/gestao')return <Navigate replace to="/login?audience=owner"/>;
  if(location.pathname==='/acesso/equipe')return <Navigate replace to="/login?audience=staff"/>;
  if(location.pathname==='/confirm-email')return <EmailConfirmationPage/>;
- if(location.pathname==='/login')return <AuthPage/>;
- if(location.pathname==='/reset-password')return <AuthPage reset/>;
- if(location.pathname==='/'&&!authReady)return <AppLoading/>;
- if(!demo&&!authReady)return <AppLoading/>;
+
+ if(location.pathname==='/login'){
+  if(!authReady||bootHold)
+   return <AppLoading/>;
+
+  if(session){
+   const loginParams=
+    new URLSearchParams(location.search);
+
+   const next=
+    appointmentLink(
+     loginParams.get('next')
+    );
+
+   if(next)
+    return <Navigate
+     replace
+     to={next}
+    />;
+
+   const audience=
+    loginParams.get('audience')??'';
+
+   const shop=
+    loginParams.get('shop')??'';
+
+   if(audience==='platform')
+    return <Navigate
+     replace
+     to="/platform"
+    />;
+
+   if(audience==='owner')
+    return <Navigate
+     replace
+     to="/owner"
+    />;
+
+   if(audience==='staff')
+    return <Navigate
+     replace
+     to="/barber"
+    />;
+
+   if(audience==='client')
+    return <Navigate
+     replace
+     to={
+      shop
+       ?`/?shop=${encodeURIComponent(shop)}&audience=client`
+       :'/client'
+     }
+    />;
+
+   return <Navigate
+    replace
+    to="/"
+   />;
+  }
+
+  return <AuthPage/>;
+ }
+
+ if(location.pathname==='/reset-password')
+  return <AuthPage reset/>;
+
+ if(
+  location.pathname==='/'&&
+  (!authReady||bootHold)
+ )
+  return <AppLoading/>;
+
+ if(
+  !demo&&
+  (!authReady||bootHold)
+ )
+  return <AppLoading/>;
  if(!demo&&!session){
   const audience=location.pathname.startsWith('/owner')?'owner':location.pathname.startsWith('/barber')?'staff':location.pathname.startsWith('/client')?'client':new URLSearchParams(location.search).get('audience')||(clientContext(location.pathname,location.search)?'client':'');
   const params=new URLSearchParams();const next=appointmentLink(location.pathname+location.search);if(next)params.set('next',next);if(audience)params.set('audience',audience);const shop=clientContext(location.pathname,location.search);if(shop)params.set('shop',shop);
@@ -239,12 +535,12 @@ export default function App(){
     <button className="icon-button close-menu" aria-label={t('app.closeNavigation')} onClick={()=>setMenu(false)}><X size={20}/></button>
    </div>
    <p className="nav-label">{t('nav.navigation')}</p>
-   <nav ref={sidebarNavRef} aria-label={t('app.mainNavigation')}>{items.filter(n=>!['/configuracoes','/suporte'].includes(n.path)).map(n=><NavLink data-tour={`nav${n.path.replace('/','-')}`} end={n.path===''} className={({isActive})=>`nav-link ${isActive?'active':''}`} to={base+n.path} key={n.path}><n.icon size={19} strokeWidth={1.6}/>{navLabel(n.path)}{n.path==='/assistente'&&<span className="ai-tag">IA</span>}</NavLink>)}</nav>
+   <nav data-tour="navigation" ref={sidebarNavRef} aria-label={t('app.mainNavigation')}>{items.filter(n=>!['/configuracoes','/suporte'].includes(n.path)).map(n=><NavLink data-tour={`nav${n.path.replace('/','-')}`} end={n.path===''} className={({isActive})=>`nav-link ${isActive?'active':''}`} to={base+n.path} key={n.path}><n.icon size={19} strokeWidth={1.6}/>{navLabel(n.path)}{n.path==='/assistente'&&<span className="ai-tag">IA</span>}</NavLink>)}</nav>
    <div className="sidebar-bottom">
-    <NavLink className="nav-link" to={`${base}/configuracoes`}>
+    <NavLink data-tour="nav-configuracoes" className="nav-link" to={`${base}/configuracoes`}>
      <Settings size={19}/>{t('nav.settings')}
     </NavLink>
-    <NavLink className="nav-link" to={`${base}/suporte`}>
+    <NavLink data-tour="nav-suporte" className="nav-link" to={`${base}/suporte`}>
      <CircleHelp size={19}/>{t("nav.support")}
     </NavLink>
     {role!=='CLIENT'&&memberships&&memberships.length>1?<label className="field">{t('app.switchBusiness')}<select value={shopId} onChange={e=>{sessionStorage.setItem('fio-shop',e.target.value);setShopId(e.target.value);}}>{memberships.map(m=><option key={m.barbershop_id} value={m.barbershop_id}>{m.role} · {m.barbershop_id.slice(0,8)}</option>)}</select></label>:null}
@@ -260,7 +556,19 @@ export default function App(){
   </aside>
   <div className="workspace" inert={menu}>
    <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?t('nav.settings'):navLabel(page)}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:role==='BARBER'?<span className="plan-badge">FIO {data.plan}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?t('app.useLightTheme'):t('app.useDarkTheme')} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label={t('app.openMenu')} onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
-   <main key={`${base}:${shopId}:${page}`} className={page==='/assistente'?'chat-main assistant-chat-main':'main-content'}>{content}</main>
+   <main
+    key={`${base}:${shopId}:${page}`}
+    data-tour={
+     page===''?'overview':
+     page==='/agenda'?'agenda-page':
+     page==='/configuracoes'?'settings-page':
+     page==='/suporte'?'support-page':
+     undefined
+    }
+    className={page==='/assistente'?'chat-main assistant-chat-main':'main-content'}
+   >
+    {content}
+   </main>
    <nav className="bottom-nav" aria-label={t('app.mobileNavigation')}>
     {role!=='CLIENT'&&<NavLink end to={base}><LayoutDashboard size={21}/><span>{t('nav.home')}</span></NavLink>}
     <NavLink to={base+'/agenda'}><CalendarDays size={21}/><span>{t("nav.agenda")}</span></NavLink>

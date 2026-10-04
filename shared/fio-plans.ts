@@ -57,10 +57,10 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
   recommended:true,
   trialDays:14,
   prices:{weekly:null,monthly:7990,annual:76704},
-  highlights:['1 profissional','Até 500 clientes'],
+  highlights:['Agenda e app profissional','Até 500 clientes'],
   groups:[
    {title:'CAPACIDADE',items:[
-    '1 profissional',
+    'Operação solo organizada',
     'Até 500 clientes',
     'Até 20 serviços',
     'Até 5 pacotes de cortes'
@@ -86,10 +86,10 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
   eyebrow:'SOLO SEM LIMITES',
   description:'Para quem trabalha sozinho e quer o nível máximo do FIO.',
   prices:{weekly:null,monthly:19790,annual:189984},
-  highlights:['1 profissional','Clientes sem limite'],
+  highlights:['Clientes sem limite','Serviços sem limite'],
   groups:[
    {title:'CAPACIDADE',items:[
-    '1 profissional',
+    'Operação solo sem limites',
     'Clientes sem limite',
     'Serviços sem limite',
     'Pacotes de cortes sem limite'
