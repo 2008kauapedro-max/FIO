@@ -3,7 +3,7 @@ import {ChevronLeft,ChevronRight} from 'lucide-react';
 import {api} from '../lib/api';
 import {useI18n} from '../i18n';
 
-type Availability={day:string;available_count:number};
+type Availability={day:string;available_count:number;closed:boolean};
 type PeriodItem={starts_at:string;status:string};
 type PeriodResult={items:PeriodItem[]};
 
@@ -26,7 +26,7 @@ export function AgendaMonthCalendar(p:{
  const dateFormatter=new Intl.DateTimeFormat('en-CA',{timeZone:p.zone,year:'numeric',month:'2-digit',day:'2-digit'});
  const today=dateFormatter.format(new Date());
  const [month,setMonth]=useState((p.date||today).slice(0,7));
- const [availability,setAvailability]=useState<Record<string,number>>({});
+ const [availability,setAvailability]=useState<Record<string,{count:number;closed:boolean}>>({});
  const [bookedDays,setBookedDays]=useState<Set<string>>(new Set());
  const [loading,setLoading]=useState(false);
 
@@ -40,10 +40,10 @@ export function AgendaMonthCalendar(p:{
   if(p.demo){
    const [y,m]=month.split('-').map(Number);
    const total=new Date(Date.UTC(y,m,0)).getUTCDate();
-   const next:Record<string,number>={};
+   const next:Record<string,{count:number;closed:boolean}>={};
    for(let d=1;d<=total;d++){
     const key=`${month}-${String(d).padStart(2,'0')}`;
-    if(key>=today)next[key]=2;
+    if(key>=today)next[key]={count:2,closed:false};
    }
    setAvailability(next);
    setBookedDays(new Set());
@@ -68,7 +68,10 @@ export function AgendaMonthCalendar(p:{
    )
   ]).then(([rows,period])=>{
    if(!alive)return;
-   setAvailability(Object.fromEntries(rows.map(row=>[row.day,Number(row.available_count)])));
+   setAvailability(Object.fromEntries(rows.map(row=>[
+    row.day,
+    {count:Number(row.available_count),closed:Boolean(row.closed)}
+   ])));
 
    const formatter=new Intl.DateTimeFormat('en-CA',{
     timeZone:p.zone,
@@ -118,15 +121,18 @@ export function AgendaMonthCalendar(p:{
    {days.map((key,index)=>{
     if(!key)return <span key={'blank-'+index}/>;
     const past=key<today;
-    const count=Number(availability[key]??0);
-    const known=Object.prototype.hasOwnProperty.call(availability,key);
-    const available=known&&count>0;
+    const row=availability[key];
+    const known=Boolean(row);
+    const count=Number(row?.count??0);
+    const closed=known&&Boolean(row?.closed);
+    const available=known&&!closed&&count>0;
     // Vermelho somente quando houve agendamento no dia e não restou nenhum horário.
-    const full=known&&count===0&&bookedDays.has(key);
+    const full=known&&!closed&&count===0&&bookedDays.has(key);
     return <button
      type="button"
      key={key}
-     className={`${p.date===key?'selected ':''}${available?'available ':''}${full?'full ':''}${past?'past':''}`}
+     className={`${p.date===key?'selected ':''}${closed?'closed ':''}${available?'available ':''}${full?'full ':''}${past?'past':''}`}
+     disabled={closed}
      onClick={()=>p.onDateChange(key)}
     >
      <strong>{Number(key.slice(-2))}</strong>
@@ -138,6 +144,7 @@ export function AgendaMonthCalendar(p:{
   <div className="simple-month-legend">
    <span><i className="available"/>{t('calendar.available')}</span>
    <span><i className="full"/>{t('calendar.full')}</span>
+   <span><i className="closed"/>{t('calendar.closed')}</span>
   </div>
  </section>;
 }

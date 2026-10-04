@@ -3,6 +3,7 @@ import { saveLocalePreferences } from '../i18n/supabaseLocale';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { LanguageSettings } from '../components/LanguageSettings';
 import {StaffSchedule} from '../components/StaffSchedule';
+import {BusinessHoursSettings} from '../components/BusinessHoursSettings';
 import {AgendaMonthCalendar} from '../components/AgendaMonthCalendar';
 import {BookingFlow as BookingModal} from '../components/BookingFlow';
 import { useState,useEffect,type FormEvent,type CSSProperties } from 'react';
@@ -776,6 +777,7 @@ function StaffAgenda(p:WorkspaceProps){
  const solo=data.shop.operation_mode==='SOLO';
 
  const owner=data.membership.role==='OWNER';
+ const canCreateManual=owner&&!solo;
 
  const initialProfessional=
   data.membership.role==='BARBER'||solo
@@ -795,7 +797,7 @@ function StaffAgenda(p:WorkspaceProps){
  );
 
  const [booking,setBooking]=useState(
-  owner&&new URLSearchParams(location.search).has('novo')
+  canCreateManual&&new URLSearchParams(location.search).has('novo')
  );
 
  const [selected,setSelected]=useState<Appointment|null>(null);
@@ -1108,7 +1110,7 @@ function StaffAgenda(p:WorkspaceProps){
    </nav>
 
    <div className="simple-agenda-view" key={agendaView}>
-   {owner&&<button type="button" className="simple-new-booking" onClick={()=>setBooking(true)}>
+   {canCreateManual&&<button type="button" className="simple-new-booking" onClick={()=>setBooking(true)}>
     {t('staffAgenda.new')}
    </button>}
 
@@ -1199,7 +1201,7 @@ function StaffAgenda(p:WorkspaceProps){
    />
   }
 
-  {owner&&booking&&
+  {canCreateManual&&booking&&
    <BookingModal
     {...p}
     onClose={()=>setBooking(false)}
@@ -1722,7 +1724,7 @@ export function Support(p:WorkspaceProps){
 export function Settings(p:WorkspaceProps){
  const {t,formatDate}=useI18n();
  const owner=p.data.membership.role==='OWNER',solo=p.data.shop.operation_mode==='SOLO',navigate=useNavigate();
- const [section,setSection]=useState<'home'|'profile'|'barbershop'|'plan'|'access'|'account'|'language'|'schedule'|'theme'|'help'>('home');
+ const [section,setSection]=useState<'home'|'profile'|'barbershop'|'plan'|'access'|'account'|'language'|'hours'|'schedule'|'theme'|'help'>('home');
  useEffect(()=>{window.scrollTo({top:0,behavior:'instant'});},[section]);
  const [displayName,setDisplayName]=useState(p.data.membership.display_name);
  const [phone,setPhone]=useState(p.data.membership.phone??'');
@@ -1801,6 +1803,7 @@ export function Settings(p:WorkspaceProps){
   ...(p.data.membership.role!=='CLIENT'?[['access',t('settings.accessApp'),ShieldCheck] as const]:[]),
   ['account',t('settings.accountSecurity'),KeyRound],
   ['language',t('settings.language'),Languages],
+  ...(owner?[['hours',t('settings.businessHours'),Clock3] as const]:[]),
   ...(owner&&!solo?[['schedule',t('settings.teamSchedule'),CalendarDays] as const]:[]),
   ['theme',t('settings.colors'),Palette],
   ['help',t('settings.help'),CircleHelp],
@@ -1808,7 +1811,7 @@ export function Settings(p:WorkspaceProps){
  const groupedSections=[
   {label:t('settings.groupProfile'),items:sections.filter(([key])=>key==='profile'||key==='barbershop')},
   {label:t('settings.groupSecurity'),items:sections.filter(([key])=>key==='account'||key==='access')},
-  {label:t('settings.groupPreferences'),items:sections.filter(([key])=>key==='language'||key==='schedule'||key==='theme')},
+  {label:t('settings.groupPreferences'),items:sections.filter(([key])=>key==='language'||key==='hours'||key==='schedule'||key==='theme')},
   {label:t('settings.groupPlan'),items:sections.filter(([key])=>key==='plan')},
   {label:t('settings.groupSupport'),items:sections.filter(([key])=>key==='help')},
  ].filter(group=>group.items.length>0);
@@ -1867,7 +1870,7 @@ export function Settings(p:WorkspaceProps){
        <CircleHelp size={17}/>{t('settings.support')}
       </button>
      </section>
-    }{section==='schedule'&&owner&&<StaffSchedule {...p}/>} {section==='language'&&<section className="settings-card"><LanguageSettings onSave={async preferences=>{if(!supabase)throw new Error(t('errors.generic'));await saveLocalePreferences(supabase,p.data.shop.id,preferences);p.notify(t('language.saved'));}}/></section>}
+    }{section==='hours'&&owner&&<BusinessHoursSettings {...p}/>} {section==='schedule'&&owner&&<StaffSchedule {...p}/>} {section==='language'&&<section className="settings-card"><LanguageSettings onSave={async preferences=>{if(!supabase)throw new Error(t('errors.generic'));await saveLocalePreferences(supabase,p.data.shop.id,preferences);p.notify(t('language.saved'));}}/></section>}
     {section==='profile'&&<>
      <section className="settings-card settings-profile-card">
       <div className="settings-profile-head">
@@ -1965,12 +1968,3 @@ export function Settings(p:WorkspaceProps){
   </section>}
  </>;
 }
-
-
-
-
-
-
-
-
-

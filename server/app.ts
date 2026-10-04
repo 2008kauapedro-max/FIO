@@ -367,6 +367,12 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/appointments',rateLimitByUser('appointment-create',60_000,20),async(req,res)=>{
   const c=ctx(res),v=bookingSchema.parse(req.body);
   if(c.member.role==='BARBER')throw new ApiError(403,'FORBIDDEN','Profissionais gerenciam a agenda, mas não criam agendamentos para clientes.');
+  if(c.member.role==='OWNER'){
+   const shop=await c.db.from('barbershops').select('operation_mode').eq('id',c.shopId).single();
+   dbError(shop.error);
+   if(!shop.data)throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
+   if(shop.data.operation_mode==='SOLO')throw new ApiError(403,'FORBIDDEN','No modo solo, novos agendamentos são criados pelo cliente.');
+  }
   const r=await c.db.rpc('book_appointment',{p_shop:c.shopId,p_client:v.clientId,p_barber:v.barberId,p_service:v.serviceId,p_start:v.startsAt,p_use_subscription:v.useSubscription});dbError(r.error);
   const assigned=await c.db.from('appointments').select('barber_id').eq('barbershop_id',c.shopId).eq('id',r.data).maybeSingle();
   res.status(201).json({id:r.data,barberId:assigned.data?.barber_id??null});

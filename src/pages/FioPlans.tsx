@@ -242,8 +242,8 @@ export function FioPlans(p:WorkspaceProps){
    await p.refresh();
    p.notify(t('fp.trialStarted'));
    setSelectedPlan(primaryPaid);
-  }catch{
-   p.notify(t('fp.trialFailed'));
+  }catch(error){
+   p.notify(checkoutMessage(error));
   }finally{
    setBusy(false);
   }
@@ -894,7 +894,6 @@ export function FioPlans(p:WorkspaceProps){
   </section>;
  }
 
- const currentDisplay=displayName(p.data.plan);
  const paidSelected=selectedPlan!=='FREE';
  const selectedPaid=paidSelected?selectedPlan as PaidPlan:null;
  const currentSamePlan=p.data.plan===selectedPlan;
@@ -905,14 +904,7 @@ export function FioPlans(p:WorkspaceProps){
  );
 
  return <section className="fio-payflow fio-payflow-plans">
-  <div className="fio-payflow-plans-heading">
-   <div>
-    <h1>Escolha seu plano</h1>
-    <p>Compare e assine em poucos toques.</p>
-   </div>
-   <span className="fio-payflow-current-chip">{currentDisplay}</span>
-  </div>
-
+  <div className="fio-payflow-plan-controls">
   <div className="fio-payflow-cycle" role="tablist" aria-label={t('fp.subscriptionPeriod')}>
    <button type="button" className={cycle==='annual'?'active':''} aria-selected={cycle==='annual'} onClick={()=>setCycle('annual')}>
     Anual <small>-20%</small>
@@ -936,7 +928,9 @@ export function FioPlans(p:WorkspaceProps){
     </button>
    )}
   </div>
+  </div>
 
+  <div className="fio-payflow-plan-scroll">
   <article className="fio-payflow-card" data-plan={selectedPlan}>
    <span className="fio-payflow-eyebrow">{t(`fp.plan.${planDefinition.code}.eyebrow`)}</span>
    <h2>{displayName(planDefinition.code)}</h2>
@@ -968,8 +962,7 @@ export function FioPlans(p:WorkspaceProps){
   </article>
 
   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
-
-  <div className="fio-payflow-plan-spacer"/>
+  </div>
 
   <div className="fio-payflow-bottom-action fio-payflow-plan-action">
    {selectedPlan==='FREE'
@@ -994,11 +987,9 @@ export function FioPlans(p:WorkspaceProps){
 
    {selectedPlan===primaryPaid&&!trialUsed&&p.data.plan==='FREE'&&!billingLocked&&
     <button className="fio-payflow-trial" disabled={busy} onClick={()=>void startTrial()}>
-     Testar 14 dias grátis
+     {t('fp.trialCta',{plan:displayName(selectedPlan)})}
     </button>
    }
-
-   <small>Pix · ativa assim que o pagamento for confirmado</small>
   </div>
  </section>;
 }

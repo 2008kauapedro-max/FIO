@@ -2,7 +2,7 @@ import { useI18n } from './i18n';
 import { loadLocalePreferences,saveLocalePreferences } from './i18n/supabaseLocale';
 import {appointmentLink} from './lib/appointment-link';
 import { clientContext,rememberClientShop } from './lib/client-context';
-import { useCallback,useEffect,useRef,useState,lazy,Suspense } from 'react';
+import { useCallback,useEffect,useRef,useState,lazy,Suspense,type CSSProperties } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
 import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,Images,Megaphone,Sun,Moon,Crown,CircleHelp,Settings,MoreHorizontal,Power,Plus,Trash2 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
@@ -58,6 +58,15 @@ function storageLogo(
   .join('/');
 
  return `${base}/storage/v1/object/public/branding-assets/${encoded}`;
+}
+
+function fioAccentContrast(hex:string){
+ const value=hex.replace('#','');
+ if(!/^[0-9a-f]{6}$/i.test(value))return '#080808';
+ const r=parseInt(value.slice(0,2),16);
+ const g=parseInt(value.slice(2,4),16);
+ const b=parseInt(value.slice(4,6),16);
+ return (r*299+g*587+b*114)/1000<145?'#ffffff':'#080808';
 }
 
 function readLoadingBrands():Record<string,LoadingBrand>{
@@ -519,7 +528,14 @@ export default function App(){
   default:content=<Dashboard {...props}/>;
  }
  const toggleTheme=()=>setTheme(t=>t==='dark'?'light':'dark');
- return <div className={`app-shell ${role==='CLIENT'?'client-shell':''} ${page==='/assistente'?'chat-shell':''}`}>
+ const clientAccent=data.shop.custom_accent||data.shop.accent_color||'#ffffff';
+ const clientShellStyle=role==='CLIENT'
+  ?({
+    '--client-accent':clientAccent,
+    '--client-accent-contrast':fioAccentContrast(clientAccent)
+   } as CSSProperties)
+  :undefined;
+ return <div className={`app-shell ${role==='CLIENT'?'client-shell':''} ${page==='/assistente'?'chat-shell':''}`} style={clientShellStyle}>
   {menu&&<button className="menu-backdrop" aria-label={t('app.closeMenu')} onClick={()=>setMenu(false)}/>}
   <aside className={`sidebar ${menu?'is-open':''}`}>
    <div className="sidebar-brand sidebar-shop-brand">
@@ -580,6 +596,3 @@ export default function App(){
   {toast&&<div className={`toast ${/não foi|falh|erro|indisponível|expir|aguarde|pendente/i.test(toast)?'is-error':'is-success'}`} role="status">{toast}<button aria-label={t('app.closeNotice')} onClick={()=>setToast('')}><X size={16}/></button></div>}
  </div>;
 }
-
-
-

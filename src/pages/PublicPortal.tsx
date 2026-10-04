@@ -190,7 +190,6 @@ export function PublicPortal(){
    <div className="booking-showcase-top">
     <span className="booking-showcase-badge">{providerLabel}</span>
     <div className="booking-showcase-actions">
-     <button type="button" className="booking-install-top" onClick={goClient}>{t('role.clientArea')}</button>
      <button type="button" className="booking-install-top" onClick={()=>openInstallChooser()}><Download size={15}/>{standalone?t('public.openApp'):t('public.downloadApp')}</button>
     </div>
    </div>
@@ -270,4 +269,3 @@ export function PublicPortal(){
   </div></div>}
  </div>;
 }
-

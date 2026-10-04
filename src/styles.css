@@ -5293,3 +5293,283 @@ body:has(.workspace),
   padding:10px;
  }
 }
+
+
+/* FIO_SOLO_LIVE_QA_V8_20261004 */
+
+/* Agenda: fechado nunca usa verde. */
+.simple-month-grid>button.closed{
+ color:var(--muted)!important;
+ cursor:not-allowed;
+ opacity:.62;
+}
+.simple-month-grid>button.closed i{
+ background:#747474!important;
+}
+.simple-month-grid>button.closed.selected{
+ background:color-mix(in srgb,var(--surface) 88%,var(--text) 12%)!important;
+ color:var(--muted)!important;
+ border-color:#747474!important;
+}
+.simple-month-legend i.closed{
+ background:#747474!important;
+}
+
+/* Horários de funcionamento editáveis depois do onboarding. */
+.business-hours-settings{
+ display:grid;
+ gap:14px;
+}
+.business-hours-settings .section-title{
+ align-items:center;
+ margin-bottom:0;
+}
+.business-hours-list{
+ display:grid;
+ gap:8px;
+}
+.business-hours-row{
+ overflow:hidden;
+ border:1px solid var(--border);
+ border-radius:12px;
+ background:var(--surface);
+}
+.business-hours-row.is-open{
+ border-color:color-mix(in srgb,var(--text) 24%,var(--border));
+}
+.business-hours-toggle{
+ width:100%;
+ min-height:48px;
+ display:flex;
+ align-items:center;
+ justify-content:space-between;
+ gap:12px;
+ padding:10px 12px;
+ border:0;
+ background:transparent;
+ color:var(--text);
+ text-align:left;
+}
+.business-hours-toggle>span{
+ display:grid;
+ gap:2px;
+}
+.business-hours-toggle strong{
+ font-size:.78rem;
+}
+.business-hours-toggle small,
+.business-hours-toggle b{
+ color:var(--muted);
+ font-size:.66rem;
+ font-weight:600;
+}
+.business-hours-row.is-open .business-hours-toggle b{
+ color:#71c98c;
+}
+.business-hours-times{
+ display:grid;
+ grid-template-columns:1fr 1fr;
+ gap:9px;
+ padding:0 12px 12px;
+}
+.business-hours-times label{
+ display:grid;
+ gap:5px;
+ color:var(--muted);
+ font-size:.64rem;
+}
+.business-hours-times input{
+ width:100%;
+ min-height:42px;
+ padding:0 9px;
+ border:1px solid var(--border);
+ border-radius:9px;
+ background:var(--bg);
+ color:var(--text);
+}
+
+/* Plano FIO: sem título repetido. Controles e CTA ficam parados;
+   somente o conteúdo do plano rola. */
+.fio-payflow-plan-controls{
+ flex:0 0 auto;
+}
+.fio-payflow-plan-scroll{
+ min-height:0;
+ overflow-y:auto;
+ overscroll-behavior:contain;
+ scrollbar-width:none;
+ padding-bottom:8px;
+}
+.fio-payflow-plan-scroll::-webkit-scrollbar{
+ display:none;
+}
+.fio-payflow-plan-action{
+ border:0!important;
+ box-shadow:none!important;
+}
+.fio-payflow-consent{
+ align-items:center;
+ gap:11px;
+ min-height:58px;
+ margin-top:10px;
+ padding:10px 12px;
+ border:1px solid var(--border);
+ border-radius:11px;
+ background:var(--surface);
+ font-size:.68rem;
+ line-height:1.4;
+}
+.fio-payflow-consent input{
+ flex:0 0 24px;
+ width:24px!important;
+ height:24px!important;
+ margin:0!important;
+ accent-color:var(--text);
+ cursor:pointer;
+}
+.fio-payflow-disclosure{
+ margin:12px 0 8px;
+}
+.fio-payflow-disclosure summary{
+ min-height:38px;
+ display:flex;
+ align-items:center;
+ font-size:.68rem;
+}
+.fio-payflow-disclosure p{
+ font-size:.61rem;
+ line-height:1.38;
+}
+.fio-payflow-review-card{
+ margin-bottom:13px;
+}
+.fio-payflow-review-card>div{
+ min-height:38px;
+}
+
+/* O painel CLIENT usa a mesma cor escolhida no mini site. */
+.client-shell{
+ --client-accent:#ffffff;
+ --client-accent-contrast:#080808;
+}
+.client-shell .primary{
+ background:var(--client-accent)!important;
+ border-color:var(--client-accent)!important;
+ color:var(--client-accent-contrast)!important;
+}
+.client-shell .bottom-nav a.active,
+.client-shell .bottom-nav button.active{
+ color:var(--client-accent)!important;
+}
+.client-shell .bottom-nav a.active:before{
+ background:var(--client-accent)!important;
+}
+.client-shell .booking-steps .active{
+ color:var(--client-accent)!important;
+}
+.client-shell .booking-steps .active span{
+ background:var(--client-accent)!important;
+ border-color:var(--client-accent)!important;
+ color:var(--client-accent-contrast)!important;
+}
+.client-shell .booking-options button.selected,
+.client-shell .booking-period-tabs button.selected{
+ border-color:var(--client-accent)!important;
+ box-shadow:inset 0 0 0 1px var(--client-accent)!important;
+}
+.client-shell .booking-hour-grid>button.selected,
+.client-shell .booking-calendar-grid>button.selected{
+ background:var(--client-accent)!important;
+ border-color:var(--client-accent)!important;
+ color:var(--client-accent-contrast)!important;
+}
+.client-shell .booking-calendar-grid>button.available i{
+ background:var(--client-accent);
+}
+
+/* Splash React: preserva a logo inteira e neutraliza a regra antiga
+   .fio-loading-screen img { width:48px; height:132px }. */
+.fio-loading-screen.fio-loading-screen--brand .fio-loading-brand-logo:not(.is-fio){
+ width:clamp(150px,42vw,210px)!important;
+ height:clamp(150px,42vw,210px)!important;
+ max-width:58vw!important;
+ max-height:58vw!important;
+ object-fit:contain!important;
+ object-position:center!important;
+ padding:0!important;
+ border:0!important;
+ border-radius:0!important;
+ background:transparent!important;
+ box-shadow:none!important;
+}
+.fio-loading-screen.fio-loading-screen--brand .fio-loading-copy strong{
+ font-size:1rem;
+}
+.fio-loading-screen.fio-loading-screen--brand .fio-loading-copy span{
+ font-size:.72rem;
+}
+.fio-loading-screen.fio-loading-screen--brand .fio-loading-progress{
+ width:min(220px,64vw);
+}
+
+@media(max-width:760px){
+ .app-shell:has(.fio-payflow-plans) .main-content{
+  height:calc(100dvh - 58px - 54px - env(safe-area-inset-bottom));
+  min-height:0;
+  overflow:hidden;
+  padding:10px 14px 0;
+ }
+ .fio-payflow.fio-payflow-plans{
+  width:100%;
+  height:100%;
+  min-height:0!important;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  overflow:hidden;
+ }
+ .fio-payflow-plan-controls{
+  padding-top:1px;
+ }
+ .fio-payflow-cycle{
+  margin-bottom:8px;
+ }
+ .fio-payflow-tabs{
+  margin-bottom:9px;
+ }
+ .fio-payflow-plan-scroll{
+  padding:0 1px 10px;
+ }
+ .fio-payflow-card{
+  min-height:0!important;
+  padding:13px 14px 12px!important;
+ }
+ .fio-payflow-plan-action{
+  position:relative!important;
+  bottom:auto!important;
+  z-index:8;
+  gap:4px;
+  margin:0 -2px!important;
+  padding:9px 2px 8px!important;
+  border-top:1px solid var(--border)!important;
+  background:var(--bg)!important;
+ }
+ .fio-payflow-plan-action .fio-payflow-primary{
+  min-height:48px;
+ }
+ .fio-payflow-plan-action .fio-payflow-trial{
+  min-height:30px;
+  font-size:.66rem;
+ }
+ .business-hours-times{
+  grid-template-columns:1fr 1fr;
+ }
+}
+
+@media(max-width:430px){
+ .fio-loading-screen.fio-loading-screen--brand .fio-loading-brand-logo:not(.is-fio){
+  width:min(52vw,205px)!important;
+  height:min(52vw,205px)!important;
+  max-width:none!important;
+  max-height:none!important;
+ }
+}

@@ -1633,3 +1633,54 @@ Object.assign(it,{
  "tour.navigationTitle":"Il tuo menu",
  "tour.navigationText":"Usa questo menu per aprire Agenda, Feed, Clienti, Servizi, Piano FIO e gli altri strumenti disponibili."
 });
+
+
+/* FIO_SOLO_LIVE_QA_I18N_V8_20261004 */
+Object.assign(ptBR,{
+ "calendar.closed":"Fechado",
+ "settings.businessHours":"Horários de funcionamento",
+ "settings.saveHours":"Salvar horários",
+ "settings.hoursSaved":"Horários atualizados.",
+ "settings.hoursInvalid":"Deixe pelo menos um dia aberto e confira os horários.",
+ "fp.trialCta":"Testar {{plan}} grátis por 14 dias"
+});
+Object.assign(en,{
+ "calendar.closed":"Closed",
+ "settings.businessHours":"Business hours",
+ "settings.saveHours":"Save hours",
+ "settings.hoursSaved":"Hours updated.",
+ "settings.hoursInvalid":"Keep at least one day open and check the times.",
+ "fp.trialCta":"Try {{plan}} free for 14 days"
+});
+Object.assign(es,{
+ "calendar.closed":"Cerrado",
+ "settings.businessHours":"Horario de atención",
+ "settings.saveHours":"Guardar horarios",
+ "settings.hoursSaved":"Horarios actualizados.",
+ "settings.hoursInvalid":"Deja al menos un día abierto y revisa los horarios.",
+ "fp.trialCta":"Prueba {{plan}} gratis durante 14 días"
+});
+Object.assign(fr,{
+ "calendar.closed":"Fermé",
+ "settings.businessHours":"Horaires d’ouverture",
+ "settings.saveHours":"Enregistrer les horaires",
+ "settings.hoursSaved":"Horaires mis à jour.",
+ "settings.hoursInvalid":"Laissez au moins un jour ouvert et vérifiez les horaires.",
+ "fp.trialCta":"Essayez {{plan}} gratuitement pendant 14 jours"
+});
+Object.assign(de,{
+ "calendar.closed":"Geschlossen",
+ "settings.businessHours":"Öffnungszeiten",
+ "settings.saveHours":"Zeiten speichern",
+ "settings.hoursSaved":"Öffnungszeiten aktualisiert.",
+ "settings.hoursInvalid":"Lass mindestens einen Tag geöffnet und prüfe die Zeiten.",
+ "fp.trialCta":"{{plan}} 14 Tage kostenlos testen"
+});
+Object.assign(it,{
+ "calendar.closed":"Chiuso",
+ "settings.businessHours":"Orari di apertura",
+ "settings.saveHours":"Salva orari",
+ "settings.hoursSaved":"Orari aggiornati.",
+ "settings.hoursInvalid":"Lascia almeno un giorno aperto e controlla gli orari.",
+ "fp.trialCta":"Prova {{plan}} gratis per 14 giorni"
+});
