@@ -72,7 +72,7 @@ describe('acesso e loading sem flash',()=>{
    );
  });
 
- it('login por senha não enumera e-mail e ajuda contas Google a criar senha',()=>{
+ it('login por senha usa erro genérico e encaminha cadastro sem enumerar conta',()=>{
   const auth=readFileSync(
    resolve('src/pages/Auth.tsx'),
    'utf8'
@@ -85,12 +85,27 @@ describe('acesso e loading sem flash',()=>{
 
   expect(auth)
    .toContain(
-    "t('auth.definePassword')"
+    "setMessage(t('auth.loginFailed'))"
    );
 
   expect(auth)
    .toContain(
-    "setMode('forgot')"
+    "setMode('signup')"
+   );
+
+  expect(auth)
+   .not.toContain(
+    'loginHelp'
+   );
+
+  expect(auth)
+   .not.toContain(
+    'passwordProviderHelp'
+   );
+
+  expect(auth)
+   .not.toContain(
+    'passwordAccessTitle'
    );
 
   expect(auth)
@@ -104,7 +119,7 @@ describe('acesso e loading sem flash',()=>{
    );
  });
 
- it('Google novo pode criar credencial de senha no onboarding owner e cliente',()=>{
+ it('onboarding não revela provedor nem força senha por causa do Google',()=>{
   const auth=readFileSync(
    resolve('src/pages/Auth.tsx'),
    'utf8'
@@ -115,29 +130,44 @@ describe('acesso e loading sem flash',()=>{
    'utf8'
   );
 
+  const dict=readFileSync(
+   resolve('src/i18n/dictionaries.ts'),
+   'utf8'
+  );
+
   expect(auth)
-   .toContain(
+   .not.toContain(
     'setGoogleOnly('
    );
 
   expect(auth)
-   .toContain(
-    'supabase.auth.updateUser({'
+   .not.toContain(
+    'auth.googlePassword'
    );
 
   expect(owner)
-   .toContain(
+   .not.toContain(
     'ensurePasswordCredential'
    );
 
   expect(owner)
-   .toContain(
+   .not.toContain(
     'accountPasswordConfirm'
    );
 
   expect(owner)
-   .toContain(
-    'supabase.auth.updateUser({'
+   .not.toContain(
+    'auth.googlePassword'
+   );
+
+  expect(dict)
+   .not.toContain(
+    'auth.passwordProviderHelp'
+   );
+
+  expect(dict)
+   .not.toContain(
+    'auth.googlePasswordTitle'
    );
  });
 });

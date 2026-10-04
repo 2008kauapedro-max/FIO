@@ -47,9 +47,7 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  const {t,formatCurrency}=useI18n();
  const [shopId,setShopId]=useState(initialShopId??''),[step,setStep]=useState(1),[completed,setCompleted]=useState<number[]>([]),[draft,setDraft]=useState<Record<string,unknown>>({}),[snapshot,setSnapshot]=useState<Snapshot|null>(null),[loading,setLoading]=useState(Boolean(initialShopId)),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[success,setSuccess]=useState(false);
  const [operationMode,setOperationMode]=useState<'SHOP'|'SOLO'>('SHOP'),[name,setName]=useState(''),[slug,setSlug]=useState(''),[slugTouched,setSlugTouched]=useState(false),[displayName,setDisplayName]=useState(''),[ownerPhone,setOwnerPhone]=useState(''),[whatsapp,setWhatsapp]=useState(''),[instagram,setInstagram]=useState(''),[address,setAddress]=useState(''),[amenities,setAmenities]=useState<string[]>([]),[services,setServices]=useState<Service[]>(()=>serviceDefaults(t)),[schedules,setSchedules]=useState<DaySchedule[]>(scheduleDefaults),[hoursSaved,setHoursSaved]=useState(false),[paletteKey,setPaletteKey]=useState('fio-black'),[themeMode,setThemeMode]=useState<'light'|'dark'>('dark'),[customAccent,setCustomAccent]=useState('#ffffff'),[logoPath,setLogoPath]=useState<string|null>(null),[coverPath,setCoverPath]=useState<string|null>(null),[backgroundPath,setBackgroundPath]=useState<string|null>(null);
- const [googleOnly,setGoogleOnly]=useState(false);
- const [accountPassword,setAccountPassword]=useState('');
- const [accountPasswordConfirm,setAccountPasswordConfirm]=useState('');
+
  const publicLink=shopId&&slug?`${window.location.origin}/${slug}`:'';
  const qrRef=useRef<HTMLDivElement>(null);
 
@@ -132,16 +130,6 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
    const meta=user.user_metadata as Record<string,unknown>;
    const metaName=[meta?.display_name,meta?.full_name,meta?.name].find(v=>typeof v==='string'&&v.trim().length>=2);
    const accountPhone=typeof meta?.account_phone==='string'?meta.account_phone.trim():'';
-   const providers=Array.isArray(user.app_metadata?.providers)
-    ?user.app_metadata.providers.map(String)
-    :user.app_metadata?.provider
-     ?[String(user.app_metadata.provider)]
-     :[];
-
-   setGoogleOnly(
-    providers.includes('google')&&
-    !providers.includes('email')
-   );
 
    if(metaName)setDisplayName(current=>current||String(metaName).trim());
    if(accountPhone)setOwnerPhone(current=>current||accountPhone);
@@ -191,48 +179,6 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
   setCompleted(nextCompleted);setDraft(nextDraft);setStep(next);
  }
 
- async function ensurePasswordCredential(){
-  if(!googleOnly)return true;
-
-  if(accountPassword.length<8){
-   setError(t('auth.passwordMin'));
-   return false;
-  }
-
-  if(
-   accountPassword!==
-   accountPasswordConfirm
-  ){
-   setError(t('auth.passwordMismatch'));
-   return false;
-  }
-
-  if(!supabase){
-   setError(t('auth.unavailable'));
-   return false;
-  }
-
-  setBusy(true);
-  setError('');
-
-  try{
-   const result=
-    await supabase.auth.updateUser({
-     password:accountPassword
-    });
-
-   if(result.error)
-    throw result.error;
-
-   setGoogleOnly(false);
-   return true;
-  }catch{
-   setError(t('auth.passwordChangeFailed'));
-   return false;
-  }finally{
-   setBusy(false);
-  }
- }
 
  async function createFirst(){
   setBusy(true);setError('');setNotice('');
@@ -252,9 +198,6 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  }
 
  async function continueFromFirst(){
-  if(!await ensurePasswordCredential())
-   return;
-
   const creating=!shopId;
   const id=shopId||await createFirst();
   if(!id)return;
@@ -379,18 +322,11 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  };
  const canContinue=step===1?Boolean(
   displayName.trim().length>=2&&
-  ownerPhone.replace(/\D/g,'').length>=10&&
-  ownerPhone.replace(/\D/g,'').length<=13&&
+  ownerPhone.replace(/D/g,'').length>=10&&
+  ownerPhone.replace(/D/g,'').length<=13&&
   name.trim().length>=2&&
   /^[a-z0-9-]{3,60}$/.test(slug)&&
-  whatsapp.replace(/\D/g,'').length>=10&&
-  (
-   !googleOnly||
-   (
-    accountPassword.length>=8&&
-    accountPassword===accountPasswordConfirm
-   )
-  )
+  whatsapp.replace(/D/g,'').length>=10
  ):step===2?services.some(s=>s.active&&validService(s)):step===3?validSchedules.length>0:step===4?Boolean(paletteKey&&logoPath):true;
 
  if(loading)return <div className="owner-onboarding ob-loading">{t('onboarding.loading')}</div>;
@@ -435,34 +371,6 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
       <small>{t('auth.phoneIdentityHint')}</small>
      </label>
 
-     {googleOnly&&<>
-      <div className="ob-google-password-copy">
-       <strong>{t('auth.googlePasswordTitle')}</strong>
-       <small>{t('auth.googlePasswordDesc')}</small>
-      </div>
-
-      <label>
-       {t('auth.newPassword')}
-       <input
-        type="password"
-        minLength={8}
-        autoComplete="new-password"
-        value={accountPassword}
-        onChange={e=>setAccountPassword(e.target.value)}
-       />
-      </label>
-
-      <label>
-       {t('auth.confirmNewPassword')}
-       <input
-        type="password"
-        minLength={8}
-        autoComplete="new-password"
-        value={accountPasswordConfirm}
-        onChange={e=>setAccountPasswordConfirm(e.target.value)}
-       />
-      </label>
-     </>}
     </div>
 
     <div className="ob-mode-grid">
