@@ -199,16 +199,27 @@ export function BookingCalendar(p:{
     if(!key)
      return <span key={`blank-${index}`}/>;
 
-    const isClosed=closedDays.has(key);
+    const inRange=key>=today&&key<=maxDate;
+    const known=Object.prototype.hasOwnProperty.call(availability,key);
+    const isClosed=inRange&&closedDays.has(key);
+    const count=Number(availability[key]??0);
+    const available=inRange&&known&&!isClosed&&count>0;
+    const full=inRange&&known&&!isClosed&&count===0;
 
     const disabled=
-     key<today||
-     key>maxDate||
+     !inRange||
      monthLoading||
-     isClosed;
+     isClosed||
+     !known;
 
-    const available=
-     !isClosed&&Number(availability[key]??0)>0;
+    const stateClass=
+     isClosed||!inRange
+      ?'closed'
+      :available
+       ?'available'
+       :full
+        ?'full'
+        :'closed';
 
     return <button
      type="button"
@@ -216,14 +227,14 @@ export function BookingCalendar(p:{
      disabled={disabled}
      className={
       `${p.date===key?'selected ':''}`+
-      `${isClosed?'closed':available?'available':'full'}`
+      stateClass
      }
      onClick={()=>p.onDateChange(key)}
     >
 
      <strong>{Number(key.slice(-2))}</strong>
 
-     {!disabled&&<i aria-hidden="true"/>}
+     {!monthLoading&&inRange&&known&&<i aria-hidden="true"/>}
 
     </button>;
 
@@ -245,7 +256,7 @@ export function BookingCalendar(p:{
     {t('calendar.monthError')}
    </p>}
 
-  {closedDays.has(p.date)&&<p className="booking-closed-notice"><strong>Barbearia fechada neste dia.</strong><span>Escolha outro dia disponível para agendar.</span></p>}
+  {closedDays.has(p.date)&&<p className="booking-closed-notice"><strong>Sem atendimento neste dia.</strong><span>O profissional ou a barbearia não possui horários configurados para esta data.</span></p>}
 
   <div className="booking-time-section">
 

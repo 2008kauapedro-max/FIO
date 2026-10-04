@@ -1,4 +1,4 @@
-const CACHE='fio-shell-v7';
+const CACHE='fio-shell-v8';
 function pushTarget(value){
  try{const u=new URL(value,self.location.origin);if(u.origin===self.location.origin&&(/^\/(owner|barber|client)\/agenda$/.test(u.pathname)||u.pathname==='/platform/alertas'))return u.href;}catch{}
  return new URL('/',self.location.origin).href;

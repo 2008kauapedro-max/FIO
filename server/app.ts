@@ -299,26 +299,14 @@ export function createApp(authenticator: Authenticator=authenticate) {
    monthStart:z.iso.date()
   }).parse(req.query);
 
-  const r=await c.db.rpc('available_days',{
+  const r=await c.db.rpc('calendar_day_availability',{
    p_shop:c.shopId,
    p_barber:v.barberId==='any'?null:v.barberId,
    p_service:v.serviceId,
    p_month:v.monthStart
   });
   dbError(r.error);
-
-  const first=v.monthStart.slice(0,7)+'-01';
-  const monthDate=new Date(first+'T00:00:00Z');
-  const last=new Date(Date.UTC(monthDate.getUTCFullYear(),monthDate.getUTCMonth()+1,0)).toISOString().slice(0,10);
-  const closures=await c.db.from('shop_closures').select('day').eq('barbershop_id',c.shopId).gte('day',first).lte('day',last);
-  dbError(closures.error);
-  const closed=new Set((closures.data??[]).map(row=>String(row.day)));
-
-  const monthRows=(r.data??[]) as {day:string;available_count:number}[];
-  res.json(monthRows.map(row=>({
-   ...row,
-   closed:closed.has(String(row.day))
-  })));
+  res.json(r.data??[]);
  });
  app.get('/api/slots',async(req,res)=>{
   const c=ctx(res);const v=z.object({barberId:z.union([z.uuid(),z.literal('any')]),serviceId:z.uuid(),day:z.iso.date()}).parse(req.query);
@@ -400,6 +388,11 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.patch('/api/notifications/:id/read',async(req,res)=>{
   const c=ctx(res),id=z.uuid().parse(req.params.id);
   const r=await c.db.from('notifications').update({read_at:new Date().toISOString()}).eq('id',id).eq('barbershop_id',c.shopId).eq('user_id',c.userId);dbError(r.error);res.json({ok:true});
+ });
+ app.get('/api/feed/professionals',async(_req,res)=>{
+  const c=ctx(res);requireFioFeature(c,'feed');
+  const r=await c.db.rpc('feed_professional_profiles',{p_shop:c.shopId});
+  dbError(r.error);res.json(r.data??[]);
  });
  app.post('/api/posts',rateLimitByUser('feed-posts',600_000,12),async(req,res)=>{
   const c=ctx(res);requireFioFeature(c,'feed');

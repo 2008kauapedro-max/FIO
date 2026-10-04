@@ -27,7 +27,7 @@ describe('agenda premium',()=>{
  const sql=
   readFileSync(
    resolve(
-    'supabase/migrations/20261001193000_agenda_calendar_availability.sql'
+    'supabase/migrations/20261004163000_client_experience_final.sql'
    ),
    'utf8'
   );
@@ -100,16 +100,16 @@ describe('agenda premium',()=>{
 
  });
 
- it('novos horários começam em hora cheia',()=>{
+ it('novos horários usam grade de 20 minutos sem regra antiga de hora cheia',()=>{
 
   expect(sql)
-   .toContain("interval '1 hour'");
+   .toContain("interval '20 minutes'");
 
   expect(sql)
-   .toContain('FULL_HOUR_REQUIRED');
+   .not.toContain('FULL_HOUR_REQUIRED');
 
   expect(sql)
-   .toContain('available_days');
+   .toContain('calendar_day_availability');
 
  });
 

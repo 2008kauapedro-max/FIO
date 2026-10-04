@@ -1,13 +1,13 @@
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { useEffect,useMemo,useState,type CSSProperties } from 'react';
 import { useLocation } from 'react-router-dom';
-import { ArrowRight,Clock3,Download,ExternalLink,Info,MapPin,Search,Scissors,Share2,Smartphone,SquarePlus,Users,X } from 'lucide-react';
+import { Clock3,Download,ExternalLink,Info,MapPin,Search,Scissors,Share2,Smartphone,SquarePlus,Users,X } from 'lucide-react';
 import { whatsappUrl } from '../../shared/phone';
 import { InAppBrowserBanner } from '../components/InAppBrowserBanner';
 import {useI18n} from '../i18n';
 
 type PublicShop={id:string;name:string;slug:string;operation_mode?:'SHOP'|'SOLO';public_title?:string|null;public_description?:string|null;logo_url?:string|null;cover_url?:string|null;background_url?:string|null;accent_color?:string|null;theme_mode?:'light'|'dark';palette_key?:string|null;custom_accent?:string|null;whatsapp?:string|null;instagram?:string|null;address?:string|null};
-type PublicPalette={light_background:string;light_surface:string;light_text:string;light_text_muted:string;light_accent:string;dark_background:string;dark_surface:string;dark_text:string;dark_text_muted:string;dark_accent:string};
+type PublicPalette={light_background:string;light_surface:string;light_surface_secondary?:string;light_text:string;light_text_muted:string;light_accent:string;dark_background:string;dark_surface:string;dark_surface_secondary?:string;dark_text:string;dark_text_muted:string;dark_accent:string};
 type PublicData={shop:PublicShop;palette?:PublicPalette|null;services:{id:string;name:string;description?:string|null;duration_minutes:number;price_cents:number}[];team:{user_id:string;display_name:string;role:'OWNER'|'BARBER';avatar_url?:string|null}[];subscriptionPlans:{id:string;name:string;description?:string|null;cuts:number;validity_days:number;price_cents:number;active:boolean}[]};
 type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:'accepted'|'dismissed'}>};
 type PortalTab='services'|'details'|'team';
@@ -159,8 +159,26 @@ export function PublicPortal(){
  if(error)return <div className="public-portal centered-state"><img src="/FIOlogo/FIObranco.png" alt="FIO"/><h1>{t('public.openFailed')}</h1><p>{error}</p></div>;
  if(!data)return <div className="public-portal centered-state"><img className="pulse-mark" src="/FIOlogo/FIObranco.png" alt="FIO"/><p>{t('public.preparing')}</p></div>;
 
- const dark=data.shop.theme_mode!=='light',p=data.palette;const accent=data.shop.custom_accent||data.shop.accent_color||(dark?p?.dark_accent:p?.light_accent)||'#ff8a00';
- const portalStyle={'--shop-accent':accent,'--shop-accent-contrast':accentContrast(accent),'--public-bg':dark?p?.dark_background||'#080808':p?.light_background||'#f5f5f2','--public-surface':dark?p?.dark_surface||'#111111':p?.light_surface||'#ffffff','--public-text':dark?p?.dark_text||'#f5f5f5':p?.light_text||'#111111','--public-muted':dark?p?.dark_text_muted||'#8d8d8d':p?.light_text_muted||'#666666',backgroundImage:data.shop.background_url?`linear-gradient(${dark?'rgba(0,0,0,.82),rgba(0,0,0,.9)':'rgba(245,245,242,.88),rgba(245,245,242,.94)'}),url(${data.shop.background_url})`:undefined,backgroundSize:data.shop.background_url?'460px auto':undefined,backgroundAttachment:data.shop.background_url?'fixed':undefined} as CSSProperties;
+ const dark=data.shop.theme_mode!=='light',p=data.palette;
+ const accent=data.shop.custom_accent||data.shop.accent_color||(dark?p?.dark_accent:p?.light_accent)||'#ff8a00';
+ const surfaceSecondary=dark
+  ?p?.dark_surface_secondary||p?.dark_surface||'#191919'
+  :p?.light_surface_secondary||p?.light_surface||'#f0f0ed';
+ const portalStyle={
+  '--shop-accent':accent,
+  '--shop-accent-contrast':accentContrast(accent),
+  '--public-bg':dark?p?.dark_background||'#080808':p?.light_background||'#f5f5f2',
+  '--public-surface':dark?p?.dark_surface||'#111111':p?.light_surface||'#ffffff',
+  '--public-surface-secondary':surfaceSecondary,
+  '--public-text':dark?p?.dark_text||'#f5f5f5':p?.light_text||'#111111',
+  '--public-muted':dark?p?.dark_text_muted||'#8d8d8d':p?.light_text_muted||'#666666',
+  colorScheme:dark?'dark':'light',
+  backgroundImage:data.shop.background_url
+   ?`linear-gradient(${dark?'rgba(0,0,0,.82),rgba(0,0,0,.9)':'rgba(245,245,242,.88),rgba(245,245,242,.94)'}),url(${data.shop.background_url})`
+   :undefined,
+  backgroundSize:data.shop.background_url?'460px auto':undefined,
+  backgroundAttachment:data.shop.background_url?'fixed':undefined
+ } as CSSProperties;
  const providerLabel=data.shop.operation_mode==='SOLO'?t('public.provider.solo'):t('public.provider.shop');
  const mapsHref=data.shop.address?publicMapsUrl(data.shop.address):null;
  const instagramHref=data.shop.instagram?publicInstagramUrl(data.shop.instagram):null;
@@ -168,7 +186,7 @@ export function PublicPortal(){
 
  return <div className="public-portal branded-portal booking-showcase" style={portalStyle}>
   <InAppBrowserBanner/>
-  <header className="booking-showcase-hero" style={data.shop.cover_url?{backgroundImage:`linear-gradient(180deg,rgba(0,0,0,.16),rgba(0,0,0,.84)),url(${data.shop.cover_url})`}:undefined}>
+  <header className={`booking-showcase-hero${data.shop.cover_url?' has-cover':''}`} style={data.shop.cover_url?{backgroundImage:`linear-gradient(180deg,rgba(0,0,0,.16),rgba(0,0,0,.84)),url(${data.shop.cover_url})`}:undefined}>
    <div className="booking-showcase-top">
     <span className="booking-showcase-badge">{providerLabel}</span>
     <div className="booking-showcase-actions">
@@ -226,13 +244,8 @@ export function PublicPortal(){
    {data.subscriptionPlans?.length>0&&tab==='details'&&<section className="booking-plans"><h2>{t('public.plans')}</h2>{data.subscriptionPlans.map(plan=><article key={plan.id}><div><strong>{plan.name}</strong><small>{t('public.cuts',{count:plan.cuts,suffix:plan.cuts===1?'':'s',days:plan.validity_days})}</small></div><b>{formatCurrency(plan.price_cents/100,'BRL')}</b></article>)}</section>}
   </main>
 
-  <footer className="booking-powered">
-   <div className="booking-powered-card">
-    <span className="booking-powered-kicker">{t('public.powered')}</span>
-    <strong>{t('public.createShop')}</strong>
-    <p>{t('public.createShopDesc')}</p>
-    <a href="/login?audience=owner&mode=signup">{t('public.startNow')} <ArrowRight size={15}/></a>
-   </div>
+  <footer className="booking-powered booking-powered-minimal">
+   <span>{t('public.powered')}</span>
   </footer>
 
   {installGate&&<div className="client-app-gate" role="dialog" aria-modal="true" aria-label={t('public.installAria')}><div className="client-app-gate-card">
