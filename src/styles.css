@@ -4019,3 +4019,74 @@ body:has(.workspace),
   font-size:.92rem;
  }
 }
+
+/* FIO_TURNSTILE_MOBILE_CENTERED_20261004
+   Mantém o Turnstile oficial, mas centraliza e reduz visualmente no mobile.
+   Aplica em login, cadastro de barbearia e qualquer tela que use AuthCaptcha. */
+.auth-captcha{
+ width:100%;
+ min-width:0;
+ display:grid;
+ justify-items:center;
+ overflow:hidden;
+}
+
+.auth-captcha-widget{
+ width:100%;
+ min-width:0;
+ display:flex;
+ justify-content:center;
+ align-items:flex-start;
+ margin-inline:auto;
+}
+
+.auth-captcha-widget>div{
+ margin-inline:auto!important;
+}
+
+.auth-captcha-widget iframe{
+ display:block!important;
+ margin-inline:auto!important;
+}
+
+/*
+ Em telas estreitas o Turnstile da Cloudflare mantém uma largura mínima.
+ Criamos um espaço um pouco maior para ele renderizar e reduzimos o conjunto
+ proporcionalmente, mantendo o retângulo fino e inteiro dentro do formulário.
+*/
+@media(max-width:480px){
+ .auth-captcha-widget{
+  position:relative;
+  left:50%;
+  width:109.1%;
+  max-width:none;
+  transform:translateX(-50%) scale(.88);
+  transform-origin:top center;
+  margin-bottom:-7px;
+ }
+
+ .auth-captcha-widget>div{
+  width:100%!important;
+  max-width:none!important;
+ }
+
+ .auth-captcha-widget iframe{
+  max-width:none!important;
+ }
+}
+
+@media(max-width:360px){
+ .auth-captcha-widget{
+  width:114.3%;
+  transform:translateX(-50%) scale(.84);
+  margin-bottom:-10px;
+ }
+}
+
+/* O texto de confirmação continua alinhado ao formulário. */
+.auth-captcha-status,
+.auth-captcha-hint,
+.auth-captcha-error,
+.auth-captcha-retry{
+ justify-self:stretch;
+}
