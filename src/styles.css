@@ -4153,3 +4153,101 @@ body:has(.workspace),
 }
 /* ===== FIM AJUSTE FINO TURNSTILE + CARD MOBILE ===== */
 
+
+/* FIO_TURNSTILE_STABLE_MOBILE_20261004
+   Corrige os dois estados do Turnstile (verificando e sucesso)
+   sem depender da largura dinâmica que a Cloudflare aplica ao iframe. */
+@media(max-width:640px){
+  .auth-card--login{
+    padding-left:10px!important;
+    padding-right:10px!important;
+  }
+
+  .auth-card--login form{
+    width:100%;
+    min-width:0;
+  }
+
+  .auth-captcha{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    overflow:hidden!important;
+    margin:6px 0 8px!important;
+  }
+
+  .auth-captcha-widget{
+    position:relative!important;
+    left:auto!important;
+    width:300px!important;
+    max-width:100%!important;
+    min-width:0!important;
+    margin:0 auto!important;
+    transform:none!important;
+    transform-origin:center top!important;
+    display:block!important;
+    overflow:hidden!important;
+  }
+
+  .auth-captcha-widget>div{
+    width:300px!important;
+    max-width:100%!important;
+    min-width:0!important;
+    margin:0 auto!important;
+    transform:none!important;
+  }
+
+  .auth-captcha-widget iframe{
+    display:block!important;
+    width:300px!important;
+    max-width:100%!important;
+    min-width:0!important;
+    margin:0 auto!important;
+    transform:none!important;
+  }
+
+  .auth-captcha-status,
+  .auth-captcha-hint,
+  .auth-captcha-error{
+    width:100%;
+    margin:6px 0!important;
+  }
+
+  .auth-card--login{
+    padding-top:16px!important;
+    padding-bottom:16px!important;
+  }
+
+  .auth-card--login form{
+    margin-top:14px!important;
+  }
+
+  .auth-card--login .field{
+    margin-bottom:10px!important;
+  }
+
+  .auth-card--login .remember-session{
+    margin:2px 0 6px!important;
+  }
+
+  .auth-card--login .auth-options{
+    margin-top:10px!important;
+  }
+
+  .auth-card--login .auth-divider{
+    margin:12px 0!important;
+  }
+
+  .auth-card--login .oauth-button{
+    margin-bottom:4px!important;
+  }
+}
+
+@media(max-width:340px){
+  .auth-captcha-widget,
+  .auth-captcha-widget>div,
+  .auth-captcha-widget iframe{
+    width:292px!important;
+  }
+}
+/* FIM FIO_TURNSTILE_STABLE_MOBILE_20261004 */
