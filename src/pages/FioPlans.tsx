@@ -33,8 +33,8 @@ export function FioPlans(p:WorkspaceProps){
  const primaryPaid:PaidPlan=soloMode?'SOLO':'PRO';
  const visiblePlans=useMemo(()=>FIO_PLAN_CATALOG.filter(plan=>
   soloMode
-   ?plan.code==='FREE'||plan.code==='SOLO'||plan.code===p.data.plan
-   :plan.code!=='SOLO'
+   ?plan.code==='FREE'||plan.code==='SOLO'||plan.code==='SOLO_PREMIUM'||plan.code===p.data.plan
+   :plan.code!=='SOLO'&&plan.code!=='SOLO_PREMIUM'
  ),[soloMode,p.data.plan]);
  const trialUsed=Boolean(sub.trial_ends_at);
  const trialActive=sub.status==='trialing'&&Boolean(sub.trial_ends_at)&&new Date(sub.trial_ends_at!)>new Date();

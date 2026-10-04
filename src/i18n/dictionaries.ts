@@ -1356,3 +1356,57 @@ Object.assign(es,{
 Object.assign(fr,{"fp.startSolo":"Démarrer FIO SOLO","fp.plan.SOLO.eyebrow":"POUR LES INDÉPENDANTS","fp.plan.SOLO.desc":"Tout pour organiser votre activité, votre app et vos clients.","fp.plan.SOLO.h1":"1 professionnel","fp.plan.SOLO.h2":"Jusqu’à 500 clients","fp.plan.SOLO.g0":"CAPACITÉ","fp.plan.SOLO.g0i0":"1 professionnel","fp.plan.SOLO.g0i1":"Jusqu’à 500 clients","fp.plan.SOLO.g0i2":"Jusqu’à 20 services","fp.plan.SOLO.g0i3":"Jusqu’à 5 forfaits","fp.plan.SOLO.g1":"PRÉSENCE NUMÉRIQUE","fp.plan.SOLO.g1i0":"Mini site personnalisé","fp.plan.SOLO.g1i1":"App/PWA à votre image","fp.plan.SOLO.g1i2":"Logo, couverture, fond et couleurs","fp.plan.SOLO.g2":"COMMUNICATION","fp.plan.SOLO.g2i0":"Fil d’actualité","fp.plan.SOLO.g2i1":"Campagnes et communication","fp.plan.SOLO.g2i2":"Forfaits de coupes","fp.plan.SOLO.g3":"INTELLIGENCE","fp.plan.SOLO.g3i0":"Assistant FIO","fp.plan.SOLO.g3i1":"150 requêtes IA par utilisateur/jour","fp.annualBestChoice":"-20% · Meilleur choix"});
 Object.assign(de,{"fp.startSolo":"FIO SOLO starten","fp.plan.SOLO.eyebrow":"FÜR SOLO-BARBER","fp.plan.SOLO.desc":"Alles für deinen Alltag, deine App und deine Kunden.","fp.plan.SOLO.h1":"1 Profi","fp.plan.SOLO.h2":"Bis zu 500 Kunden","fp.plan.SOLO.g0":"KAPAZITÄT","fp.plan.SOLO.g0i0":"1 Profi","fp.plan.SOLO.g0i1":"Bis zu 500 Kunden","fp.plan.SOLO.g0i2":"Bis zu 20 Leistungen","fp.plan.SOLO.g0i3":"Bis zu 5 Pakete","fp.plan.SOLO.g1":"DIGITALE PRÄSENZ","fp.plan.SOLO.g1i0":"Individuelle Mini-Website","fp.plan.SOLO.g1i1":"App/PWA mit deiner Identität","fp.plan.SOLO.g1i2":"Logo, Cover, Hintergrund und Farben","fp.plan.SOLO.g2":"KOMMUNIKATION","fp.plan.SOLO.g2i0":"Feed","fp.plan.SOLO.g2i1":"Kampagnen und Kommunikation","fp.plan.SOLO.g2i2":"Schnittpakete","fp.plan.SOLO.g3":"INTELLIGENZ","fp.plan.SOLO.g3i0":"FIO-Assistent","fp.plan.SOLO.g3i1":"150 KI-Anfragen pro Nutzer/Tag","fp.annualBestChoice":"20% RABATT · Beste Wahl"});
 Object.assign(it,{"fp.startSolo":"Inizia FIO SOLO","fp.plan.SOLO.eyebrow":"PER CHI LAVORA DA SOLO","fp.plan.SOLO.desc":"Tutto per organizzare routine, app e clienti.","fp.plan.SOLO.h1":"1 professionista","fp.plan.SOLO.h2":"Fino a 500 clienti","fp.plan.SOLO.g0":"CAPACITÀ","fp.plan.SOLO.g0i0":"1 professionista","fp.plan.SOLO.g0i1":"Fino a 500 clienti","fp.plan.SOLO.g0i2":"Fino a 20 servizi","fp.plan.SOLO.g0i3":"Fino a 5 pacchetti","fp.plan.SOLO.g1":"PRESENZA DIGITALE","fp.plan.SOLO.g1i0":"Mini sito personalizzato","fp.plan.SOLO.g1i1":"App/PWA con la tua identità","fp.plan.SOLO.g1i2":"Logo, copertina, sfondo e colori","fp.plan.SOLO.g2":"COMUNICAZIONE","fp.plan.SOLO.g2i0":"Feed","fp.plan.SOLO.g2i1":"Campagne e comunicazione","fp.plan.SOLO.g2i2":"Pacchetti tagli","fp.plan.SOLO.g3":"INTELLIGENZA","fp.plan.SOLO.g3i0":"Assistente FIO","fp.plan.SOLO.g3i1":"150 richieste IA per utente/giorno","fp.annualBestChoice":"20% OFF · Scelta migliore"});
+
+/* FIO_MVP_FINAL_20261004 */
+Object.assign(ptBR,{
+ "fp.plan.SOLO.g2i1":"Pacotes/planos de cortes",
+ "fp.plan.PRO.g2i1":"Pacotes/planos de cortes",
+ "fp.plan.PREMIUM.g2i1":"Pacotes/planos de cortes",
+ "fp.plan.SOLO_PREMIUM.eyebrow":"SOLO SEM LIMITES",
+ "fp.plan.SOLO_PREMIUM.desc":"Para quem trabalha sozinho e quer o nível máximo do FIO.",
+ "fp.plan.SOLO_PREMIUM.h1":"1 profissional","fp.plan.SOLO_PREMIUM.h2":"Clientes sem limite",
+ "fp.plan.SOLO_PREMIUM.g0":"CAPACIDADE","fp.plan.SOLO_PREMIUM.g0i0":"1 profissional","fp.plan.SOLO_PREMIUM.g0i1":"Clientes sem limite","fp.plan.SOLO_PREMIUM.g0i2":"Serviços sem limite","fp.plan.SOLO_PREMIUM.g0i3":"Pacotes de cortes sem limite",
+ "fp.plan.SOLO_PREMIUM.g1":"PRESENÇA DIGITAL","fp.plan.SOLO_PREMIUM.g1i0":"Mini site personalizado","fp.plan.SOLO_PREMIUM.g1i1":"App/PWA com identidade da barbearia","fp.plan.SOLO_PREMIUM.g1i2":"Logo, capa, fundo e cores",
+ "fp.plan.SOLO_PREMIUM.g2":"RECURSOS","fp.plan.SOLO_PREMIUM.g2i0":"Feed da barbearia","fp.plan.SOLO_PREMIUM.g2i1":"Pacotes/planos de cortes",
+ "fp.plan.SOLO_PREMIUM.g3":"INTELIGÊNCIA","fp.plan.SOLO_PREMIUM.g3i0":"Assistente FIO","fp.plan.SOLO_PREMIUM.g3i1":"500 consultas de IA por usuário/dia"
+});
+Object.assign(en,{
+ "fp.plan.SOLO.g2i1":"Haircut packages/plans","fp.plan.PRO.g2i1":"Haircut packages/plans","fp.plan.PREMIUM.g2i1":"Haircut packages/plans",
+ "fp.plan.SOLO_PREMIUM.eyebrow":"SOLO WITHOUT LIMITS","fp.plan.SOLO_PREMIUM.desc":"For solo professionals who want the highest FIO tier.","fp.plan.SOLO_PREMIUM.h1":"1 professional","fp.plan.SOLO_PREMIUM.h2":"Unlimited clients",
+ "fp.plan.SOLO_PREMIUM.g0":"CAPACITY","fp.plan.SOLO_PREMIUM.g0i0":"1 professional","fp.plan.SOLO_PREMIUM.g0i1":"Unlimited clients","fp.plan.SOLO_PREMIUM.g0i2":"Unlimited services","fp.plan.SOLO_PREMIUM.g0i3":"Unlimited haircut packages",
+ "fp.plan.SOLO_PREMIUM.g1":"DIGITAL PRESENCE","fp.plan.SOLO_PREMIUM.g1i0":"Custom mini site","fp.plan.SOLO_PREMIUM.g1i1":"Barbershop-branded app/PWA","fp.plan.SOLO_PREMIUM.g1i2":"Logo, cover, background and colors",
+ "fp.plan.SOLO_PREMIUM.g2":"FEATURES","fp.plan.SOLO_PREMIUM.g2i0":"Barbershop feed","fp.plan.SOLO_PREMIUM.g2i1":"Haircut packages/plans",
+ "fp.plan.SOLO_PREMIUM.g3":"INTELLIGENCE","fp.plan.SOLO_PREMIUM.g3i0":"FIO Assistant","fp.plan.SOLO_PREMIUM.g3i1":"500 AI requests per user/day"
+});
+Object.assign(es,{
+ "fp.plan.SOLO.g2i1":"Paquetes/planes de cortes","fp.plan.PRO.g2i1":"Paquetes/planes de cortes","fp.plan.PREMIUM.g2i1":"Paquetes/planes de cortes",
+ "fp.plan.SOLO_PREMIUM.eyebrow":"SOLO SIN LÍMITES","fp.plan.SOLO_PREMIUM.desc":"Para quien trabaja solo y quiere el nivel máximo de FIO.","fp.plan.SOLO_PREMIUM.h1":"1 profesional","fp.plan.SOLO_PREMIUM.h2":"Clientes sin límite",
+ "fp.plan.SOLO_PREMIUM.g0":"CAPACIDAD","fp.plan.SOLO_PREMIUM.g0i0":"1 profesional","fp.plan.SOLO_PREMIUM.g0i1":"Clientes sin límite","fp.plan.SOLO_PREMIUM.g0i2":"Servicios sin límite","fp.plan.SOLO_PREMIUM.g0i3":"Paquetes sin límite",
+ "fp.plan.SOLO_PREMIUM.g1":"PRESENCIA DIGITAL","fp.plan.SOLO_PREMIUM.g1i0":"Mini sitio personalizado","fp.plan.SOLO_PREMIUM.g1i1":"App/PWA con identidad de la barbería","fp.plan.SOLO_PREMIUM.g1i2":"Logo, portada, fondo y colores",
+ "fp.plan.SOLO_PREMIUM.g2":"RECURSOS","fp.plan.SOLO_PREMIUM.g2i0":"Feed de la barbería","fp.plan.SOLO_PREMIUM.g2i1":"Paquetes/planes de cortes",
+ "fp.plan.SOLO_PREMIUM.g3":"INTELIGENCIA","fp.plan.SOLO_PREMIUM.g3i0":"Asistente FIO","fp.plan.SOLO_PREMIUM.g3i1":"500 consultas de IA por usuario/día"
+});
+Object.assign(fr,{
+ "fp.plan.SOLO.g2i1":"Forfaits coupe","fp.plan.PRO.g2i1":"Forfaits coupe","fp.plan.PREMIUM.g2i1":"Forfaits coupe",
+ "fp.plan.SOLO_PREMIUM.eyebrow":"SOLO SANS LIMITES","fp.plan.SOLO_PREMIUM.desc":"Pour les indépendants qui veulent le niveau FIO maximal.","fp.plan.SOLO_PREMIUM.h1":"1 professionnel","fp.plan.SOLO_PREMIUM.h2":"Clients illimités",
+ "fp.plan.SOLO_PREMIUM.g0":"CAPACITÉ","fp.plan.SOLO_PREMIUM.g0i0":"1 professionnel","fp.plan.SOLO_PREMIUM.g0i1":"Clients illimités","fp.plan.SOLO_PREMIUM.g0i2":"Services illimités","fp.plan.SOLO_PREMIUM.g0i3":"Forfaits illimités",
+ "fp.plan.SOLO_PREMIUM.g1":"PRÉSENCE NUMÉRIQUE","fp.plan.SOLO_PREMIUM.g1i0":"Mini site personnalisé","fp.plan.SOLO_PREMIUM.g1i1":"App/PWA à l’identité du salon","fp.plan.SOLO_PREMIUM.g1i2":"Logo, couverture, fond et couleurs",
+ "fp.plan.SOLO_PREMIUM.g2":"FONCTIONS","fp.plan.SOLO_PREMIUM.g2i0":"Fil du salon","fp.plan.SOLO_PREMIUM.g2i1":"Forfaits coupe",
+ "fp.plan.SOLO_PREMIUM.g3":"INTELLIGENCE","fp.plan.SOLO_PREMIUM.g3i0":"Assistant FIO","fp.plan.SOLO_PREMIUM.g3i1":"500 requêtes IA par utilisateur/jour"
+});
+Object.assign(de,{
+ "fp.plan.SOLO.g2i1":"Haarschnitt-Pakete/Abos","fp.plan.PRO.g2i1":"Haarschnitt-Pakete/Abos","fp.plan.PREMIUM.g2i1":"Haarschnitt-Pakete/Abos",
+ "fp.plan.SOLO_PREMIUM.eyebrow":"SOLO OHNE LIMITS","fp.plan.SOLO_PREMIUM.desc":"Für Solo-Profis, die die höchste FIO-Stufe möchten.","fp.plan.SOLO_PREMIUM.h1":"1 Profi","fp.plan.SOLO_PREMIUM.h2":"Unbegrenzte Kunden",
+ "fp.plan.SOLO_PREMIUM.g0":"KAPAZITÄT","fp.plan.SOLO_PREMIUM.g0i0":"1 Profi","fp.plan.SOLO_PREMIUM.g0i1":"Unbegrenzte Kunden","fp.plan.SOLO_PREMIUM.g0i2":"Unbegrenzte Leistungen","fp.plan.SOLO_PREMIUM.g0i3":"Unbegrenzte Pakete",
+ "fp.plan.SOLO_PREMIUM.g1":"DIGITALE PRÄSENZ","fp.plan.SOLO_PREMIUM.g1i0":"Individuelle Mini-Website","fp.plan.SOLO_PREMIUM.g1i1":"App/PWA im Shop-Design","fp.plan.SOLO_PREMIUM.g1i2":"Logo, Cover, Hintergrund und Farben",
+ "fp.plan.SOLO_PREMIUM.g2":"FUNKTIONEN","fp.plan.SOLO_PREMIUM.g2i0":"Shop-Feed","fp.plan.SOLO_PREMIUM.g2i1":"Haarschnitt-Pakete/Abos",
+ "fp.plan.SOLO_PREMIUM.g3":"INTELLIGENZ","fp.plan.SOLO_PREMIUM.g3i0":"FIO-Assistent","fp.plan.SOLO_PREMIUM.g3i1":"500 KI-Anfragen pro Nutzer/Tag"
+});
+Object.assign(it,{
+ "fp.plan.SOLO.g2i1":"Pacchetti/piani taglio","fp.plan.PRO.g2i1":"Pacchetti/piani taglio","fp.plan.PREMIUM.g2i1":"Pacchetti/piani taglio",
+ "fp.plan.SOLO_PREMIUM.eyebrow":"SOLO SENZA LIMITI","fp.plan.SOLO_PREMIUM.desc":"Per chi lavora da solo e vuole il livello FIO massimo.","fp.plan.SOLO_PREMIUM.h1":"1 professionista","fp.plan.SOLO_PREMIUM.h2":"Clienti illimitati",
+ "fp.plan.SOLO_PREMIUM.g0":"CAPACITÀ","fp.plan.SOLO_PREMIUM.g0i0":"1 professionista","fp.plan.SOLO_PREMIUM.g0i1":"Clienti illimitati","fp.plan.SOLO_PREMIUM.g0i2":"Servizi illimitati","fp.plan.SOLO_PREMIUM.g0i3":"Pacchetti illimitati",
+ "fp.plan.SOLO_PREMIUM.g1":"PRESENZA DIGITALE","fp.plan.SOLO_PREMIUM.g1i0":"Mini sito personalizzato","fp.plan.SOLO_PREMIUM.g1i1":"App/PWA con identità del salone","fp.plan.SOLO_PREMIUM.g1i2":"Logo, copertina, sfondo e colori",
+ "fp.plan.SOLO_PREMIUM.g2":"FUNZIONI","fp.plan.SOLO_PREMIUM.g2i0":"Feed del salone","fp.plan.SOLO_PREMIUM.g2i1":"Pacchetti/piani taglio",
+ "fp.plan.SOLO_PREMIUM.g3":"INTELLIGENZA","fp.plan.SOLO_PREMIUM.g3i0":"Assistente FIO","fp.plan.SOLO_PREMIUM.g3i1":"500 richieste IA per utente/giorno"
+});

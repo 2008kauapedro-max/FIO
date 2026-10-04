@@ -11,7 +11,7 @@ import { planAllows,type FioFeature } from '../shared/entitlements';
 import { roleHome } from '../shared/domain';
 import { api,supabase } from './lib/api';
 import { AuthPage,EmailConfirmationPage,Onboarding } from './pages/Auth';
-import { Agenda,Customers,Dashboard,Services,Settings as SettingsPage,Subscriptions,Team,Communication,Support,type WorkspaceProps } from './pages/Workspace';
+import { Agenda,Customers,Dashboard,Services,Settings as SettingsPage,Subscriptions,Team,Support,type WorkspaceProps } from './pages/Workspace';
 import { AssistantChat } from './components/AssistantChat';
 import { Feed } from './pages/Feed';
 import { PublicPortal } from './pages/PublicPortal';
@@ -30,16 +30,15 @@ function AppLoading(){
 
 type NavItem={path:string;label:string;icon:typeof LayoutDashboard;roles:Role[];feature?:FioFeature};
 const navItems:NavItem[]=[
- {path:'',label:'Visão geral',icon:LayoutDashboard,roles:['OWNER','BARBER','CLIENT']},
+ {path:'',label:'Visão geral',icon:LayoutDashboard,roles:['OWNER','BARBER']},
  {path:'/agenda',label:'Agenda',icon:CalendarDays,roles:['OWNER','BARBER','CLIENT']},
- {path:'/assistente',label:'Assistente',icon:Sparkles,roles:['OWNER','BARBER','CLIENT'],feature:'assistant'},
+ {path:'/assistente',label:'Assistente',icon:Sparkles,roles:['OWNER','BARBER'],feature:'assistant'},
  {path:'/feed',label:'Feed',icon:Images,roles:['OWNER','BARBER','CLIENT'],feature:'feed'},
  {path:'/clientes',label:'Clientes',icon:Users,roles:['OWNER']},
  {path:'/equipe',label:'Equipe',icon:UserRound,roles:['OWNER','BARBER']},
  {path:'/profissionais',label:'Profissionais',icon:UserRound,roles:['CLIENT']},
  {path:'/servicos',label:'Serviços',icon:Scissors,roles:['OWNER','BARBER','CLIENT']},
  {path:'/assinaturas',label:'Pacotes de cortes',icon:Wallet,roles:['OWNER','CLIENT']},
- {path:'/comunicacao',label:'Comunicação',icon:Megaphone,roles:['OWNER'],feature:'communication'},
  {path:'/plano-fio',label:'Plano FIO',icon:Crown,roles:['OWNER']},
  {path:'/configuracoes',label:'Configurações',icon:Settings,roles:['OWNER','BARBER','CLIENT']},
  {path:'/suporte',label:'Ajuda e suporte',icon:CircleHelp,roles:['OWNER','BARBER','CLIENT']}
@@ -47,148 +46,6 @@ const navItems:NavItem[]=[
 
 type Theme='dark'|'light';
 type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:'accepted'|'dismissed'}>};
-
-function shopDate(zone:string,date=new Date()){
- return new Intl.DateTimeFormat('en-CA',{
-  timeZone:zone,
-  year:'numeric',
-  month:'2-digit',
-  day:'2-digit'
- }).format(date);
-}
-function plusDays(value:string,days:number){
- const [y,m,d]=value.split('-').map(Number);
- const next=new Date(Date.UTC(y,m-1,d+days));
- return `${next.getUTCFullYear()}-${String(next.getUTCMonth()+1).padStart(2,'0')}-${String(next.getUTCDate()).padStart(2,'0')}`;
-}
-function ShopPowerControl({shopId,zone,onChanged}:{shopId:string;zone:string;onChanged:(message:string)=>void}){
- const today=shopDate(zone);
- const tomorrow=plusDays(today,1);
- const max=plusDays(today,60);
- const [closedDays,setClosedDays]=useState<string[]>([]);
- const [modal,setModal]=useState(false);
- const [busy,setBusy]=useState(false);
- const [selected,setSelected]=useState<string[]>([today]);
- const [customDay,setCustomDay]=useState('');
-
- const load=useCallback(async()=>{
-  try{
-   const result=await api<{days:string[]}>(`/shop/closures?from=${today}&to=${max}`,shopId);
-   setClosedDays(result.days??[]);
-  }catch{}
- },[shopId,today,max]);
-
- useEffect(()=>{void load();},[load]);
-
- const closedToday=closedDays.includes(today);
- const toggleDay=(day:string)=>{
-  setSelected(current=>current.includes(day)?current.filter(x=>x!==day):[...current,day].sort());
- };
- const openModal=()=>{
-  setSelected([...new Set(closedToday?[...closedDays]:[...closedDays,today])].sort());
-  setCustomDay('');
-  setModal(true);
- };
- const addCustom=()=>{
-  if(!customDay||customDay<today||customDay>max)return;
-  setSelected(current=>current.includes(customDay)?current:[...current,customDay].sort());
-  setCustomDay('');
- };
- async function saveClosures(){
-  const days=selected.filter(day=>day>=today&&day<=max);
-  const removed=closedDays.filter(day=>day>=today&&day<=max&&!days.includes(day));
-  if(!days.length&&!removed.length)return;
-  setBusy(true);
-  try{
-   if(removed.length){
-    await Promise.all(
-     removed.map(day=>api(`/shop/closures/${day}`,shopId,undefined,'DELETE'))
-    );
-   }
-   if(days.length){
-    await api('/shop/closures',shopId,{days,confirmed:true});
-   }
-   await load();
-   setModal(false);
-   if(!days.length){
-    onChanged('Todos os dias selecionados foram reabertos.');
-   }else if(removed.length){
-    onChanged('Dias de funcionamento atualizados.');
-   }else{
-    onChanged(days.length===1?'Barbearia fechada para o dia selecionado.':`Barbearia fechada em ${days.length} dias selecionados.`);
-   }
-  }catch(e){onChanged((e as Error).message);}
-  finally{setBusy(false);}
- }
- async function reopenToday(){
-  setBusy(true);
-  try{
-   await api(`/shop/closures/${today}`,shopId,undefined,'DELETE');
-   await load();
-   setSelected(current=>current.filter(day=>day!==today));
-   setModal(false);
-   onChanged('Barbearia reaberta para hoje.');
-  }catch(e){onChanged((e as Error).message);}
-  finally{setBusy(false);}
- }
-
- return <>
-  <button
-   type="button"
-   className={`icon-button shop-power-button ${closedToday?'is-closed':'is-open'}`}
-   aria-label={closedToday?'Barbearia fechada. Gerenciar abertura.':'Fechar barbearia'}
-   title={closedToday?'Barbearia fechada':'Fechar barbearia'}
-   onClick={openModal}
-  >
-   <Power size={19}/>
-  </button>
-
-  {modal&&<Modal title={closedToday?'Barbearia fechada':'Fechar barbearia'} onClose={()=>{if(!busy)setModal(false);}}>
-   <div className="shop-power-modal">
-    <div className={`shop-power-state ${closedToday?'closed':'open'}`}>
-     <Power size={22}/>
-     <div>
-      <strong>{closedToday?'Fechada hoje':'Aberta agora'}</strong>
-      <span>{closedToday?'Clientes não conseguem criar novos horários para hoje.':'Ao confirmar, novos agendamentos serão bloqueados nos dias escolhidos.'}</span>
-     </div>
-    </div>
-
-    {!closedToday&&<p className="muted">Você pretende fechar sua barbearia agora? Seus clientes só poderão escolher os próximos dias disponíveis.</p>}
-
-    <div className="shop-closure-days">
-     <label className={selected.includes(today)?'selected':''}>
-      <input type="checkbox" checked={selected.includes(today)} onChange={()=>toggleDay(today)}/>
-      <span><b>Hoje</b><small>{today}</small></span>
-     </label>
-     <label className={selected.includes(tomorrow)?'selected':''}>
-      <input type="checkbox" checked={selected.includes(tomorrow)} onChange={()=>toggleDay(tomorrow)}/>
-      <span><b>Amanhã</b><small>{tomorrow}</small></span>
-     </label>
-    </div>
-
-    <div className="shop-custom-closure">
-     <input type="date" min={today} max={max} value={customDay} onChange={e=>setCustomDay(e.target.value)}/>
-     <button type="button" className="secondary" disabled={!customDay} onClick={addCustom}><Plus size={16}/>Adicionar dia</button>
-    </div>
-
-    {selected.filter(day=>day!==today&&day!==tomorrow).length>0&&
-     <div className="shop-selected-closures">
-      {selected.filter(day=>day!==today&&day!==tomorrow).map(day=>
-       <button type="button" key={day} onClick={()=>toggleDay(day)}><span>{day}</span><Trash2 size={15}/></button>
-      )}
-     </div>
-    }
-
-    <div className="shop-power-actions">
-     {closedToday&&<button type="button" className="primary" disabled={busy} onClick={()=>void reopenToday()}>{busy?'Aguarde…':'Reabrir hoje'}</button>}
-     <button type="button" className={closedToday?'secondary':'danger'} disabled={busy||(!selected.length&&!closedDays.length)} onClick={()=>void saveClosures()}>{busy?'Aguarde…':closedToday?'Salvar dias fechados':'Confirmar fechamento'}</button>
-     <button type="button" className="text-button" disabled={busy} onClick={()=>setModal(false)}>Cancelar</button>
-    </div>
-   </div>
-  </Modal>}
- </>;
-}
-
 
 export default function App(){
  const {t,locale,region,setLocale,setRegion,setCurrency}=useI18n();
@@ -338,6 +195,7 @@ export default function App(){
  if(location.pathname==='/')return <Navigate replace to={roleHome(data.membership.role)+location.search}/>;
 
  const role=data.membership.role,base=roleHome(role),page=location.pathname.slice(base.length),solo=data.shop.operation_mode==='SOLO',items=navItems.filter(n=>n.roles.includes(role)&&(!n.feature||planAllows(data.plan,n.feature))&&!(solo&&n.path==='/equipe'));
+ if(role==='CLIENT'&&page==='')return <Navigate replace to={`${base}/agenda${location.search}`}/>;
  if(!location.pathname.startsWith(base+'/')&&location.pathname!==base)return <Navigate replace to={base}/>;
  if(page!==''&&page!=='/configuracoes'&&!items.some(n=>n.path===page))return <Navigate replace to={base}/>;
  const props:WorkspaceProps={data,demo,base,refresh,notify:setToast,updateDemo:fn=>setData(d=>d?fn(d):d),canInstall:Boolean(installPrompt),installApp:async()=>{
@@ -357,7 +215,6 @@ export default function App(){
    case '/profissionais':content=<Team {...props}/>;break;
   case '/servicos':content=<Services {...props}/>;break;
   case '/assinaturas':content=<Subscriptions {...props}/>;break;
-  case '/comunicacao':content=<Communication {...props}/>;break;
   case '/plano-fio':content=<FioPlans {...props}/>;break;
   case '/configuracoes':content=<SettingsPage {...props}/>;break;
   case '/suporte':content=<Support {...props}/>;break;
@@ -402,13 +259,13 @@ export default function App(){
    </div>
   </aside>
   <div className="workspace" inert={menu}>
-   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?t('nav.settings'):navLabel(page)}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:role==='BARBER'?<span className="plan-badge">FIO {data.plan}</span>:null}{role==='OWNER'?<ShopPowerControl shopId={data.shop.id} zone={data.shop.timezone} onChanged={setToast}/>:<button className="icon-button compact-theme" aria-label={theme==='dark'?t('app.useLightTheme'):t('app.useDarkTheme')} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button>}<button className="icon-button mobile-menu-button" aria-label={t('app.openMenu')} onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
+   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?t('nav.settings'):navLabel(page)}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:role==='BARBER'?<span className="plan-badge">FIO {data.plan}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?t('app.useLightTheme'):t('app.useDarkTheme')} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label={t('app.openMenu')} onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
    <main key={`${base}:${shopId}:${page}`} className={page==='/assistente'?'chat-main assistant-chat-main':'main-content'}>{content}</main>
    <nav className="bottom-nav" aria-label={t('app.mobileNavigation')}>
-    <NavLink end to={base}><LayoutDashboard size={21}/><span>{t('nav.home')}</span></NavLink>
+    {role!=='CLIENT'&&<NavLink end to={base}><LayoutDashboard size={21}/><span>{t('nav.home')}</span></NavLink>}
     <NavLink to={base+'/agenda'}><CalendarDays size={21}/><span>{t("nav.agenda")}</span></NavLink>
-    {planAllows(data.plan,'assistant')?<NavLink to={base+'/assistente'}><Sparkles size={21}/><span>{t("nav.assistant")}</span></NavLink>:<NavLink to={base+'/servicos'}><Scissors size={21}/><span>{t('nav.services')}</span></NavLink>}
-    <button className={menu||!['','/agenda','/assistente','/servicos'].includes(page)?'active':''} aria-label={t('app.moreOptions')} aria-expanded={menu} onClick={()=>setMenu(!menu)}><MoreHorizontal size={21}/><span>{t("nav.more")}</span></button>
+    {role==='CLIENT'?<><NavLink to={base+'/servicos'}><Scissors size={21}/><span>{t('nav.services')}</span></NavLink><NavLink to={base+'/profissionais'}><UserRound size={21}/><span>{t('nav.professionals')}</span></NavLink></>:planAllows(data.plan,'assistant')?<NavLink to={base+'/assistente'}><Sparkles size={21}/><span>{t("nav.assistant")}</span></NavLink>:<NavLink to={base+'/servicos'}><Scissors size={21}/><span>{t('nav.services')}</span></NavLink>}
+    <button className={menu||!['','/agenda','/assistente','/servicos','/profissionais'].includes(page)?'active':''} aria-label={t('app.moreOptions')} aria-expanded={menu} onClick={()=>setMenu(!menu)}><MoreHorizontal size={21}/><span>{t("nav.more")}</span></button>
    </nav>
   </div>
   <GuidedTour key={`${shopId}:${data.membership.user_id}:${role}`} userId={data.membership.user_id} shopId={shopId} role={role} base={base} openMenu={setMenu}/>

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 export type Role = 'OWNER' | 'BARBER' | 'CLIENT';
-export type Plan = 'FREE' | 'SOLO' | 'PRO' | 'PLUS' | 'PREMIUM';
+export type Plan = 'FREE' | 'SOLO' | 'SOLO_PREMIUM' | 'PRO' | 'PLUS' | 'PREMIUM';
 export const roleHome = (role: Role) => '/' + role.toLowerCase();
 export const money = (cents: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
 export const bookingSchema = z.object({ serviceId: z.uuid(), barberId: z.uuid().nullable(), clientId: z.uuid(), startsAt: z.iso.datetime({ offset: true }), useSubscription: z.boolean().default(false) }).strict();

@@ -72,12 +72,40 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
    ]},
    {title:'COMUNICAÇÃO',items:[
     'Feed da barbearia',
-    'Campanhas e comunicação',
     'Pacotes/planos de cortes'
    ]},
    {title:'INTELIGÊNCIA',items:[
     'Assistente FIO',
     '150 consultas de IA por usuário/dia'
+   ]}
+  ]
+ },
+ {
+  code:'SOLO_PREMIUM',
+  name:'FIO SOLO PREMIUM',
+  eyebrow:'SOLO SEM LIMITES',
+  description:'Para quem trabalha sozinho e quer o nível máximo do FIO.',
+  prices:{weekly:null,monthly:19790,annual:189984},
+  highlights:['1 profissional','Clientes sem limite'],
+  groups:[
+   {title:'CAPACIDADE',items:[
+    '1 profissional',
+    'Clientes sem limite',
+    'Serviços sem limite',
+    'Pacotes de cortes sem limite'
+   ]},
+   {title:'PRESENÇA DIGITAL',items:[
+    'Mini site personalizado',
+    'App/PWA com identidade da barbearia',
+    'Logo, capa, fundo e cores'
+   ]},
+   {title:'RECURSOS',items:[
+    'Feed da barbearia',
+    'Pacotes/planos de cortes'
+   ]},
+   {title:'INTELIGÊNCIA',items:[
+    'Assistente FIO',
+    '500 consultas de IA por usuário/dia'
    ]}
   ]
  },
@@ -104,7 +132,6 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
    ]},
    {title:'COMUNICAÇÃO',items:[
     'Feed da barbearia',
-    'Campanhas e comunicação',
     'Pacotes/planos de cortes'
    ]},
    {title:'INTELIGÊNCIA',items:[
@@ -134,7 +161,6 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
    ]},
    {title:'COMUNICAÇÃO',items:[
     'Feed da barbearia',
-    'Campanhas e comunicação',
     'Pacotes/planos de cortes'
    ]},
    {title:'INTELIGÊNCIA',items:[

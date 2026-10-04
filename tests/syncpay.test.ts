@@ -9,6 +9,8 @@ describe('SyncPay billing boundary',()=>{
   expect(syncpayInternals.planConfig('PRO','monthly')).toMatchObject({amountCents:14990,periodicityDays:30});
   expect(syncpayInternals.planConfig('PREMIUM','annual')).toMatchObject({amountCents:287904,periodicityDays:365});
   expect(syncpayInternals.planConfig('SOLO','annual')).toMatchObject({amountCents:76704,periodicityDays:365});
+  expect(syncpayInternals.planConfig('SOLO_PREMIUM','monthly')).toMatchObject({amountCents:19790,periodicityDays:30});
+  expect(syncpayInternals.planConfig('SOLO_PREMIUM','annual')).toMatchObject({amountCents:189984,periodicityDays:365});
  });
 
  it('retira PLUS e semanal das novas vendas',()=>{

@@ -133,12 +133,20 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/onboarding',rateLimitByUser('onboarding',600_000,8),async(req,res)=>{
   const v=z.discriminatedUnion('mode',[
    z.object({mode:z.literal('create'),name:z.string().trim().min(2).max(100),slug:z.string().regex(/^[a-z0-9-]{3,60}$/),displayName:z.string().trim().min(2).max(100),phone:z.string().trim().min(8).max(24),operationMode:z.enum(['SHOP','SOLO']).default('SHOP')}).strict(),
-   z.object({mode:z.literal('join'),slug:z.string().min(3).max(60),displayName:z.string().trim().min(2).max(100)}).strict(),
+   z.object({mode:z.literal('join'),slug:z.string().min(3).max(60),displayName:z.string().trim().min(2).max(100),phone:z.string().trim().min(8).max(24).optional()}).strict(),
    z.object({mode:z.literal('invite'),token:z.uuid(),displayName:z.string().trim().min(2).max(100)}).strict()
   ]).parse(req.body);
   const a=res.locals.auth as AuthContext;
    if(v.mode==='create'){const claimed=await a.db.rpc('claim_account_phone',{p_phone:v.phone});dbError(claimed.error);}
-  const result=v.mode==='create'?await a.db.rpc('create_workspace',{p_name:v.name,p_slug:v.slug,p_display_name:v.displayName,p_operation_mode:v.operationMode}):v.mode==='join'?await a.db.rpc('join_barbershop',{p_slug:v.slug,p_name:v.displayName}):await a.db.rpc('accept_invitation',{p_token:v.token,p_name:v.displayName});
+  const result=v.mode==='create'
+   ?await a.db.rpc('create_workspace',{p_name:v.name,p_slug:v.slug,p_display_name:v.displayName,p_operation_mode:v.operationMode})
+   :v.mode==='join'&&v.phone
+    ?await a.db.rpc('join_barbershop_with_profile',{p_slug:v.slug,p_name:v.displayName,p_phone:v.phone})
+    :v.mode==='join'
+     ?await a.db.rpc('join_barbershop',{p_slug:v.slug,p_name:v.displayName})
+     :await a.db.rpc('accept_invitation',{p_token:v.token,p_name:v.displayName});
+  if(result.error?.message?.includes('PHONE_ALREADY_IN_USE'))throw new ApiError(409,'PHONE_ALREADY_IN_USE','Este telefone já está vinculado a outra conta FIO.');
+  if(result.error?.message?.includes('INVALID_PHONE'))throw new ApiError(400,'INVALID_PHONE','Informe um WhatsApp/telefone válido.');
   dbError(result.error);res.status(201).json({barbershopId:result.data});
  });
  app.get('/api/onboarding/progress',async(req,res)=>{
@@ -318,6 +326,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  });
  app.post('/api/appointments',rateLimitByUser('appointment-create',60_000,20),async(req,res)=>{
   const c=ctx(res),v=bookingSchema.parse(req.body);
+  if(c.member.role==='BARBER')throw new ApiError(403,'FORBIDDEN','Profissionais gerenciam a agenda, mas não criam agendamentos para clientes.');
   const r=await c.db.rpc('book_appointment',{p_shop:c.shopId,p_client:v.clientId,p_barber:v.barberId,p_service:v.serviceId,p_start:v.startsAt,p_use_subscription:v.useSubscription});dbError(r.error);
   const assigned=await c.db.from('appointments').select('barber_id').eq('barbershop_id',c.shopId).eq('id',r.data).maybeSingle();
   res.status(201).json({id:r.data,barberId:assigned.data?.barber_id??null});
@@ -414,13 +423,13 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const r=await c.db.from('support_feedback').insert({barbershop_id:c.shopId,user_id:c.userId,role:c.member.role,category:v.category,message:v.message});dbError(r.error);res.status(201).json({ok:true});
  });
  app.get('/api/conversations',async(_req,res)=>{
-  const c=ctx(res);requireFioFeature(c,'assistant');const r=await c.db.from('assistant_conversations').select('id,title,created_at').eq('barbershop_id',c.shopId).eq('user_id',c.userId).order('created_at',{ascending:false}).limit(50);dbError(r.error);res.json(r.data);
+  const c=ctx(res);if(c.member.role==='CLIENT')throw new ApiError(403,'FORBIDDEN','Assistente disponível apenas para a equipe.');requireFioFeature(c,'assistant');const r=await c.db.from('assistant_conversations').select('id,title,created_at').eq('barbershop_id',c.shopId).eq('user_id',c.userId).order('created_at',{ascending:false}).limit(50);dbError(r.error);res.json(r.data);
  });
  app.get('/api/conversations/:id',async(req,res)=>{
-  const c=ctx(res),id=z.uuid().parse(req.params.id);requireFioFeature(c,'assistant');
+  const c=ctx(res),id=z.uuid().parse(req.params.id);if(c.member.role==='CLIENT')throw new ApiError(403,'FORBIDDEN','Assistente disponível apenas para a equipe.');requireFioFeature(c,'assistant');
   const r=await c.db.from('assistant_messages').select('id,role,content').eq('conversation_id',id).eq('barbershop_id',c.shopId).eq('user_id',c.userId).order('created_at').limit(200);dbError(r.error);res.json(r.data);
  });
- app.post('/api/assistant',rateLimitByUser('assistant',60_000,12),async(req,res)=>{const c=ctx(res);requireFioFeature(c,'assistant');res.json(await askAssistant(c,req.body));});
+ app.post('/api/assistant',rateLimitByUser('assistant',60_000,12),async(req,res)=>{const c=ctx(res);if(c.member.role==='CLIENT')throw new ApiError(403,'FORBIDDEN','Assistente disponível apenas para a equipe.');requireFioFeature(c,'assistant');res.json(await askAssistant(c,req.body));});
  app.use('/api',(_req,res)=>res.status(404).json({code:'NOT_FOUND',message:'Recurso não encontrado.'}));
  if(process.env.NODE_ENV==='production') {
   app.use(express.static(resolve('dist')));

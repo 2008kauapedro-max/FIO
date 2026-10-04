@@ -461,9 +461,8 @@ function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
  async function submit(e:FormEvent){
   e.preventDefault();setBusy(true);setError('');
   try{
-   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'join',slug,displayName:displayName.trim()});
+   const r=await api<{barbershopId:string}>('/onboarding',undefined,{mode:'join',slug,displayName:displayName.trim(),phone:phone.trim()});
    sessionStorage.setItem('fio-shop',r.barbershopId);
-   if(phone.trim())await api('/profile/contact',r.barbershopId,{displayName:displayName.trim(),phone:phone.trim()},'PATCH');
    onDone();
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
@@ -497,11 +496,11 @@ function LegacyOnboarding({onDone}:{onDone:()=>void}) {
    const payload=mode==='create'
     ?{mode,displayName:displayName.trim(),phone:phone.trim(),name,slug}
     :mode==='join'
-     ?{mode,displayName:displayName.trim(),slug}
+     ?{mode,displayName:displayName.trim(),phone:phone.trim(),slug}
      :{mode,displayName:displayName.trim(),token:invite};
    const r=await api<{barbershopId:string}>('/onboarding',undefined,payload);
    sessionStorage.setItem('fio-shop',r.barbershopId);
-   if(phone.trim())await api('/profile/contact',r.barbershopId,{displayName:displayName.trim(),phone:phone.trim()},'PATCH');
+   if(phone.trim()&&mode!=='join')await api('/profile/contact',r.barbershopId,{displayName:displayName.trim(),phone:phone.trim()},'PATCH');
    onDone();
   }catch(e){
    setError((e as Error).message);

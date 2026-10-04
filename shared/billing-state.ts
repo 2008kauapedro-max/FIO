@@ -1,6 +1,6 @@
 import type { BillingCycle } from './fio-plans.js';
 
-export type PaidPlan = 'SOLO' | 'PRO' | 'PREMIUM';
+export type PaidPlan = 'SOLO' | 'SOLO_PREMIUM' | 'PRO' | 'PREMIUM';
 export type BillingState = {
  change?:{plan:PaidPlan;cycle:BillingCycle;state:string;type:string|null;amountCents:number|null}|null;
  provider:'syncpay'; providerStatus:string; plan:PaidPlan; cycle:BillingCycle;
