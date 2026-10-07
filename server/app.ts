@@ -10,6 +10,7 @@ import { ApiError,dbError } from './errors.js';
 import { askAssistant } from './assistant.js';
 import { bookingSchema } from '../shared/domain.js';
 import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment } from './syncpay.js';
+import { createStripeCheckoutSession,createStripeBillingPortal,getStripeBilling,handleStripeWebhook,stripeCheckoutConfigured,getStripeRefundPolicy,requestStripeRefund } from './stripe.js';
 import { randomUUID } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
 import {publicPushConfig,validPushEndpoint} from './platform-push.js';
@@ -47,6 +48,7 @@ function allowedBrowserWriteOrigin(req:express.Request){
 
  // SyncPay é servidor-servidor e possui validação própria de assinatura.
  if(req.originalUrl.startsWith('/api/webhooks/syncpay'))return true;
+ if(req.originalUrl.startsWith('/api/webhooks/stripe'))return true;
 
  const rawOrigin=req.get('origin');
  if(!rawOrigin)return true;
@@ -94,6 +96,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.use('/api',rateLimit('api-ingress',{windowMs:60_000,max:300}));
  // O webhook precisa do corpo bruto para validar a assinatura antes do JSON parser global.
  app.post('/api/webhooks/syncpay',express.raw({type:'*/*',limit:'64kb'}),async(req,res)=>handleSyncpayWebhook(req,res));
+ app.post('/api/webhooks/stripe',express.raw({type:'application/json',limit:'256kb'}),async(req,res)=>handleStripeWebhook(req,res));
  app.use(express.json({limit:'12kb'}));
  app.get('/api/health',rateLimit('health',{windowMs:60_000,max:30}), (_req, res) =>res.set('Cache-Control','no-store').json({status:'ok'}));
  app.get('/api/public/shop/:slug',rateLimit('public-shop',{windowMs:60_000,max:60}),async(req,res)=>{
@@ -250,6 +253,18 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const c=ctx(res);requireOwner(c);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('start_saas_pro_trial',{p_shop:c.shopId});dbError(r.error);res.status(201).json({trialEndsAt:r.data});
  });
+ app.post('/api/saas/stripe/checkout',rateLimitByUser('stripe-checkout',600_000,6),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.status(201).json(await createStripeCheckoutSession(c,req.body));
+ });
+ app.post('/api/saas/stripe/portal',rateLimitByUser('stripe-portal',600_000,8),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.json(await createStripeBillingPortal(c,req.body));
+ });
+ app.get('/api/saas/stripe/refund-policy',async(_req,res)=>{
+  const c=ctx(res);requireOwner(c);res.json(await getStripeRefundPolicy(c));
+ });
+ app.post('/api/saas/stripe/refund',rateLimitByUser('stripe-refund',3600000,2),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.json(await requestStripeRefund(c,req.body));
+ });
  app.post('/api/saas/subscribe',rateLimitByUser('billing-subscribe',600_000,8),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
  });
@@ -258,7 +273,14 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/saas/charge',rateLimitByUser('billing-charge',600_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await manageSyncpayCharge(c,req.body));});
  app.post('/api/saas/refund',rateLimitByUser('billing-refund',3_600_000,2),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await requestSyncpayRefund(c,req.body));});
  app.get('/api/saas/billing',async(_req,res)=>{
-  const c=ctx(res);requireOwner(c);res.json(await getSyncpayBilling(c));
+  const c=ctx(res);requireOwner(c);
+  const stripe=await getStripeBilling(c);
+  if(stripe){
+   res.json({configured:false,stripeConfigured:stripeCheckoutConfigured(),subscription:stripe});
+   return;
+  }
+  const billing=await getSyncpayBilling(c);
+  res.json({...billing,stripeConfigured:stripeCheckoutConfigured()});
  });
  app.post('/api/services',async(req,res)=>{
   const c=ctx(res);requireOwner(c);

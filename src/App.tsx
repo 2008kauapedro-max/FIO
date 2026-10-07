@@ -8,10 +8,12 @@ import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,L
 import type { Session } from '@supabase/supabase-js';
 import type { Bootstrap,Membership,Role } from '../shared/domain';
 import { planAllows,type FioFeature } from '../shared/entitlements';
+import { fioPlanPublicName } from '../shared/fio-plans';
 import { roleHome } from '../shared/domain';
 import { api,supabase } from './lib/api';
 import { AuthPage,EmailConfirmationPage,Onboarding } from './pages/Auth';
-import { Agenda,Customers,Dashboard,Services,Settings as SettingsPage,Subscriptions,Team,Support,type WorkspaceProps } from './pages/Workspace';
+import { Agenda,Customers,Dashboard,Services,Settings as SettingsPage,Subscriptions,Team,type WorkspaceProps } from './pages/Workspace';
+import { FioSupport } from './pages/FioSupport';
 import { AssistantChat } from './components/AssistantChat';
 import { Feed } from './pages/Feed';
 import { PublicPortal } from './pages/PublicPortal';
@@ -376,7 +378,7 @@ export default function App(){
   const key=(e:KeyboardEvent)=>{if(e.key==='Escape')setMenu(false);if(e.key==='Tab'&&panel){const nodes=Array.from(panel.querySelectorAll<HTMLElement>('a,button,select')).filter(n=>n.getClientRects().length);const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}};
   document.addEventListener('keydown',key);return()=>{cancelAnimationFrame(frame);document.removeEventListener('keydown',key);previous?.focus();};
  },[menu]);
- useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),5000);return()=>clearTimeout(timer);},[toast]);
+ useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),6000);return()=>clearTimeout(timer);},[toast]);
  useEffect(()=>{if(data?.membership.role==='CLIENT')rememberClientShop(data.shop.slug);},[data?.membership.role,data?.shop.slug]);
  useEffect(()=>{
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
@@ -493,13 +495,13 @@ export default function App(){
   const params=new URLSearchParams();const next=appointmentLink(location.pathname+location.search);if(next)params.set('next',next);if(audience)params.set('audience',audience);const shop=clientContext(location.pathname,location.search);if(shop)params.set('shop',shop);
   return <Navigate replace to={`/login${params.toString()?`?${params.toString()}`:''}`}/>;
  }
- if(error)return <div className="full-error"><h1>{t('app.openFailed')}</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>{t('app.tryAgain')}</button><button className="secondary" onClick={()=>void supabase?.auth.signOut({scope:'local'})}>{t('app.signOut')}</button><Link to="/login">{t('app.backToAccess')}</Link></div>;
+ if(error)return <div className="full-error"><h1>{t('app.openFailed')}</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>{t('app.tryAgain')}</button><button className="secondary" onClick={()=>void supabase?.auth.signOut({scope:'local'})}>{t('app.switchAccount')}</button><Link to="/login">{t('app.backToAccess')}</Link></div>;
  if(!demo&&memberships===null)return <AppLoading/>;
- if(!demo&&(memberships?.length===0||Boolean(onboardingShopId)||clientJoinPending))return <Onboarding shopId={onboardingShopId||undefined} onDone={()=>void loadMemberships()}/>;
+ if(!demo&&(memberships?.length===0||Boolean(onboardingShopId)||clientJoinPending))return <Onboarding shopId={onboardingShopId||undefined} requireClientPassword={Boolean(clientJoinPending&&memberships?.length===0)} onDone={()=>void loadMemberships()}/>;
  if(!data)return <AppLoading/>;
  if(location.pathname==='/')return <Navigate replace to={roleHome(data.membership.role)+location.search}/>;
 
- const role=data.membership.role,base=roleHome(role),page=location.pathname.slice(base.length),solo=data.shop.operation_mode==='SOLO',items=navItems.filter(n=>n.roles.includes(role)&&(!n.feature||planAllows(data.plan,n.feature))&&!(solo&&n.path==='/equipe'));
+ const role=data.membership.role,base=roleHome(role),page=location.pathname.slice(base.length),solo=data.shop.operation_mode==='SOLO',planLabel=fioPlanPublicName(data.plan),items=navItems.filter(n=>n.roles.includes(role)&&(!n.feature||planAllows(data.plan,n.feature))&&!(solo&&n.path==='/equipe'));
  if(role==='CLIENT'&&page==='')return <Navigate replace to={`${base}/agenda${location.search}`}/>;
  if(!location.pathname.startsWith(base+'/')&&location.pathname!==base)return <Navigate replace to={base}/>;
  if(page!==''&&page!=='/configuracoes'&&!items.some(n=>n.path===page))return <Navigate replace to={base}/>;
@@ -522,7 +524,7 @@ export default function App(){
   case '/assinaturas':content=<Subscriptions {...props}/>;break;
   case '/plano-fio':content=<FioPlans {...props}/>;break;
   case '/configuracoes':content=<SettingsPage {...props}/>;break;
-  case '/suporte':content=<Support {...props}/>;break;
+  case '/suporte':content=<FioSupport {...props}/>;break;
   case '/feed':content=<Feed {...props}/>;break;
   case '/assistente':content=<AssistantChat role={role} plan={data.plan} aiEnabled={data.aiEnabled} shopId={data.shop.id} shopName={data.shop.public_title||data.shop.name} shopLogo={data.shop.logo_url||undefined} demo={demo} base={base}/>;break;
   default:content=<Dashboard {...props}/>;
@@ -535,6 +537,30 @@ export default function App(){
     '--client-accent-contrast':fioAccentContrast(clientAccent)
    } as CSSProperties)
   :undefined;
+
+ const toastIsBooking=
+  toast===t('app.newAppointment');
+
+ const toastIsError=
+  /não foi|falh|erro|indisponível|expir|aguarde|pendente/i
+   .test(toast);
+
+ const toastTitle=
+  toastIsBooking
+   ?t('app.noticeBookingTitle')
+   :toastIsError
+    ?t('app.noticeErrorTitle')
+    :t('app.noticeInfoTitle');
+
+ const toastLogo=storageLogo(
+  data.shop.logo_url,
+  data.shop.logo_asset_path
+ );
+
+ const toastAccent=
+  data.shop.custom_accent||
+  data.shop.accent_color||
+  '#ffffff';
  return <div className={`app-shell ${role==='CLIENT'?'client-shell':''} ${page==='/assistente'?'chat-shell':''}`} style={clientShellStyle}>
   {menu&&<button className="menu-backdrop" aria-label={t('app.closeMenu')} onClick={()=>setMenu(false)}/>}
   <aside className={`sidebar ${menu?'is-open':''}`}>
@@ -571,7 +597,7 @@ export default function App(){
    </div>
   </aside>
   <div className="workspace" inert={menu}>
-   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?t('nav.settings'):navLabel(page)}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">FIO {data.plan}</NavLink>:role==='BARBER'?<span className="plan-badge">FIO {data.plan}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?t('app.useLightTheme'):t('app.useDarkTheme')} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label={t('app.openMenu')} onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
+   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?t('nav.settings'):navLabel(page)}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">{planLabel}</NavLink>:role==='BARBER'?<span className="plan-badge">{planLabel}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?t('app.useLightTheme'):t('app.useDarkTheme')} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label={t('app.openMenu')} onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
    <main
     key={`${base}:${shopId}:${page}`}
     data-tour={
@@ -593,6 +619,60 @@ export default function App(){
    </nav>
   </div>
   <GuidedTour key={`${shopId}:${data.membership.user_id}:${role}`} userId={data.membership.user_id} shopId={shopId} role={role} base={base} openMenu={setMenu}/>
-  {toast&&<div className={`toast ${/não foi|falh|erro|indisponível|expir|aguarde|pendente/i.test(toast)?'is-error':'is-success'}`} role="status">{toast}<button aria-label={t('app.closeNotice')} onClick={()=>setToast('')}><X size={16}/></button></div>}
+  {toast&&
+   <aside
+    className={'toast fio-inapp-notice '+(toastIsBooking?'is-booking':toastIsError?'is-error':'is-success')}
+    role={toastIsError?'alert':'status'}
+    aria-live={toastIsError?'assertive':'polite'}
+    style={{'--notice-accent':toastAccent} as CSSProperties}
+   >
+    <span className="fio-inapp-notice-icon">
+     {toastLogo
+      ?<img src={toastLogo} alt=""/>
+      :toastIsBooking
+       ?<CalendarDays size={22}/>
+       :<Scissors size={21}/>
+     }
+    </span>
+
+    <span className="fio-inapp-notice-copy">
+     <span className="fio-inapp-notice-heading">
+      <strong>{toastTitle}</strong>
+      <small>{t('app.noticeNow')}</small>
+     </span>
+
+     <span className="fio-inapp-notice-message">
+      {toast}
+     </span>
+    </span>
+
+    {toastIsBooking&&
+     <button
+      type="button"
+      className="fio-inapp-notice-action"
+      onClick={()=>{
+       setToast('');
+       navigate(base+'/agenda');
+      }}
+     >
+      {t('app.noticeOpenAgenda')}
+     </button>
+    }
+
+    <button
+     type="button"
+     className="fio-inapp-notice-close"
+     aria-label={t('app.closeNotice')}
+     onClick={()=>setToast('')}
+    >
+     <X size={17}/>
+    </button>
+
+    <span
+     className="fio-inapp-notice-progress"
+     aria-hidden="true"
+    />
+   </aside>
+  }
  </div>;
 }

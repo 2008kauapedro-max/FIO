@@ -7,7 +7,7 @@ if(scenario==='pending'||scenario==='expired')state={provider:'syncpay',provider
 export async function api<T>(path:string,_shop?:string,body?:unknown):Promise<T>{
  if(path==='/saas/billing'){
   if(scenario==='error')throw new RequestError('SYNCPAY_AUTH_ERROR','never expose this');
-  return {configured:true,subscription:state} as T;
+  return {configured:true,stripeConfigured:false,subscription:state} as T;
  }
  if(path==='/saas/subscribe'){
   const input=body as {plan:'PRO'|'PREMIUM';cycle:'weekly'|'monthly'|'annual'};

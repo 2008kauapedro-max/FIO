@@ -1,6 +1,6 @@
 import { useEffect,useMemo,useState } from 'react';
-import { ArrowLeft,Check,Copy,Crown,Gift,RefreshCw,ShieldCheck,WalletCards,X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowLeft,Check,Copy,CreditCard,Crown,Gift,RefreshCw,ShieldCheck,WalletCards,X } from 'lucide-react';
+import { useLocation,useNavigate } from 'react-router-dom';
 import { FIO_PLAN_CATALOG,type BillingCycle } from '../../shared/fio-plans';
 import { api,RequestError } from '../lib/api';
 import { QRCodeSVG } from 'qrcode.react';
@@ -10,6 +10,7 @@ import type { WorkspaceProps } from './Workspace';
 import { useI18n } from '../i18n';
 
 type Screen='plans'|'review'|'pix'|'success'|'manage';
+type PaymentMethod='card'|'pix';
 
 function documentDigits(value:string){
  return value.replace(/\D/g,'').slice(0,14);
@@ -35,12 +36,30 @@ function formatDocument(value:string){
 export function FioPlans(p:WorkspaceProps){
  const {t,formatCurrency,formatDate}=useI18n();
  const navigate=useNavigate();
+ const location=useLocation();
 
  const amount=(cents:number)=>formatCurrency(cents/100,'BRL');
  const date=(value?:string|null)=>value?formatDate(value,{day:'2-digit',month:'short',year:'numeric'}):'';
  const cycleLabel=(value:BillingCycle)=>t(`fp.cycle.${value}`);
  const providerStatus=(value:string)=>t(`fp.billingStatus.${['pending_first_payment','active','overdue','suspended','cancelled'].includes(value)?value:'default'}`);
- const checkoutMessage=(error:unknown)=>error instanceof RequestError?error.message:t('fp.billingError');
+ const checkoutMessage=(error:unknown)=>{
+  if(!(error instanceof RequestError))
+   return t('fp.billingError');
+
+  const internalCodes=[
+   'SYNCPAY_AUTH_ERROR',
+   'SYNCPAY_CONFIG_ERROR',
+   'STRIPE_AUTH_ERROR',
+   'STRIPE_CONFIG_ERROR',
+   'PROVIDER_ERROR',
+   'INTERNAL_ERROR'
+  ];
+
+  if(internalCodes.includes(error.code))
+   return t('fp.billingError');
+
+  return error.message||t('fp.billingError');
+ };
 
  const soloMode=p.data.shop.operation_mode==='SOLO';
  const primaryPaid:PaidPlan=soloMode?'SOLO':'PRO';
@@ -70,6 +89,9 @@ export function FioPlans(p:WorkspaceProps){
  const [billing,setBilling]=useState<BillingState|null>(null);
  const [billingLoaded,setBillingLoaded]=useState(false);
  const [billingConfigured,setBillingConfigured]=useState(false);
+ const [stripeConfigured,setStripeConfigured]=useState(false);
+ const [paymentMethod,setPaymentMethod]=useState<PaymentMethod>('card');
+ const [stripeReturn,setStripeReturn]=useState<'pending'|'checking'|'cancelled'|null>(null);
  const [checkoutError,setCheckoutError]=useState('');
  const [checkoutCode,setCheckoutCode]=useState('');
  const [now,setNow]=useState(Date.now());
@@ -96,7 +118,7 @@ export function FioPlans(p:WorkspaceProps){
  useEffect(()=>{
   let active=true;
 
-  void api<{configured:boolean;subscription:BillingState|null}>(
+  void api<{configured:boolean;stripeConfigured:boolean;subscription:BillingState|null}>(
    '/saas/billing',
    p.data.shop.id
   )
@@ -104,6 +126,8 @@ export function FioPlans(p:WorkspaceProps){
     if(!active)return;
     setBilling(result.subscription);
     setBillingConfigured(result.configured);
+    setStripeConfigured(result.stripeConfigured);
+    setPaymentMethod(result.stripeConfigured?'card':'pix');
     setBillingLoaded(true);
    })
    .catch(error=>{
@@ -160,6 +184,58 @@ export function FioPlans(p:WorkspaceProps){
    window.clearInterval(poll);
   };
  },[screen,billing?.providerStatus,p.data.shop.id,p.refresh]);
+
+ useEffect(()=>{
+  const params=new URLSearchParams(location.search);
+  const outcome=params.get('stripe');
+  if(outcome!=='success'&&outcome!=='cancelled')return;
+  const sessionId=params.get('session_id')??'';
+  params.delete('stripe');
+  params.delete('session_id');
+  const remaining=params.toString();
+  navigate({pathname:location.pathname,search:remaining?'?'+remaining:''},{replace:true});
+  if(outcome==='success'&&/^cs_(?:test|live)_[A-Za-z0-9]+$/.test(sessionId))
+   setStripeReturn('pending');
+  else if(outcome==='cancelled')
+   setStripeReturn('cancelled');
+ },[location.pathname,location.search,navigate]);
+
+ useEffect(()=>{
+  if(stripeReturn!=='pending')return;
+  let alive=true;
+  let attempts=0;
+  let checking=false;
+  const check=async()=>{
+   if(!alive||checking)return;
+   checking=true;
+   let confirmed=false;
+   try{
+    const result=await api<{configured:boolean;stripeConfigured:boolean;subscription:BillingState|null}>(
+     '/saas/billing',p.data.shop.id
+    );
+    if(!alive)return;
+    setBilling(result.subscription);
+    setBillingConfigured(result.configured);
+    setStripeConfigured(result.stripeConfigured);
+    if(result.subscription?.provider==='stripe'&&result.subscription.providerStatus==='active'){
+     confirmed=true;
+     setSelectedPlan(result.subscription.plan);
+     await p.refresh();
+     if(!alive)return;
+     setScreen('success');
+     setStripeReturn(null);
+    }
+   }catch{
+    // O parametro de retorno jamais concede acesso ou prova pagamento.
+   }finally{
+    checking=false;
+    if(alive&&!confirmed&&++attempts>=12)setStripeReturn('checking');
+   }
+  };
+  void check();
+  const timer=window.setInterval(()=>void check(),5000);
+  return()=>{alive=false;window.clearInterval(timer);};
+ },[stripeReturn,p.data.shop.id,p.refresh]);
 
  function shortName(code:Plan){
   if(code==='FREE')return 'FREE';
@@ -254,12 +330,23 @@ export function FioPlans(p:WorkspaceProps){
   setCheckoutCode('');
   setSelectedPlan(code);
 
+  if(stripeReturn==='pending'||stripeReturn==='checking'){
+   setCheckoutError('Confirme o estado do pagamento Stripe antes de iniciar outra tentativa.');
+   return;
+  }
+
   if(!billingLoaded){
    setCheckoutError(t('fp.checking'));
    return;
   }
 
-  if(!billingConfigured){
+  if(billing?.provider==='stripe'){
+   setSelectedPlan(billing.plan);
+   setScreen('manage');
+   return;
+  }
+
+  if(!billingConfigured&&!stripeConfigured){
    setCheckoutError(t('fp.billingSupport'));
    return;
   }
@@ -303,6 +390,7 @@ export function FioPlans(p:WorkspaceProps){
   setCheckoutPlan(code);
   setDocument('');
   setAcceptedTerms(false);
+  setPaymentMethod(stripeConfigured?'card':'pix');
   setScreen('review');
  }
 
@@ -313,6 +401,50 @@ export function FioPlans(p:WorkspaceProps){
    busy
   )
    return;
+
+  if(paymentMethod==='card'){
+   if(!stripeConfigured)return;
+
+   setBusy(true);
+   setCheckoutError('');
+   setCheckoutCode('');
+
+   try{
+    const result=await api<{
+     configured:boolean;
+     provider:'stripe';
+     sessionId:string;
+     url:string;
+    }>(
+     '/saas/stripe/checkout',
+     p.data.shop.id,
+     {
+      plan:checkoutPlan,
+      cycle,
+      acceptedTerms:true
+     }
+    );
+
+    const checkoutUrl=new URL(result.url);
+
+    if(
+     checkoutUrl.protocol!=='https:'||
+     checkoutUrl.hostname!=='checkout.stripe.com'
+    )
+     throw new Error('STRIPE_CHECKOUT_URL_INVALID');
+
+    window.location.assign(checkoutUrl.toString());
+    return;
+   }catch(error){
+    setCheckoutError(checkoutMessage(error));
+    setCheckoutCode(error instanceof RequestError?error.code:'');
+    setBusy(false);
+   }
+
+   return;
+  }
+
+  if(!billingConfigured)return;
 
   const digits=documentDigits(document);
 
@@ -419,8 +551,11 @@ export function FioPlans(p:WorkspaceProps){
 
    if(result.subscription?.providerStatus==='active'){
     await p.refresh();
-
-    if(screen==='pix')
+    if(stripeReturn&&result.subscription.provider==='stripe'){
+     setSelectedPlan(result.subscription.plan);
+     setStripeReturn(null);
+     setScreen('success');
+    }else if(screen==='pix')
      setScreen('success');
    }
 
@@ -476,6 +611,24 @@ export function FioPlans(p:WorkspaceProps){
    setCheckoutError(checkoutMessage(error));
    setCheckoutCode(error instanceof RequestError?error.code:'');
   }finally{
+   setBusy(false);
+  }
+ }
+
+ async function manageStripeSubscription(){
+  if(busy)return;
+  setBusy(true);
+  setCheckoutError('');
+  try{
+   const result=await api<{url:string}>(
+    '/saas/stripe/portal',p.data.shop.id,{confirmed:true}
+   );
+   const portal=new URL(result.url);
+   if(portal.protocol!=='https:'||portal.hostname!=='billing.stripe.com')
+    throw new Error('STRIPE_PORTAL_URL_INVALID');
+   window.location.assign(portal.toString());
+  }catch(error){
+   setCheckoutError(checkoutMessage(error));
    setBusy(false);
   }
  }
@@ -645,24 +798,64 @@ export function FioPlans(p:WorkspaceProps){
    </div>
 
    {!changePlan&&<>
-    <label className="fio-payflow-field">
-     <span>CPF ou CNPJ do responsável</span>
-     <input
-      value={document}
-      inputMode="numeric"
-      autoComplete="off"
-      placeholder="000.000.000-00"
-      maxLength={18}
-      onChange={event=>setDocument(formatDocument(event.target.value))}
-     />
-     <small>Enviado à SyncPay para identificar quem paga. O FIO não salva esse número.</small>
-    </label>
+    <div className="fio-payflow-methods" role="radiogroup" aria-label="Forma de pagamento">
+     <button
+      type="button"
+      role="radio"
+      aria-checked={paymentMethod==='card'}
+      className={paymentMethod==='card'?'active':''}
+      disabled={!stripeConfigured}
+      onClick={()=>setPaymentMethod('card')}
+     >
+      <CreditCard size={18}/>
+      <span>
+       <strong>CartÃ£o</strong>
+       <small>CrÃ©dito Â· pagamento seguro pela Stripe</small>
+      </span>
+     </button>
 
-    <details className="fio-payflow-disclosure">
-     <summary>{t('fp.cancelRefund')}</summary>
-     <p>{t('fp.cancelRefundDesc')}</p>
-     <p>{t('fp.noAutoRefund')}</p>
-    </details>
+     <button
+      type="button"
+      role="radio"
+      aria-checked={paymentMethod==='pix'}
+      className={paymentMethod==='pix'?'active':''}
+      disabled={!billingConfigured}
+      onClick={()=>setPaymentMethod('pix')}
+     >
+      <WalletCards size={18}/>
+      <span>
+       <strong>Pix</strong>
+       <small>Pagamento pela SyncPay</small>
+      </span>
+     </button>
+    </div>
+
+    {paymentMethod==='card'
+     ?<div className="fio-payflow-note">
+       <ShieldCheck size={18}/>
+       <span>VocÃª serÃ¡ direcionado ao Checkout seguro da Stripe. O FIO nÃ£o recebe nem armazena os dados do seu cartÃ£o.</span>
+      </div>
+     :<>
+      <label className="fio-payflow-field">
+       <span>CPF ou CNPJ do responsÃ¡vel</span>
+       <input
+        value={document}
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="000.000.000-00"
+        maxLength={18}
+        onChange={event=>setDocument(formatDocument(event.target.value))}
+       />
+       <small>Enviado Ã  SyncPay para identificar quem paga. O FIO nÃ£o salva esse nÃºmero.</small>
+      </label>
+
+      <details className="fio-payflow-disclosure">
+       <summary>{t('fp.cancelRefund')}</summary>
+       <p>{t('fp.cancelRefundDesc')}</p>
+       <p>{t('fp.noAutoRefund')}</p>
+      </details>
+     </>
+    }
 
     <label className="fio-payflow-consent">
      <input
@@ -673,7 +866,7 @@ export function FioPlans(p:WorkspaceProps){
      <span>
       {t('fp.termsConsent')}{' '}
       <a href="/termos" target="_blank" rel="noreferrer">Termos</a>
-      {' · '}
+      {' Â· '}
       <a href="/privacidade" target="_blank" rel="noreferrer">Privacidade</a>
      </span>
     </label>
@@ -712,16 +905,23 @@ export function FioPlans(p:WorkspaceProps){
       (
        changePlan
         ?!changeAccepted
-        :!acceptedTerms||![11,14].includes(documentDigits(document).length)
+        :!acceptedTerms||
+         (paymentMethod==='card'
+          ?!stripeConfigured
+          :!billingConfigured||![11,14].includes(documentDigits(document).length))
       )
      }
      onClick={()=>void (changePlan?confirmChange():subscribe())}
     >
      {busy
-      ?t('fp.preparingPix')
+      ?paymentMethod==='card'
+       ?'Abrindo pagamento seguro...'
+       :t('fp.preparingPix')
       :changePlan
        ?t('fp.confirmChange')
-       :'Gerar Pix'
+       :paymentMethod==='card'
+        ?'Continuar com cartÃ£o'
+        :'Gerar Pix'
      }
      <span>→</span>
     </button>
@@ -873,23 +1073,36 @@ export function FioPlans(p:WorkspaceProps){
      {busy?t('fp.updating'):t('fp.refreshStatus')}
     </button>
 
-    {billing.providerStatus==='pending_first_payment'&&!billing.change&&
-     <button className="fio-payflow-secondary" disabled={busy} onClick={()=>void manageCharge('resend')}>
-      {t('fp.newPix')}
+    {billing.provider==='stripe'?<>
+     <div className="fio-payflow-note">
+      <ShieldCheck size={18}/>
+      <span>Gerencie seu cartão e o cancelamento na Stripe. Para solicitar reembolso do primeiro pagamento em até 7 dias, use a Central de Ajuda do FIO.</span>
+     </div>
+     <button className="fio-payflow-secondary" disabled={busy} onClick={()=>void manageStripeSubscription()}>
+      Gerenciar na Stripe
      </button>
-    }
+     <button className="fio-payflow-secondary" disabled={busy} onClick={()=>navigate(p.base+'/suporte')}>
+      Reembolso e suporte FIO
+     </button>
+    </>:<>
+     {billing.providerStatus==='pending_first_payment'&&!billing.change&&
+      <button className="fio-payflow-secondary" disabled={busy} onClick={()=>void manageCharge('resend')}>
+       {t('fp.newPix')}
+      </button>
+     }
 
-    {billing.providerStatus==='active'&&!billing.change&&billing.refund?.eligible&&
-     <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void requestRefund()}>
-      {t('fp.cancelRefundButton')}
-     </button>
-    }
+     {billing.providerStatus==='active'&&!billing.change&&billing.refund?.eligible&&
+      <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void requestRefund()}>
+       {t('fp.cancelRefundButton')}
+      </button>
+     }
 
-    {['active','overdue','suspended'].includes(billing.providerStatus)&&!billing.change&&!billing.refund?.eligible&&
-     <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void manageCharge('cancel_active')}>
-      {t('fp.cancelSubscription')}
-     </button>
-    }
+     {['active','overdue','suspended'].includes(billing.providerStatus)&&!billing.change&&!billing.refund?.eligible&&
+      <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void manageCharge('cancel_active')}>
+       {t('fp.cancelSubscription')}
+      </button>
+     }
+    </>}
    </div>
   </section>;
  }
@@ -904,6 +1117,15 @@ export function FioPlans(p:WorkspaceProps){
  );
 
  return <section className="fio-payflow fio-payflow-plans">
+  {stripeReturn&&<div className="fio-payflow-note" role="status">
+   <ShieldCheck size={18}/>
+   <span>{stripeReturn==='pending'
+    ?'Aguardando confirmacao segura da Stripe. O plano so sera ativado apos a confirmacao do webhook.'
+    :stripeReturn==='cancelled'
+     ?'Checkout interrompido. Confira o estado da assinatura antes de tentar novamente.'
+     :'A confirmacao esta demorando. Confira o status ou procure o suporte FIO.'}</span>
+   <button type="button" className="fio-payflow-secondary" disabled={busy} onClick={()=>void refreshBilling(false)}>Atualizar status</button>
+  </div>}
   <div className="fio-payflow-plan-controls">
   <div className="fio-payflow-cycle" role="tablist" aria-label={t('fp.subscriptionPeriod')}>
    <button type="button" className={cycle==='annual'?'active':''} aria-selected={cycle==='annual'} onClick={()=>setCycle('annual')}>
@@ -975,7 +1197,7 @@ export function FioPlans(p:WorkspaceProps){
       </button>
      :<button
        className="fio-payflow-primary"
-       disabled={busy||!billingLoaded||!billingConfigured}
+       disabled={busy||!billingLoaded||(!billingConfigured&&!stripeConfigured)||stripeReturn==='pending'||stripeReturn==='checking'}
        onClick={()=>selectedPaid&&choosePaid(selectedPaid)}
       >
        {billing?.providerStatus==='active'

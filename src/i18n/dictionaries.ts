@@ -1684,3 +1684,109 @@ Object.assign(it,{
  "settings.hoursInvalid":"Lascia almeno un giorno aperto e controlla gli orari.",
  "fp.trialCta":"Prova {{plan}} gratis per 14 giorni"
 });
+
+/* FIO_FINAL_CLIENT_SOLO_POLISH_20261005 */
+Object.assign(ptBR,{
+ "app.clientAccountRequired":"Sua sessão atual não pode abrir este acesso. Troque de conta ou volte para continuar.",
+ "app.switchAccount":"Trocar de conta",
+ "auth.passwordRules":"Use pelo menos 8 caracteres, com letra maiúscula, letra minúscula e um símbolo.",
+ "auth.confirmPassword":"Confirmar senha",
+ "auth.passwordSetupFailed":"Não foi possível configurar a senha agora. Tente novamente.",
+ "auth.existingAccount":"Não foi possível concluir por aqui. Tente entrar ou recuperar sua senha."
+});
+
+Object.assign(en,{
+ "app.clientAccountRequired":"Your current session cannot open this access. Switch accounts or go back to continue.",
+ "app.switchAccount":"Switch account",
+ "auth.passwordRules":"Use at least 8 characters with an uppercase letter, a lowercase letter and a symbol.",
+ "auth.confirmPassword":"Confirm password",
+ "auth.passwordSetupFailed":"We could not set the password right now. Try again.",
+ "auth.existingAccount":"We could not complete this here. Try signing in or recovering your password."
+});
+
+Object.assign(es,{
+ "app.clientAccountRequired":"Tu sesión actual no puede abrir este acceso. Cambia de cuenta o vuelve para continuar.",
+ "app.switchAccount":"Cambiar de cuenta",
+ "auth.passwordRules":"Usa al menos 8 caracteres con una mayúscula, una minúscula y un símbolo.",
+ "auth.confirmPassword":"Confirmar contraseña",
+ "auth.passwordSetupFailed":"No pudimos configurar la contraseña ahora. Inténtalo de nuevo.",
+ "auth.existingAccount":"No pudimos completar esto aquí. Intenta entrar o recuperar tu contraseña."
+});
+
+Object.assign(fr,{
+ "app.clientAccountRequired":"Votre session actuelle ne peut pas ouvrir cet accès. Changez de compte ou revenez en arrière.",
+ "app.switchAccount":"Changer de compte",
+ "auth.passwordRules":"Utilisez au moins 8 caractères avec une majuscule, une minuscule et un symbole.",
+ "auth.confirmPassword":"Confirmer le mot de passe",
+ "auth.passwordSetupFailed":"Impossible de configurer le mot de passe maintenant. Réessayez.",
+ "auth.existingAccount":"Impossible de terminer ici. Essayez de vous connecter ou de récupérer votre mot de passe."
+});
+
+Object.assign(de,{
+ "app.clientAccountRequired":"Deine aktuelle Sitzung kann diesen Zugriff nicht öffnen. Wechsle das Konto oder gehe zurück.",
+ "app.switchAccount":"Konto wechseln",
+ "auth.passwordRules":"Verwende mindestens 8 Zeichen mit Großbuchstaben, Kleinbuchstaben und einem Symbol.",
+ "auth.confirmPassword":"Passwort bestätigen",
+ "auth.passwordSetupFailed":"Das Passwort konnte gerade nicht eingerichtet werden. Versuche es erneut.",
+ "auth.existingAccount":"Das konnte hier nicht abgeschlossen werden. Melde dich an oder stelle dein Passwort wieder her."
+});
+
+Object.assign(it,{
+ "app.clientAccountRequired":"La sessione attuale non può aprire questo accesso. Cambia account o torna indietro.",
+ "app.switchAccount":"Cambia account",
+ "auth.passwordRules":"Usa almeno 8 caratteri con una maiuscola, una minuscola e un simbolo.",
+ "auth.confirmPassword":"Conferma password",
+ "auth.passwordSetupFailed":"Non è stato possibile configurare la password ora. Riprova.",
+ "auth.existingAccount":"Non è stato possibile completare qui. Prova ad accedere o a recuperare la password."
+});
+
+
+/* FIO_IN_APP_NOTICE_I18N_20261005 */
+
+Object.assign(ptBR,{
+ "app.noticeBookingTitle":"Novo agendamento",
+ "app.noticeInfoTitle":"FIO",
+ "app.noticeErrorTitle":"Atenção",
+ "app.noticeNow":"agora",
+ "app.noticeOpenAgenda":"Abrir agenda"
+});
+
+Object.assign(en,{
+ "app.noticeBookingTitle":"New appointment",
+ "app.noticeInfoTitle":"FIO",
+ "app.noticeErrorTitle":"Attention",
+ "app.noticeNow":"now",
+ "app.noticeOpenAgenda":"Open schedule"
+});
+
+Object.assign(es,{
+ "app.noticeBookingTitle":"Nuevo agendamiento",
+ "app.noticeInfoTitle":"FIO",
+ "app.noticeErrorTitle":"Atención",
+ "app.noticeNow":"ahora",
+ "app.noticeOpenAgenda":"Abrir agenda"
+});
+
+Object.assign(fr,{
+ "app.noticeBookingTitle":"Nouveau rendez-vous",
+ "app.noticeInfoTitle":"FIO",
+ "app.noticeErrorTitle":"Attention",
+ "app.noticeNow":"maintenant",
+ "app.noticeOpenAgenda":"Ouvrir l’agenda"
+});
+
+Object.assign(de,{
+ "app.noticeBookingTitle":"Neuer Termin",
+ "app.noticeInfoTitle":"FIO",
+ "app.noticeErrorTitle":"Achtung",
+ "app.noticeNow":"jetzt",
+ "app.noticeOpenAgenda":"Terminplan öffnen"
+});
+
+Object.assign(it,{
+ "app.noticeBookingTitle":"Nuovo appuntamento",
+ "app.noticeInfoTitle":"FIO",
+ "app.noticeErrorTitle":"Attenzione",
+ "app.noticeNow":"ora",
+ "app.noticeOpenAgenda":"Apri agenda"
+});

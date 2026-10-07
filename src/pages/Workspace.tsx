@@ -7,10 +7,11 @@ import {BusinessHoursSettings} from '../components/BusinessHoursSettings';
 import {AgendaMonthCalendar} from '../components/AgendaMonthCalendar';
 import {BookingFlow as BookingModal} from '../components/BookingFlow';
 import { useState,useEffect,type FormEvent,type CSSProperties } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation,useNavigate } from 'react-router-dom';
 import { ArrowUpRight,ArrowLeft,ChevronLeft,ChevronRight,Plus,Scissors,Clock3,Users,CalendarDays,Check,Search,Copy,SlidersHorizontal,MessageCircle,Star,Link as LinkIcon,Download,X,Share2,SquarePlus,UserRound,Store,ShieldCheck,KeyRound,LogOut,Palette,Eye,EyeOff,Info,Crown,CircleHelp,FileText,Shield,MessageSquareText,Bug,Send,ImagePlus,RefreshCw,Languages } from 'lucide-react';
 import type { Bootstrap,Appointment,Service } from '../../shared/domain';
 import { money } from '../../shared/domain';
+import { fioPlanPublicName } from '../../shared/fio-plans';
 import { api,supabase } from '../lib/api';
 import { optimizeImage } from '../lib/images';
 import { planAllows } from '../../shared/entitlements';
@@ -108,6 +109,7 @@ function StaffHome(p:WorkspaceProps){
  const {t,formatDate,formatTime}=useI18n();
  const navigate=useNavigate();
  const role=p.data.membership.role;
+ const solo=p.data.shop.operation_mode==='SOLO';
  const shopName=p.data.shop.public_title||p.data.shop.name;
  const now=Date.now();
 
@@ -223,7 +225,7 @@ function StaffHome(p:WorkspaceProps){
       {service?.name??t('ws.service')}
      </span>
 
-     {role==='OWNER'&&
+     {role==='OWNER'&&!solo&&
       <small>
        {t('home.withProfessional',{name:professional?.display_name??t('ws.professional')})}
       </small>
@@ -419,19 +421,28 @@ function ClientAppointmentRow({appointment:a,data,onClick}:{appointment:Appointm
 function ClientAgenda(p:WorkspaceProps){
  const {t,formatDate,formatTime,formatCurrency}=useI18n();
  const {data}=p,zone=data.shop.timezone;
+ const routeLocation=useLocation();
 
  const [booking,setBooking]=useState(
-  new URLSearchParams(location.search).has('novo')
+  new URLSearchParams(routeLocation.search).has('novo')
  );
 
- const [selected,setSelected]=useState<Appointment|null>(null);
+ const initialAppointmentId=
+  new URLSearchParams(routeLocation.search)
+   .get('appointment');
+
+ const [selected,setSelected]=useState<Appointment|null>(()=>
+  initialAppointmentId
+   ?data.appointments.find(a=>a.id===initialAppointmentId)??null
+   :null
+ );
  const [reschedule,setReschedule]=useState<Appointment|null>(null);
  const [busy,setBusy]=useState(false);
  const [linkOpened,setLinkOpened]=useState(false);
 
  useEffect(()=>{
 
-  const id=new URLSearchParams(location.search)
+  const id=new URLSearchParams(routeLocation.search)
    .get('appointment');
 
   if(!id||linkOpened)return;
@@ -463,7 +474,8 @@ function ClientAgenda(p:WorkspaceProps){
  },[
   data.appointments,
   data.shop.id,
-  linkOpened
+  linkOpened,
+  routeLocation.search
  ]);
 
  const upcoming=data.appointments
@@ -774,6 +786,7 @@ function StaffAgenda(p:WorkspaceProps){
  const {t,formatDate,formatTime,formatCurrency}=useI18n();
  const {data}=p;
  const zone=data.shop.timezone;
+ const routeLocation=useLocation();
  const solo=data.shop.operation_mode==='SOLO';
 
  const owner=data.membership.role==='OWNER';
@@ -797,10 +810,18 @@ function StaffAgenda(p:WorkspaceProps){
  );
 
  const [booking,setBooking]=useState(
-  canCreateManual&&new URLSearchParams(location.search).has('novo')
+  canCreateManual&&new URLSearchParams(routeLocation.search).has('novo')
  );
 
- const [selected,setSelected]=useState<Appointment|null>(null);
+ const initialAppointmentId=
+  new URLSearchParams(routeLocation.search)
+   .get('appointment');
+
+ const [selected,setSelected]=useState<Appointment|null>(()=>
+  initialAppointmentId
+   ?data.appointments.find(a=>a.id===initialAppointmentId)??null
+   :null
+ );
  const [profileCustomer,setProfileCustomer]=useState<Customer|null>(null);
  const [linkOpened,setLinkOpened]=useState(false);
  const [busy,setBusy]=useState(false);
@@ -866,7 +887,7 @@ function StaffAgenda(p:WorkspaceProps){
  useEffect(()=>{
 
   const id=
-   new URLSearchParams(location.search)
+   new URLSearchParams(routeLocation.search)
     .get('appointment');
 
   if(!id||linkOpened)return;
@@ -903,7 +924,8 @@ function StaffAgenda(p:WorkspaceProps){
  },[
   data.appointments,
   data.shop.id,
-  linkOpened
+  linkOpened,
+  routeLocation.search
  ]);
 
  const activeAppointments=daily.filter(a=>
@@ -1121,9 +1143,12 @@ function StaffAgenda(p:WorkspaceProps){
       const service=data.services.find(s=>s.id===a.service_id);
       return <button type="button" className="simple-appointment-card" key={a.id} onClick={()=>setSelected(a)}>
        <strong className="simple-appointment-time">{formatTime(a.starts_at,{timeZone:zone})}</strong>
-       <span className="simple-appointment-person">
-        <b>{customer?.name??t('ws.client')}</b>
-        <small>{service?.name??t('ws.service')}</small>
+       <span className="simple-appointment-person simple-appointment-person-with-avatar">
+        <CustomerAvatar customer={customer} data={data} className="simple-appointment-avatar"/>
+        <span className="simple-appointment-copy">
+         <b>{customer?.name??t('ws.client')}</b>
+         <small>{service?.name??t('ws.service')}</small>
+        </span>
        </span>
        <span className="simple-appointment-price">{formatCurrency(a.price_cents/100,'BRL')}</span>
       </button>;
@@ -1143,9 +1168,12 @@ function StaffAgenda(p:WorkspaceProps){
       const prefix=day===today?'Hoje':day===yesterday?'Ontem':formatDate(a.starts_at,{timeZone:zone,day:'2-digit',month:'short'});
       return <button type="button" className="simple-appointment-card" key={a.id} onClick={()=>setSelected(a)}>
        <strong className="simple-appointment-time">{prefix} {formatTime(a.starts_at,{timeZone:zone})}</strong>
-       <span className="simple-appointment-person">
-        <b>{customer?.name??t('ws.client')}</b>
-        <small>{service?.name??t('ws.service')}</small>
+       <span className="simple-appointment-person simple-appointment-person-with-avatar">
+        <CustomerAvatar customer={customer} data={data} className="simple-appointment-avatar"/>
+        <span className="simple-appointment-copy">
+         <b>{customer?.name??t('ws.client')}</b>
+         <small>{service?.name??t('ws.service')}</small>
+        </span>
        </span>
        <span className="simple-appointment-price">{formatCurrency(a.price_cents/100,'BRL')}</span>
       </button>;
@@ -1179,10 +1207,13 @@ function StaffAgenda(p:WorkspaceProps){
        const service=data.services.find(s=>s.id===a.service_id);
        return <button type="button" className="simple-appointment-card" key={a.id} onClick={()=>setSelected(a)}>
         <strong className="simple-appointment-time">{formatTime(a.starts_at,{timeZone:zone})}</strong>
-        <span className="simple-appointment-person">
+        <span className="simple-appointment-person simple-appointment-person-with-avatar">
+        <CustomerAvatar customer={customer} data={data} className="simple-appointment-avatar"/>
+        <span className="simple-appointment-copy">
          <b>{customer?.name??t('ws.client')}</b>
          <small>{service?.name??t('ws.service')}</small>
         </span>
+       </span>
         <span className={`status ${a.status}`}>{t(`status.${a.status}`)}</span>
        </button>;
       }):<Empty title={t('staffAgenda.none')}>{t('staffAgenda.noneDesc')}</Empty>}
@@ -1264,12 +1295,12 @@ function StaffAgenda(p:WorkspaceProps){
       </small>
      </div>
 
-     <div>
+     {!solo&&<div>
       <span>{t('ws.professional')}</span>
       <strong>
        {selectedProfessional?.display_name??t('ws.professional')}
       </strong>
-     </div>
+     </div>}
 
      <div>
       <span>{t('clientAgenda.date')}</span>
@@ -1724,6 +1755,7 @@ export function Support(p:WorkspaceProps){
 export function Settings(p:WorkspaceProps){
  const {t,formatDate}=useI18n();
  const owner=p.data.membership.role==='OWNER',solo=p.data.shop.operation_mode==='SOLO',navigate=useNavigate();
+ const planDisplay=fioPlanPublicName(p.data.plan);
  const [section,setSection]=useState<'home'|'profile'|'barbershop'|'plan'|'access'|'account'|'language'|'hours'|'schedule'|'theme'|'help'>('home');
  useEffect(()=>{window.scrollTo({top:0,behavior:'instant'});},[section]);
  const [displayName,setDisplayName]=useState(p.data.membership.display_name);
@@ -1919,8 +1951,8 @@ export function Settings(p:WorkspaceProps){
 
     {section==='plan'&&owner&&<>
      <section className="settings-card">
-      <div className="section-title"><h2>{t('settings.subscription')}</h2><span className="muted">{p.data.plan}</span></div>
-      <div className="settings-plan-summary"><span className="settings-plan-icon"><Crown size={20}/></span><div><strong>FIO {p.data.plan}</strong><small>{p.data.fioSubscription.status==='trialing'&&p.data.fioSubscription.trial_ends_at?t('settings.currentTrialUntil',{date:formatDate(p.data.fioSubscription.trial_ends_at)}):p.data.fioSubscription.current_period_end?t('settings.currentPeriodUntil',{date:formatDate(p.data.fioSubscription.current_period_end)}):t('settings.currentShopPlan')}</small></div></div>
+      <div className="section-title"><h2>{t('settings.subscription')}</h2><span className="muted">{planDisplay}</span></div>
+      <div className="settings-plan-summary"><span className="settings-plan-icon"><Crown size={20}/></span><div><strong>{planDisplay}</strong><small>{p.data.fioSubscription.status==='trialing'&&p.data.fioSubscription.trial_ends_at?t('settings.currentTrialUntil',{date:formatDate(p.data.fioSubscription.trial_ends_at)}):p.data.fioSubscription.current_period_end?t('settings.currentPeriodUntil',{date:formatDate(p.data.fioSubscription.current_period_end)}):t('settings.currentShopPlan')}</small></div></div>
       <p className="muted">{t('settings.subscriptionDesc')}</p>
       <button className="primary" onClick={()=>navigate(`${p.base}/plano-fio`)}><Crown size={16}/>{t('settings.viewPlans')}</button>
      </section>

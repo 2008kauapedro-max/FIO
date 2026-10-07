@@ -1,0 +1,55 @@
+.fio-help{--fh-border:var(--border,#303030);--fh-text:var(--text,#f5f5f5);--fh-muted:var(--muted,#9b9b9b);color:var(--fh-text);width:100%;max-width:890px;margin:0 auto;padding:12px 0 54px;display:grid;gap:16px}
+.fio-help *{box-sizing:border-box}
+.fio-help-header{margin:6px 0 3px}
+.fio-help-overline{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.13em;font-weight:750;color:var(--fh-muted)}
+.fio-help-header h1{font-size:clamp(25px,3.4vw,34px);letter-spacing:-.045em;margin:10px 0 4px;line-height:1.17;font-weight:780}
+.fio-help-header p{font-size:14px;color:var(--fh-muted);margin:0;line-height:1.6}
+.fio-help-search{min-height:50px;display:flex;align-items:center;gap:11px;padding:0 16px;border:1px solid var(--fh-border);border-radius:13px;background:var(--surface,#141414);color:var(--fh-muted)}
+.fio-help-search input{flex:1;width:100%;border:0;outline:none;background:transparent;color:var(--fh-text);font:inherit;font-size:14px}
+.fio-help-card{background:var(--surface,#141414);border:1px solid var(--fh-border);border-radius:16px;overflow:hidden}
+.fio-help-card-heading{padding:19px 22px 15px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.fio-help-card-heading h2,.fio-help-actions h2,.fio-help-billing h2,.fio-help-refund h2,.fio-help-manual h2{font-size:15px;font-weight:750;letter-spacing:-.02em;margin:0}
+.fio-help-card-heading span{color:var(--fh-muted);font-size:12px}
+.fio-help-faq{padding:0 22px 10px}
+.fio-help-item{border-top:1px solid var(--fh-border)}
+.fio-help-item>button{border:0;background:transparent;color:var(--fh-text);font:inherit;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;width:100%;padding:16px 0;cursor:pointer;font-size:14px;font-weight:600}
+.fio-help-item>button svg{color:var(--fh-muted);flex:none;transition:transform .15s}
+.fio-help-item>button[aria-expanded="true"] svg{transform:rotate(180deg)}
+.fio-help-item>p{padding:0 4px 17px 0;color:var(--fh-muted);line-height:1.65;font-size:13px;margin:0}
+.fio-help-muted{padding:5px 0;color:var(--fh-muted);font-size:13px;line-height:1.7;display:flex;gap:7px;align-items:flex-start}
+.fio-help-actions,.fio-help-billing{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 21px;border:1px solid var(--fh-border);border-radius:15px;background:var(--surface,#141414)}
+.fio-help-actions>div{display:flex;align-items:center;gap:14px;min-width:0}
+.fio-help-actions>div>svg,.fio-help-billing>svg{flex:none;color:var(--fh-muted)}
+.fio-help-actions p,.fio-help-billing p,.fio-help-manual>p{color:var(--fh-muted);font-size:13px;line-height:1.5;margin:5px 0 0}
+.fio-help-primary,.fio-help-secondary,.fio-help-billing button,.fio-help-back{border:1px solid var(--fh-border);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;font:inherit;font-size:13px;font-weight:700;cursor:pointer;line-height:1.25;padding:12px 16px;white-space:normal}
+.fio-help-primary{background:var(--fh-text);color:var(--surface,#111);border-color:var(--fh-text)}
+.fio-help-secondary,.fio-help-billing button,.fio-help-back{background:transparent;color:var(--fh-text)}
+.fio-help-primary:hover{opacity:.85}.fio-help-secondary:hover,.fio-help-back:hover,.fio-help-billing button:hover{background:color-mix(in srgb,var(--fh-text) 7%,transparent)}
+.fio-help button:disabled{opacity:.5;cursor:not-allowed}
+.fio-help-billing{justify-content:flex-start}.fio-help-billing>div{flex:1}
+.fio-help-links{display:flex;flex-wrap:wrap;gap:16px 24px;padding:2px 4px}
+.fio-help-links a,.fio-help-links button{display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;padding:2px 0;text-decoration:none;color:var(--fh-muted);font:inherit;font-size:12px;cursor:pointer}
+.fio-help-links a:hover,.fio-help-links button:hover{color:var(--fh-text)}
+.fio-help-back{justify-self:start;border:0;padding:7px 0;background:none;font-size:13px}
+.fio-help-form-card{padding:22px;max-width:760px;width:100%}
+.fio-help form{display:grid;gap:18px}
+.fio-help label:not(.fio-help-search){display:grid;gap:8px;font-size:13px;font-weight:650}
+.fio-help select,.fio-help textarea{display:block;width:100%;padding:12px 14px;font:inherit;font-size:14px;color:var(--fh-text);border:1px solid var(--fh-border);background:var(--background,var(--surface,#171717));border-radius:10px;outline:none;resize:vertical;min-height:46px}
+.fio-help select option{color:#161616;background:#fff}.fio-help textarea{min-height:110px;line-height:1.55}
+.fio-help select:focus,.fio-help textarea:focus,.fio-help-search:focus-within{border-color:var(--fh-text)}
+.fio-help-form-footer{display:flex;justify-content:space-between;gap:20px;align-items:center}
+.fio-help-form-footer>span{font-size:11px;color:var(--fh-muted)}
+.fio-help-error,.fio-help-message{font-size:13px;line-height:1.6;border-radius:10px;padding:12px 14px;margin:6px 0}
+.fio-help-error{border:1px solid #e78f8f;color:var(--fh-text)}.fio-help-message{border:1px solid #659a79;color:var(--fh-text)}
+.fio-help-success{text-align:center;display:grid;justify-items:center;gap:10px;padding:30px 10px}
+.fio-help-success svg{color:var(--fh-text)}.fio-help-success h2{margin:5px 0 0;font-size:19px}.fio-help-success p{font-size:13px;color:var(--fh-muted);margin:0 0 9px}
+.fio-help-refund,.fio-help-manual{padding:22px}
+.fio-help-refund-title{display:flex;align-items:flex-start;gap:14px}.fio-help-refund-title>svg{flex:none;margin-top:1px}.fio-help-refund-title p,.fio-help-refund-state p{font-size:13px;color:var(--fh-muted);line-height:1.65;margin:7px 0 0}
+.fio-help-refund-state{margin:20px 0;padding:18px;border:1px solid var(--fh-border);border-radius:12px}
+.fio-help-refund-state strong{font-size:14px}.fio-help-refund-state button{margin-top:16px}
+.fio-help-danger{border-color:var(--fh-text)}
+.fio-help-refund-links{padding-top:12px;display:flex;flex-wrap:wrap;gap:12px}
+.fio-help-manual>p{margin-bottom:16px}.fio-help-manual form button{justify-self:start}
+.fio-help-safety{display:flex;gap:11px;align-items:flex-start;color:var(--fh-muted);font-size:12px;line-height:1.55;padding:0 4px}
+.fio-help-safety svg{flex:none}.fio-help-safety p{margin:0}
+@media(max-width:640px){.fio-help{padding-top:4px;gap:12px}.fio-help-header{margin-top:1px}.fio-help-card-heading{padding:15px 16px 12px}.fio-help-faq{padding:0 16px 8px}.fio-help-actions,.fio-help-billing{padding:16px;align-items:stretch;flex-direction:column;gap:13px}.fio-help-actions>div{align-items:flex-start}.fio-help-actions>.fio-help-primary,.fio-help-billing>button{width:100%}.fio-help-form-card,.fio-help-refund,.fio-help-manual{padding:17px}.fio-help-form-footer{align-items:stretch;flex-direction:column;gap:9px}.fio-help-form-footer>.fio-help-primary{width:100%}}

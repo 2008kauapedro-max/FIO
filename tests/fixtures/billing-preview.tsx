@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import {MemoryRouter} from 'react-router-dom';
 import {FioPlans} from '../../src/pages/FioPlans';
 import {I18nProvider} from '../../src/i18n';
 import {demoData} from '../../src/lib/demo';
@@ -21,4 +22,4 @@ function Fixture(){
  const [notice,setNotice]=useState('');
  return <main style={{maxWidth:1200,margin:'auto',padding:24}}><p>TESTE LOCAL · SEM COBRANÇAS REAIS</p><FioPlans data={data} demo={false} base="/owner" refresh={async()=>{}} notify={setNotice} updateDemo={setData}/>{notice&&<p role="status">{notice}</p>}</main>;
 }
-createRoot(document.getElementById('root')!).render(<I18nProvider><Fixture/></I18nProvider>);
+createRoot(document.getElementById('root')!).render(<MemoryRouter><I18nProvider><Fixture/></I18nProvider></MemoryRouter>);

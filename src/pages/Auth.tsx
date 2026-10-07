@@ -12,6 +12,12 @@ import { OwnerOnboarding } from './OwnerOnboarding';
 
 type AuthMode='login'|'signup'|'forgot';
 
+const strongPassword=(value:string)=>
+ value.length>=8&&
+ /[A-Z]/.test(value)&&
+ /[a-z]/.test(value)&&
+ /[^A-Za-z0-9]/.test(value);
+
 export function AuthPage({reset=false}:{reset?:boolean}) {
  const {t}=useI18n();
  const location=useLocation(),navigate=useNavigate();
@@ -159,10 +165,22 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     setMessage(t('auth.recoveryInvalid'));
     return;
    }
-   if(submittedPassword.length<8){
-    setMessage(t('auth.passwordMin'));
+   if(!strongPassword(submittedPassword)){
+    setMessage(t('auth.passwordRules'));
     return;
    }
+   if(submittedPassword!==submittedConfirmPassword){
+    setMessage(t('auth.passwordMismatch'));
+    return;
+   }
+  }
+
+  if(!reset&&mode==='signup'){
+   if(!strongPassword(submittedPassword)){
+    setMessage(t('auth.passwordRules'));
+    return;
+   }
+
    if(submittedPassword!==submittedConfirmPassword){
     setMessage(t('auth.passwordMismatch'));
     return;
@@ -213,7 +231,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
     if(shop)query.set('shop',shop);
     const result=await supabase.auth.signUp({
      email,
-     password,
+     password:submittedPassword,
      options:{captchaToken:captchaToken||undefined,emailRedirectTo:`${window.location.origin}/confirm-email?${query.toString()}`,data:{account_phone:signupPhone.trim(),...(audience!=='client'?{display_name:signupName.trim()}: {})}}
     });
 
@@ -404,9 +422,10 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
         {showPassword?<EyeOff size={18}/>:<Eye size={18}/>}
        </button>
       </div>
+      {(reset||mode==='signup')&&<small>{t('auth.passwordRules')}</small>}
      </Field>}
 
-    {reset&&<Field label={t('auth.confirmNewPassword')}>
+    {(reset||mode==='signup')&&<Field label={reset?t('auth.confirmNewPassword'):t('auth.confirmPassword')}>
       <div style={{position:'relative'}}>
        <input name="confirmPassword" type={showConfirmPassword?'text':'password'} minLength={8}
         autoComplete="new-password" value={confirmPassword}
@@ -468,9 +487,16 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  </div>;
 }
 
-function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
+function ClientJoinOnboarding({onDone,slug,requirePassword}:{onDone:()=>void;slug:string;requirePassword:boolean}) {
  const {t}=useI18n();
- const [displayName,setDisplayName]=useState(''),[phone,setPhone]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ const [displayName,setDisplayName]=useState('');
+ const [phone,setPhone]=useState('');
+ const [password,setPassword]=useState('');
+ const [confirmPassword,setConfirmPassword]=useState('');
+ const [showPassword,setShowPassword]=useState(false);
+ const [showConfirmPassword,setShowConfirmPassword]=useState(false);
+ const [error,setError]=useState('');
+ const [busy,setBusy]=useState(false);
  useEffect(()=>{
   if(!supabase)return;
   let active=true;
@@ -489,9 +515,37 @@ function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
   e.preventDefault();
   setError('');
 
+  if(requirePassword){
+   if(!strongPassword(password)){
+    setError(t('auth.passwordRules'));
+    return;
+   }
+
+   if(password!==confirmPassword){
+    setError(t('auth.passwordMismatch'));
+    return;
+   }
+
+   if(!supabase){
+    setError(t('auth.unavailable'));
+    return;
+   }
+  }
+
   setBusy(true);
 
   try{
+   if(requirePassword){
+    const updated=await supabase!.auth.updateUser({
+     password
+    });
+
+    if(updated.error){
+     setError(t('auth.passwordSetupFailed'));
+     return;
+    }
+   }
+
    const r=await api<{barbershopId:string}>(
     '/onboarding',
     undefined,
@@ -523,6 +577,26 @@ function ClientJoinOnboarding({onDone,slug}:{onDone:()=>void;slug:string}) {
     <Field label={t('auth.yourName')}><input minLength={2} maxLength={100} autoComplete="name" required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></Field>
     <Field label={t('auth.phone')}><input type="tel" inputMode="tel" autoComplete="tel" placeholder="(61) 99999-9999" minLength={8} maxLength={24} value={phone} onChange={e=>setPhone(e.target.value)} required/><small>{t('auth.phoneIdentityHint')}</small></Field>
 
+    {requirePassword&&<>
+     <Field label={t('auth.newPassword')}>
+      <div style={{position:'relative'}}>
+       <input type={showPassword?'text':'password'} autoComplete="new-password" minLength={8} value={password} onChange={e=>setPassword(e.target.value)} style={{paddingRight:48}} required/>
+       <button type="button" aria-label={showPassword?t('auth.hidePassword'):t('auth.showPassword')} onClick={()=>setShowPassword(v=>!v)} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',display:'grid',placeItems:'center',width:32,height:32,padding:0,border:0,background:'transparent',color:'inherit',cursor:'pointer'}}>
+        {showPassword?<EyeOff size={18}/>:<Eye size={18}/>}
+       </button>
+      </div>
+      <small>{t('auth.passwordRules')}</small>
+     </Field>
+
+     <Field label={t('auth.confirmPassword')}>
+      <div style={{position:'relative'}}>
+       <input type={showConfirmPassword?'text':'password'} autoComplete="new-password" minLength={8} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} style={{paddingRight:48}} required/>
+       <button type="button" aria-label={showConfirmPassword?t('auth.hidePasswordConfirm'):t('auth.showPasswordConfirm')} onClick={()=>setShowConfirmPassword(v=>!v)} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',display:'grid',placeItems:'center',width:32,height:32,padding:0,border:0,background:'transparent',color:'inherit',cursor:'pointer'}}>
+        {showConfirmPassword?<EyeOff size={18}/>:<Eye size={18}/>}
+       </button>
+      </div>
+     </Field>
+    </>}
 
     {error&&<p className="notice" role="alert">{error}</p>}
     <button className="primary full" disabled={busy}>{busy?t('auth.entering'):t('auth.enterShop')}</button>
@@ -649,10 +723,10 @@ export function EmailConfirmationPage(){
  </div>;
 }
 
-export function Onboarding({onDone,shopId}:{onDone:()=>void;shopId?:string}) {
+export function Onboarding({onDone,shopId,requireClientPassword=false}:{onDone:()=>void;shopId?:string;requireClientPassword?:boolean}) {
  const {t}=useI18n();
  const params=new URLSearchParams(window.location.search),shop=clientContext(window.location.pathname,window.location.search),audience=params.get('audience');
- if(shop)return <ClientJoinOnboarding onDone={onDone} slug={shop}/>;
+ if(shop)return <ClientJoinOnboarding onDone={onDone} slug={shop} requirePassword={requireClientPassword}/>;
  if(audience==='client'||window.location.pathname.startsWith('/client'))return <div className="auth-page"><div className="auth-card"><h1>{t('auth.clientLinkTitle')}</h1><p>{t('auth.clientLinkDesc')}</p><button className="secondary" onClick={()=>void supabase?.auth.signOut()}>{t('auth.signOut')}</button></div></div>;
  return <OwnerOnboarding onDone={onDone} shopId={shopId}/>;
 }

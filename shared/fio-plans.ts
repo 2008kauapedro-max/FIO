@@ -184,3 +184,8 @@ export const billingSuffix=(cycle:BillingCycle)=>
 
 export const findFioPlan=(plan:Plan)=>
  FIO_PLAN_CATALOG.find(item=>item.code===plan)??FIO_PLAN_CATALOG[0];
+
+export const fioPlanPublicName=(plan:Plan)=>
+ plan==='SOLO'?'FIO PRO':
+ plan==='SOLO_PREMIUM'?'FIO PREMIUM':
+ `FIO ${plan}`;

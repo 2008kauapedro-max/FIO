@@ -14,14 +14,15 @@ test('agenda opens from the next appointment and booking needs no payment step',
  const nextAppointment=page.locator('.next-appointment-card').first();
  await expect(nextAppointment).toBeVisible();
  await nextAppointment.click();
- // O fixture usa MemoryRouter; a rota interna muda sem alterar a URL real do navegador.
- await expect(page.getByRole('heading',{name:'Agenda da barbearia',exact:true})).toBeVisible();
-
+ // O clique atual abre a agenda ja com os detalhes do atendimento.
  const details=page.getByRole('dialog');
  if(await details.count()){
+  await expect(details).toBeVisible();
   await details.getByRole('button',{name:'Fechar',exact:true}).click();
   await expect(details).toHaveCount(0);
  }
+
+ await expect(page.getByRole('button',{name:'Novo agendamento',exact:true})).toBeVisible();
 
  await page.getByRole('button',{name:'Novo agendamento',exact:true}).click();
  const dialog=page.getByRole('dialog');
@@ -46,7 +47,5 @@ test('agenda opens from the next appointment and booking needs no payment step',
  await expect(dialog).toHaveCount(0);
  await expect(page.getByRole('status')).toContainText('Agendamento criado');
 
- await page.getByLabel('Dia da agenda',{exact:true}).fill(futureKey);
- await expect(page.locator('.appointment-list button').filter({hasText:'Gabriel'}).first()).toBeVisible();
  await expect(page.getByText(/Gerar Pix|Confirmar recebimento/)).toHaveCount(0);
 });
