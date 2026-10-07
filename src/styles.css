@@ -5868,4 +5868,3 @@ body:has(.workspace),
 .ob-qr-downloads{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
 .ob-qr-downloads button{flex:1 1 90px}
 @media(max-width:760px){.fio-notification-menu{position:fixed;top:58px;right:10px;width:calc(100vw - 20px);max-height:70dvh}}
-
