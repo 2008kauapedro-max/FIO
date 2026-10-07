@@ -1,0 +1,2678 @@
+# CONTEXTO STRIPE FIO
+
+
+
+==================== server\app.ts ====================
+
+import express from 'express';
+import { platformRouter } from './platform.js';
+import { createClient } from '@supabase/supabase-js';
+import helmet from 'helmet';
+import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { z, ZodError } from 'zod';
+import { authenticate, tenant, requireOwner, requireFioFeature, bootstrap, type AuthContext, type TenantContext } from './context.js';
+import { ApiError,dbError } from './errors.js';
+import { askAssistant } from './assistant.js';
+import { bookingSchema } from '../shared/domain.js';
+import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment } from './syncpay.js';
+import { randomUUID } from 'node:crypto';
+import { rateLimit,rateLimitByUser } from './rate-limit.js';
+import {publicPushConfig,validPushEndpoint} from './platform-push.js';
+type Authenticator = typeof authenticate;
+
+function serviceDb(){
+ const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+ if(!url||!key) throw new ApiError(503,'SETUP_REQUIRED','A configuração segura do servidor ainda não foi concluída.');
+ return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+}
+function cleanPhone(value:string){return value.trim().replace(/\s+/g,' ');}
+function normalizeAccountPhone(value:string){
+ const digits=value.replace(/\D/g,'');
+ const normalized=digits.length===10||digits.length===11?`55${digits}`:digits;
+ if(!/^55\d{10,11}$/.test(normalized))throw new ApiError(400,'INVALID_PHONE','Confira o telefone informado.');
+ return normalized;
+}
+function publicStorageUrl(bucket:string,path:string){
+ const base=process.env.SUPABASE_URL;
+ return base?`${base}/storage/v1/object/public/${bucket}/${path}`:'';
+}
+function secureLog(requestId:string,error:unknown){
+ // Never write headers, tokens, request bodies, database errors, or provider responses to logs.
+ if(!(error instanceof ApiError)&&!(error instanceof ZodError))console.error(JSON.stringify({event:'api_error',requestId,status:500,code:'INTERNAL_ERROR'}));
+}
+
+
+function normalizedOrigin(value:string|undefined){
+ if(!value)return '';
+ try{return new URL(value).origin.toLowerCase();}catch{return '';}
+}
+
+function allowedBrowserWriteOrigin(req:express.Request){
+ if(['GET','HEAD','OPTIONS'].includes(req.method.toUpperCase()))return true;
+
+ // SyncPay é servidor-servidor e possui validação própria de assinatura.
+ if(req.originalUrl.startsWith('/api/webhooks/syncpay'))return true;
+
+ const rawOrigin=req.get('origin');
+ if(!rawOrigin)return true;
+
+ const origin=normalizedOrigin(rawOrigin);
+ if(!origin)return false;
+
+ const host=(req.get('x-forwarded-host')||req.get('host')||'')
+  .split(',')[0].trim().toLowerCase();
+
+ const proto=(req.get('x-forwarded-proto')||(req.secure?'https':'http'))
+  .split(',')[0].trim().toLowerCase();
+
+ const sameHost=host?normalizedOrigin(proto+'://'+host):'';
+
+ const configured=(process.env.FIO_ALLOWED_ORIGINS??'')
+  .split(',')
+  .map(item=>normalizedOrigin(item.trim()))
+  .filter(Boolean);
+
+ const local=process.env.NODE_ENV==='production'
+  ?[]
+  :['http://localhost:5173','http://127.0.0.1:5173'];
+
+ return [sameHost,...configured,...local]
+  .filter(Boolean)
+  .includes(origin);
+}
+
+export function createApp(authenticator: Authenticator=authenticate) {
+ const app=express();
+ app.disable('x-powered-by');
+ app.use(helmet({referrerPolicy:{policy:'strict-origin-when-cross-origin'},strictTransportSecurity:process.env.NODE_ENV==='production'?undefined:false,contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'",'https://challenges.cloudflare.com'],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'",'https://*.supabase.co','wss://*.supabase.co'],imgSrc:["'self'",'data:','blob:','https://*.supabase.co'],frameSrc:['https://challenges.cloudflare.com'],objectSrc:["'none'"],frameAncestors:["'none'"]}}}));
+ app.use((_,res,next)=>{res.setHeader('X-Request-Id',randomUUID());res.setHeader('Cache-Control','no-store');next();});
+ app.use('/api',(req,res,next)=>{
+  if(!allowedBrowserWriteOrigin(req)){
+   res.status(403).json({
+    code:'ORIGIN_FORBIDDEN',
+    message:'Origem não autorizada.'
+   });
+   return;
+  }
+  next();
+ });
+ app.use('/api',rateLimit('api-ingress',{windowMs:60_000,max:300}));
+ // O webhook precisa do corpo bruto para validar a assinatura antes do JSON parser global.
+ app.post('/api/webhooks/syncpay',express.raw({type:'*/*',limit:'64kb'}),async(req,res)=>handleSyncpayWebhook(req,res));
+ app.use(express.json({limit:'12kb'}));
+ app.get('/api/health',rateLimit('health',{windowMs:60_000,max:30}), (_req, res) =>res.set('Cache-Control','no-store').json({status:'ok'}));
+ app.get('/api/public/shop/:slug',rateLimit('public-shop',{windowMs:60_000,max:60}),async(req,res)=>{
+  const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
+  const shop=await db.from('barbershops').select('id,name,slug,operation_mode,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
+  if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
+  const [services,team,palette,billing]=await Promise.all([
+   db.from('services').select('id,name,description,duration_minutes,price_cents').eq('barbershop_id',shop.data.id).eq('active',true).order('name'),
+   db.from('memberships').select('user_id,display_name,role,avatar_url').eq('barbershop_id',shop.data.id).in('role',['OWNER','BARBER']).eq('active',true).order('display_name'),
+   db.from('shop_palettes').select('*').eq('palette_key',shop.data.palette_key??'fio-black').maybeSingle(),
+   db.from('saas_subscriptions').select('plan,status,expires_at').eq('barbershop_id',shop.data.id).maybeSingle()
+  ]);dbError(services.error);dbError(team.error);dbError(palette.error);dbError(billing.error);
+  const entitlement=billing.data&&['active','trialing','past_due'].includes(billing.data.status)&&(!billing.data.expires_at||new Date(billing.data.expires_at)>new Date());
+  const publicPlans=entitlement&&['SOLO','SOLO_PREMIUM','PRO','PLUS','PREMIUM'].includes(billing.data?.plan??'')
+   ?await db.from('subscription_plans').select('id,name,description,cuts,validity_days,price_cents,active').eq('barbershop_id',shop.data.id).eq('active',true).order('name')
+   :{data:[],error:null};
+  dbError(publicPlans.error);
+  const asset=(path:string|null)=>path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:null;
+  const instagram=shop.data.instagram?`@${String(shop.data.instagram).replace(/^@+/,'').trim()}`:null;
+  res.set('Cache-Control','no-store').json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:publicPlans.data??[]});
+ });
+ app.get('/api/public/manifest/:slug',rateLimit('public-manifest',{windowMs:60_000,max:30}),async(req,res)=>{
+  const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
+  const shop=await db.from('barbershops').select('name,public_title,logo_url,logo_asset_path,accent_color,custom_accent').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
+  if(!shop.data) throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
+  const name=shop.data.public_title||shop.data.name;
+  const icon=shop.data.logo_url||(shop.data.logo_asset_path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${shop.data.logo_asset_path}`:null);
+  if(!icon) throw new ApiError(409,'SHOP_LOGO_REQUIRED','A barbearia precisa de uma logo antes de disponibilizar o aplicativo.');
+  const theme=shop.data.custom_accent||shop.data.accent_color||'#000000';
+  res.type('application/manifest+json').set('Cache-Control','no-store').send(JSON.stringify({id:`/client-app/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/login?shop=${encodeURIComponent(slug)}&audience=client`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
+ });
+ app.use('/api',async(req,res,next)=>{res.locals.auth=await authenticator(req);res.set('Cache-Control','private, no-store');next();});
+ app.use('/api',rateLimitByUser('authenticated-api',60_000,180));
+ app.get('/api/memberships',async(_req,res)=>{
+  const a=res.locals.auth as AuthContext;
+
+  const result=await a.db
+   .from('memberships')
+   .select('*')
+   .eq('user_id',a.userId)
+   .eq('active',true);
+
+  dbError(result.error);
+
+  const memberships=result.data??[];
+  const shopIds=[
+   ...new Set(
+    memberships.map(item=>String(item.barbershop_id))
+   )
+  ];
+
+  let brandByShop=new Map<string,{
+   id:string;
+   name:string;
+   slug:string;
+   logo_url:string|null;
+   logo_asset_path:string|null;
+  }>();
+
+  if(shopIds.length){
+   const brands=await serviceDb()
+    .from('barbershops')
+    .select('id,name,slug,logo_url,logo_asset_path')
+    .in('id',shopIds);
+
+   dbError(brands.error);
+
+   brandByShop=new Map(
+    (brands.data??[]).map(shop=>[
+     String(shop.id),
+     {
+      id:String(shop.id),
+      name:String(shop.name),
+      slug:String(shop.slug),
+      logo_url:shop.logo_url?String(shop.logo_url):null,
+      logo_asset_path:shop.logo_asset_path?String(shop.logo_asset_path):null
+     }
+    ])
+   );
+  }
+
+  res.json(
+   memberships.map(item=>({
+    ...item,
+    shop_brand:brandByShop.get(String(item.barbershop_id))??null
+   }))
+  );
+ });
+ app.post('/api/onboarding',rateLimitByUser('onboarding',600_000,8),async(req,res)=>{
+  const v=z.discriminatedUnion('mode',[
+   z.object({mode:z.literal('create'),name:z.string().trim().min(2).max(100),slug:z.string().regex(/^[a-z0-9-]{3,60}$/),displayName:z.string().trim().min(2).max(100),phone:z.string().trim().min(8).max(24),operationMode:z.enum(['SHOP','SOLO']).default('SHOP')}).strict(),
+   z.object({mode:z.literal('join'),slug:z.string().min(3).max(60),displayName:z.string().trim().min(2).max(100),phone:z.string().trim().min(8).max(24).optional()}).strict(),
+   z.object({mode:z.literal('invite'),token:z.uuid(),displayName:z.string().trim().min(2).max(100)}).strict()
+  ]).parse(req.body);
+  const a=res.locals.auth as AuthContext;
+   if(v.mode==='create'){const claimed=await a.db.rpc('claim_account_phone',{p_phone:v.phone});dbError(claimed.error);}
+  const result=v.mode==='create'
+   ?await a.db.rpc('create_workspace',{p_name:v.name,p_slug:v.slug,p_display_name:v.displayName,p_operation_mode:v.operationMode})
+   :v.mode==='join'&&v.phone
+    ?await a.db.rpc('join_barbershop_with_profile',{p_slug:v.slug,p_name:v.displayName,p_phone:v.phone})
+    :v.mode==='join'
+     ?await a.db.rpc('join_barbershop',{p_slug:v.slug,p_name:v.displayName})
+     :await a.db.rpc('accept_invitation',{p_token:v.token,p_name:v.displayName});
+  if(result.error?.message?.includes('PHONE_ALREADY_IN_USE'))throw new ApiError(409,'PHONE_ALREADY_IN_USE','Este telefone já está vinculado a outra conta FIO.');
+  if(result.error?.message?.includes('INVALID_PHONE'))throw new ApiError(400,'INVALID_PHONE','Informe um WhatsApp/telefone válido.');
+  dbError(result.error);res.status(201).json({barbershopId:result.data});
+ });
+ app.get('/api/onboarding/progress',async(req,res)=>{
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);
+  const [progress,shop,services,hours,amenities,palettes]=await Promise.all([
+   a.db.from('onboarding_progress').select('*').eq('barbershop_id',c.shopId).maybeSingle(),
+   a.db.from('barbershops').select('id,name,slug,timezone,operation_mode,public_title,public_description,logo_url,cover_url,background_url,accent_color,onboarding_step,onboarding_completed,whatsapp,instagram,address,theme_mode,palette_key,custom_accent,logo_asset_path,cover_asset_path,background_asset_path').eq('id',c.shopId).single(),
+   a.db.from('services').select('id,name,description,duration_minutes,price_cents,active').eq('barbershop_id',c.shopId).order('name'),
+   a.db.from('business_hours').select('weekday,opens_at,closes_at').eq('barbershop_id',c.shopId).order('weekday'),
+   a.db.from('shop_amenities').select('amenity_key,enabled').eq('barbershop_id',c.shopId).eq('enabled',true),
+   a.db.from('shop_palettes').select('*').order('palette_key')
+  ]);[progress,shop,services,hours,amenities,palettes].forEach(r=>dbError(r.error));
+  res.json({progress:progress.data,shop:shop.data,services:services.data??[],hours:hours.data??[],amenities:amenities.data?.map(x=>x.amenity_key)??[],palettes:palettes.data??[],owner:c.member});
+ });
+ app.post('/api/onboarding/setup',async(req,res)=>{
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);
+  const v=z.object({setup:z.object({name:z.string().trim().min(2).max(100).optional(),slug:z.string().regex(/^[a-z0-9-]{3,60}$/).optional(),whatsapp:z.string().trim().max(24).optional(),instagram:z.string().trim().max(120).optional(),address:z.string().trim().max(240).optional(),themeMode:z.enum(['light','dark']).optional(),paletteKey:z.string().regex(/^[a-z][a-z0-9-]{1,40}$/).optional(),customAccent:z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(),amenities:z.array(z.string().regex(/^[a-z][a-z0-9-]{1,40}$/)).max(30).optional(),logoAssetPath:z.string().max(500).nullable().optional(),coverAssetPath:z.string().max(500).nullable().optional(),backgroundAssetPath:z.string().max(500).nullable().optional()}).strict(),step:z.number().int().min(1).max(5),completedSteps:z.array(z.number().int().min(1).max(5)).max(5),draft:z.record(z.string(),z.unknown()).default({})}).strict().parse(req.body);
+  const saved=await a.db.rpc('save_owner_setup',{p_shop:c.shopId,p_setup:v.setup});dbError(saved.error);
+  const progress=await a.db.rpc('save_onboarding_progress',{p_shop:c.shopId,p_step:v.step,p_completed:v.completedSteps,p_draft:v.draft});dbError(progress.error);res.json({ok:true});
+ });
+ app.post('/api/onboarding/services',async(req,res)=>{
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const v=z.object({id:z.uuid().optional(),name:z.string().trim().min(2).max(100),description:z.string().trim().max(500).default(''),durationMinutes:z.number().int().min(10).max(240),priceCents:z.number().int().min(0).max(1000000),active:z.boolean().default(true)}).strict().parse(req.body);
+  const q=v.id?a.db.from('services').update({name:v.name,description:v.description||null,duration_minutes:v.durationMinutes,price_cents:v.priceCents,active:v.active}).eq('id',v.id).eq('barbershop_id',c.shopId):a.db.from('services').insert({barbershop_id:c.shopId,name:v.name,description:v.description||null,duration_minutes:v.durationMinutes,price_cents:v.priceCents});
+  const r=await q.select().single();dbError(r.error);res.status(v.id?200:201).json(r.data);
+ });
+ app.post('/api/onboarding/hours',async(req,res)=>{
+  const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);
+  const clock=z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+  const legacy=z.object({weekdays:z.array(z.number().int().min(0).max(6)).min(1).max(7),opensAt:clock,closesAt:clock,breakStart:clock.nullable().optional(),breakEnd:clock.nullable().optional()}).strict();
+  const perDay=z.object({days:z.array(z.object({weekday:z.number().int().min(0).max(6),enabled:z.boolean(),opensAt:clock,closesAt:clock}).strict()).min(1).max(7)}).strict();
+  const v=z.union([legacy,perDay]).parse(req.body);
+  const rows='days' in v?v.days.filter(day=>day.enabled).map(day=>{
+   if(day.opensAt>=day.closesAt)throw new ApiError(400,'INVALID_DATA',`Confira o horário do dia ${day.weekday}.`);
+   return {barbershop_id:c.shopId,weekday:day.weekday,opens_at:day.opensAt,closes_at:day.closesAt};
+  }):v.weekdays.map(weekday=>{
+   if(v.opensAt>=v.closesAt)throw new ApiError(400,'INVALID_DATA','O fechamento deve ser depois da abertura.');
+   return {barbershop_id:c.shopId,weekday,opens_at:v.opensAt,closes_at:v.closesAt};
+  });
+  if(!rows.length)throw new ApiError(400,'INVALID_DATA','Escolha pelo menos um dia de funcionamento.');
+  if(new Set(rows.map(row=>row.weekday)).size!==rows.length)throw new ApiError(400,'INVALID_DATA','Cada dia deve aparecer apenas uma vez.');
+  const r=await a.db.rpc('replace_business_hours',{p_shop:c.shopId,p_days:rows.map(({weekday,opens_at,closes_at})=>({weekday,opens_at,closes_at}))});dbError(r.error);res.json({ok:true});
+ });
+ app.post('/api/onboarding/activate',async(req,res)=>{const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const r=await a.db.rpc('activate_owner_onboarding',{p_shop:c.shopId});dbError(r.error);res.json({ok:true,shopId:c.shopId});});
+ app.use('/api/platform',platformRouter());
+ app.use('/api',async(req,res,next)=>{res.locals.ctx=await tenant(res.locals.auth,req);next();});
+ const ctx=(res:express.Response)=>res.locals.ctx as TenantContext;
+ app.get('/api/bootstrap',async(_req,res)=>res.json(await bootstrap(ctx(res))));
+ app.post('/api/saas/trial',rateLimitByUser('trial',3_600_000,3),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  const r=await c.db.rpc('start_saas_pro_trial',{p_shop:c.shopId});dbError(r.error);res.status(201).json({trialEndsAt:r.data});
+ });
+ app.post('/api/saas/subscribe',rateLimitByUser('billing-subscribe',600_000,8),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
+ });
+ app.post('/api/saas/recover-enrollment',rateLimitByUser('billing-recover',300_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await recoverSyncpayEnrollment(c,req.body));});
+ app.post('/api/saas/change-plan',rateLimitByUser('billing-change',600_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await changeSyncpayPlan(c,req.body));});
+ app.post('/api/saas/charge',rateLimitByUser('billing-charge',600_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await manageSyncpayCharge(c,req.body));});
+ app.post('/api/saas/refund',rateLimitByUser('billing-refund',3_600_000,2),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await requestSyncpayRefund(c,req.body));});
+ app.get('/api/saas/billing',async(_req,res)=>{
+  const c=ctx(res);requireOwner(c);res.json(await getSyncpayBilling(c));
+ });
+ app.post('/api/services',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const v=z.object({name:z.string().trim().min(2).max(100),description:z.string().trim().max(500).default(''),duration_minutes:z.number().int().min(10).max(240),price_cents:z.number().int().min(0).max(1000000)}).strict().parse(req.body);
+  const r=await c.db.from('services').insert({...v,barbershop_id:c.shopId}).select().single();dbError(r.error);res.status(201).json(r.data);
+ });
+ app.patch('/api/services/:id',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const id=z.uuid().parse(req.params.id);
+  const v=z.object({name:z.string().trim().min(2).max(100).optional(),description:z.string().trim().max(500).optional(),duration_minutes:z.number().int().min(10).max(240).optional(),price_cents:z.number().int().min(0).max(1000000).optional(),active:z.boolean().optional()}).strict().parse(req.body);
+  const r=await c.db.from('services').update(v).eq('id',id).eq('barbershop_id',c.shopId).select().single();dbError(r.error);res.json(r.data);
+ });
+ app.post('/api/customers',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const v=z.object({name:z.string().trim().min(2).max(100),phone:z.string().trim().min(8).max(24).optional()}).strict().parse(req.body);
+  const r=await c.db.from('customers').insert({...v,phone:v.phone?cleanPhone(v.phone):null,barbershop_id:c.shopId}).select().single();dbError(r.error);res.status(201).json(r.data);
+ });
+ app.patch('/api/profile/contact',async(req,res)=>{
+  const c=ctx(res),v=z.object({displayName:z.string().trim().min(2).max(100),phone:z.string().trim().max(24)}).strict().parse(req.body);
+  const r=await c.db.rpc('update_own_profile',{p_shop:c.shopId,p_display_name:v.displayName,p_phone:v.phone});dbError(r.error);res.json({ok:true});
+ });
+ app.patch('/api/profile/avatar',async(req,res)=>{
+  const c=ctx(res),v=z.object({avatarUrl:z.string().trim().max(700),avatarPath:z.string().trim().max(500)}).strict().parse(req.body);
+  const expected=`${c.shopId}/${c.userId}/`;
+  if(!v.avatarPath.startsWith(expected)||!/^avatar-\d{13}\.webp$/.test(v.avatarPath.slice(expected.length))||v.avatarUrl!==publicStorageUrl('profile-avatars',v.avatarPath))throw new ApiError(400,'INVALID_IMAGE','Não foi possível usar esta imagem.');
+  const r=await c.db.rpc('update_own_avatar',{p_shop:c.shopId,p_avatar_url:v.avatarUrl,p_avatar_path:v.avatarPath});dbError(r.error);res.json({ok:true});
+ });
+ app.patch('/api/shop/branding',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const v=z.object({title:z.string().trim().max(100).default(''),description:z.string().trim().max(280).default(''),logoUrl:z.string().trim().max(500).default(''),coverUrl:z.string().trim().max(500).default(''),backgroundUrl:z.string().trim().max(500).default(''),accentColor:z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#ffffff')}).strict().parse(req.body);
+  const r=await c.db.rpc('update_shop_branding',{p_shop:c.shopId,p_title:v.title,p_description:v.description,p_logo_url:v.logoUrl,p_cover_url:v.coverUrl,p_background_url:v.backgroundUrl,p_accent_color:v.accentColor});dbError(r.error);
+  const theme=await c.db.rpc('save_owner_setup',{p_shop:c.shopId,p_setup:{customAccent:v.accentColor}});dbError(theme.error);
+  res.set('Cache-Control','no-store').json({ok:true});
+ });
+ app.get('/api/shop/closures',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const v=z.object({from:z.iso.date(),to:z.iso.date()}).parse(req.query);
+  if(v.to<v.from)throw new ApiError(400,'INVALID_DATA','Período inválido.');
+  const r=await c.db.from('shop_closures').select('day').eq('barbershop_id',c.shopId).gte('day',v.from).lte('day',v.to).order('day');
+  dbError(r.error);
+  res.json({days:(r.data??[]).map(row=>String(row.day))});
+ });
+ app.post('/api/shop/closures',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const v=z.object({days:z.array(z.iso.date()).min(1).max(30),confirmed:z.literal(true)}).strict().parse(req.body);
+  const unique=[...new Set(v.days)];
+  const rows=unique.map(day=>({barbershop_id:c.shopId,day,created_by:c.userId}));
+  const r=await c.db.from('shop_closures').upsert(rows,{onConflict:'barbershop_id,day'});
+  dbError(r.error);
+  res.status(201).json({days:unique});
+ });
+ app.delete('/api/shop/closures/:day',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const day=z.iso.date().parse(req.params.day);
+  const r=await c.db.from('shop_closures').delete().eq('barbershop_id',c.shopId).eq('day',day);
+  dbError(r.error);
+  res.json({ok:true});
+ });
+ app.get('/api/staff/:id/access',rateLimitByUser('staff-access',60_000,15),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const id=z.uuid().parse(req.params.id);
+  const member=await c.db.from('memberships').select('user_id').eq('barbershop_id',c.shopId).eq('user_id',id).eq('role','BARBER').eq('active',true).maybeSingle();dbError(member.error);
+  if(!member.data)throw new ApiError(404,'NOT_FOUND','Profissional não encontrado nesta barbearia.');
+  const result=await serviceDb().auth.admin.getUserById(id);
+  if(result.error||!result.data.user)throw new ApiError(404,'NOT_FOUND','Acesso não encontrado.');
+  res.json({email:result.data.user.email??''});
+ });
+ app.post('/api/staff',rateLimitByUser('staff-provisioning',3_600_000,3),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const v=z.object({name:z.string().trim().min(2).max(100),email:z.email().max(254),temporaryPassword:z.string().min(8).max(128),phone:z.string().trim().min(8).max(24)}).strict().parse(req.body);
+  const admin=serviceDb();
+  const created=await admin.auth.admin.createUser({email:v.email,password:v.temporaryPassword,email_confirm:true,user_metadata:{display_name:v.name}});
+  if(created.error||!created.data.user) throw new ApiError(400,'STAFF_CREATE_FAILED','Não foi possível criar o acesso. Confira se o e-mail já está em uso.');
+  const userId=created.data.user.id;
+   const phoneClaim=await admin.from('account_phone_registry').insert({user_id:userId,phone_e164:normalizeAccountPhone(v.phone)});
+   if(phoneClaim.error){
+    await admin.auth.admin.deleteUser(userId);
+    if(phoneClaim.error.code==='23505')throw new ApiError(409,'PHONE_ALREADY_IN_USE','Este telefone já está vinculado a outra conta FIO.');
+    dbError(phoneClaim.error);
+   }
+  const membership=await admin.rpc('platform_attach_provisioned_staff',{p_shop:c.shopId,p_user:userId,p_name:v.name,p_phone:cleanPhone(v.phone),p_actor:c.userId});
+  if(membership.error){await admin.auth.admin.deleteUser(userId);dbError(membership.error);}
+  res.status(201).json({userId});
+ });
+ app.post('/api/reviews',async(req,res)=>{
+  const c=ctx(res),v=z.object({appointmentId:z.uuid(),rating:z.number().int().min(1).max(5),comment:z.string().trim().max(1000).default('')}).strict().parse(req.body);
+  const r=await c.db.rpc('submit_review',{p_shop:c.shopId,p_appointment:v.appointmentId,p_rating:v.rating,p_comment:v.comment});dbError(r.error);res.status(201).json({id:r.data});
+ });
+ app.get('/api/slots/month',async(req,res)=>{
+  const c=ctx(res);
+  const v=z.object({
+   barberId:z.union([z.uuid(),z.literal('any')]),
+   serviceId:z.uuid(),
+   monthStart:z.iso.date()
+  }).parse(req.query);
+
+  const r=await c.db.rpc('calendar_day_availability',{
+   p_shop:c.shopId,
+   p_barber:v.barberId==='any'?null:v.barberId,
+   p_service:v.serviceId,
+   p_month:v.monthStart
+  });
+  dbError(r.error);
+  res.json(r.data??[]);
+ });
+ app.get('/api/slots',async(req,res)=>{
+  const c=ctx(res);const v=z.object({barberId:z.union([z.uuid(),z.literal('any')]),serviceId:z.uuid(),day:z.iso.date()}).parse(req.query);
+  const r=await c.db.rpc('available_slots',{p_shop:c.shopId,p_barber:v.barberId==='any'?null:v.barberId,p_service:v.serviceId,p_day:v.day});dbError(r.error);res.json(r.data);
+ });
+ app.post('/api/appointments',rateLimitByUser('appointment-create',60_000,20),async(req,res)=>{
+  const c=ctx(res),v=bookingSchema.parse(req.body);
+  if(c.member.role==='BARBER')throw new ApiError(403,'FORBIDDEN','Profissionais gerenciam a agenda, mas não criam agendamentos para clientes.');
+  if(c.member.role==='OWNER'){
+   const shop=await c.db.from('barbershops').select('operation_mode').eq('id',c.shopId).single();
+   dbError(shop.error);
+   if(!shop.data)throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
+   if(shop.data.operation_mode==='SOLO')throw new ApiError(403,'FORBIDDEN','No modo solo, novos agendamentos são criados pelo cliente.');
+  }
+  const r=await c.db.rpc('book_appointment',{p_shop:c.shopId,p_client:v.clientId,p_barber:v.barberId,p_service:v.serviceId,p_start:v.startsAt,p_use_subscription:v.useSubscription});dbError(r.error);
+  const assigned=await c.db.from('appointments').select('barber_id').eq('barbershop_id',c.shopId).eq('id',r.data).maybeSingle();
+  res.status(201).json({id:r.data,barberId:assigned.data?.barber_id??null});
+ });
+ app.get('/api/appointments/period',async(req,res)=>{
+  const c=ctx(res),v=z.object({from:z.iso.date(),to:z.iso.date(),barberId:z.uuid().optional()}).parse(req.query);
+  const r=await c.db.rpc('appointment_period',{p_shop:c.shopId,p_from:v.from,p_to:v.to,p_barber:v.barberId??null});dbError(r.error);res.json(r.data);
+ });
+ app.post('/api/appointments/:id/reschedule',rateLimitByUser('appointment-reschedule',60_000,20),async(req,res)=>{
+  const c=ctx(res),id=z.uuid().parse(req.params.id),v=z.object({startsAt:z.iso.datetime({offset:true}),confirmed:z.literal(true)}).strict().parse(req.body);
+  const r=await c.db.rpc('reschedule_appointment',{p_shop:c.shopId,p_id:id,p_start:v.startsAt});dbError(r.error);res.json({ok:true});
+ });
+ app.get('/api/staff-schedule',async(_req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const [hours,blocks,rules]=await Promise.all(['staff_hours','staff_blocks','staff_service_rules'].map(table=>c.db.from(table).select('*').eq('barbershop_id',c.shopId)));
+  [hours,blocks,rules].forEach(r=>dbError(r.error));res.json({hours:hours.data,blocks:blocks.data,rules:rules.data});
+ });
+ app.post('/api/staff-schedule',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const v=z.object({barberId:z.uuid(),hours:z.array(z.object({weekday:z.number().int().min(0).max(6),opens_at:z.string().regex(/^\d{2}:\d{2}$/),closes_at:z.string().regex(/^\d{2}:\d{2}$/)}).strict()).max(28),disabledServices:z.array(z.uuid()).max(500)}).strict().parse(req.body);
+  const r=await c.db.rpc('configure_staff_schedule',{p_shop:c.shopId,p_barber:v.barberId,p_hours:v.hours,p_disabled_services:v.disabledServices});dbError(r.error);res.json({ok:true});
+ });
+ app.post('/api/staff-blocks',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const v=z.object({barberId:z.uuid(),startsAt:z.iso.datetime({offset:true}),endsAt:z.iso.datetime({offset:true})}).strict().parse(req.body);
+  const r=await c.db.rpc('add_staff_block',{p_shop:c.shopId,p_barber:v.barberId,p_start:v.startsAt,p_end:v.endsAt});dbError(r.error);res.json({id:r.data});
+ });
+ app.delete('/api/staff-blocks/:id',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const r=await c.db.from('staff_blocks').delete().eq('barbershop_id',c.shopId).eq('id',z.uuid().parse(req.params.id));dbError(r.error);res.json({ok:true});
+ });
+ app.get('/api/appointments/:id',async(req,res)=>{const c=ctx(res);const r=await c.db.from('appointments').select('id,client_id,barber_id,service_id,starts_at,ends_at,status,price_cents,subscription_id').eq('barbershop_id',c.shopId).eq('id',z.uuid().parse(req.params.id)).maybeSingle();dbError(r.error);if(!r.data)throw new ApiError(404,'NOT_FOUND','Agendamento não encontrado no seu acesso.');res.json(r.data);});
+ app.get('/api/push/config',async(_req,res)=>res.json(publicPushConfig()));
+ app.get('/api/push/preferences',async(_req,res)=>{const c=ctx(res);const r=await c.db.from('appointment_push_devices').select('endpoint,enabled,changes,reminders').eq('barbershop_id',c.shopId).eq('user_id',c.userId);dbError(r.error);res.json(r.data);});
+ app.post('/api/push/devices',rateLimitByUser('push',60_000,10),async(req,res)=>{
+  const c=ctx(res),v=z.object({optIn:z.literal(true),endpoint:z.string().max(2048).refine(validPushEndpoint),keys:z.object({p256dh:z.string(),auth:z.string()}).strict(),changes:z.boolean(),reminders:z.boolean()}).strict().parse(req.body);
+  const r=await c.db.rpc('register_appointment_push',{p_shop:c.shopId,p_endpoint:v.endpoint,p_keys:v.keys,p_changes:v.changes,p_reminders:v.reminders});dbError(r.error);res.json({ok:true});
+ });
+ app.delete('/api/push/devices',async(req,res)=>{
+  const c=ctx(res),v=z.object({endpoint:z.string().max(2048)}).strict().parse(req.body);const r=await c.db.rpc('disable_appointment_push',{p_shop:c.shopId,p_endpoint:v.endpoint});dbError(r.error);res.json({ok:true});
+ });
+ app.patch('/api/appointments/:id',rateLimitByUser('appointment-status',60_000,30),async(req,res)=>{
+  const c=ctx(res),id=z.uuid().parse(req.params.id),v=z.object({status:z.enum(['confirmed','in_service','completed','cancelled','no_show']),confirmed:z.literal(true)}).strict().parse(req.body);
+  const r=await c.db.rpc('transition_appointment',{p_shop:c.shopId,p_id:id,p_status:v.status});dbError(r.error);res.json({ok:true});
+ });
+ app.post('/api/invitations',rateLimitByUser('invitations',600_000,10),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const v=z.object({role:z.enum(['BARBER','CLIENT'])}).strict().parse(req.body);
+  const r=await c.db.rpc('create_invitation',{p_shop:c.shopId,p_role:v.role});dbError(r.error);res.status(201).json({token:r.data});
+ });
+ app.post('/api/subscriptions',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const v=z.object({clientId:z.uuid(),name:z.string().trim().min(2).max(100),cuts:z.number().int().min(1).max(1000),expiresAt:z.iso.datetime({offset:true}),confirmed:z.literal(true)}).strict().parse(req.body);
+  const r=await c.db.rpc('issue_subscription',{p_shop:c.shopId,p_client:v.clientId,p_name:v.name,p_cuts:v.cuts,p_expires:v.expiresAt});dbError(r.error);res.status(201).json({id:r.data});
+ });
+ app.post('/api/subscription-plans',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);requireFioFeature(c,'client_plans');const v=z.object({name:z.string().trim().min(2).max(100),description:z.string().trim().max(700).default(''),cuts:z.number().int().min(1).max(1000),validityDays:z.number().int().min(1).max(730),priceCents:z.number().int().min(0).max(10000000)}).strict().parse(req.body);
+  const r=await c.db.from('subscription_plans').insert({barbershop_id:c.shopId,name:v.name,description:v.description||null,cuts:v.cuts,validity_days:v.validityDays,price_cents:v.priceCents}).select().single();dbError(r.error);res.status(201).json(r.data);
+ });
+ app.post('/api/subscriptions/from-plan',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);requireFioFeature(c,'client_plans');const v=z.object({clientId:z.uuid(),planId:z.uuid(),confirmed:z.literal(true)}).strict().parse(req.body);
+  const r=await c.db.rpc('issue_subscription_from_plan',{p_shop:c.shopId,p_client:v.clientId,p_plan:v.planId});dbError(r.error);res.status(201).json({id:r.data});
+ });
+ app.patch('/api/subscriptions/:id/cancel',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);const id=z.uuid().parse(req.params.id);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  const r=await c.db.rpc('cancel_subscription',{p_shop:c.shopId,p_subscription:id});dbError(r.error);res.json({ok:true});
+ });
+ app.post('/api/campaigns',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);await requireFioFeature(c,'communication');const v=z.object({title:z.string().trim().min(2).max(120),body:z.string().trim().min(1).max(1000),audience:z.enum(['CLIENT','BARBER','ALL']).default('CLIENT')}).strict().parse(req.body);
+  const r=await c.db.from('campaigns').insert({barbershop_id:c.shopId,created_by:c.userId,title:v.title,body:v.body,audience:v.audience,status:'draft'}).select().single();dbError(r.error);res.status(201).json(r.data);
+ });
+ app.post('/api/campaigns/:id/publish',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);await requireFioFeature(c,'communication');const id=z.uuid().parse(req.params.id);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  const r=await c.db.rpc('publish_campaign',{p_shop:c.shopId,p_campaign:id});dbError(r.error);res.json({ok:true});
+ });
+ app.patch('/api/notifications/:id/read',async(req,res)=>{
+  const c=ctx(res),id=z.uuid().parse(req.params.id);
+  const r=await c.db.from('notifications').update({read_at:new Date().toISOString()}).eq('id',id).eq('barbershop_id',c.shopId).eq('user_id',c.userId);dbError(r.error);res.json({ok:true});
+ });
+ app.get('/api/feed/professionals',async(_req,res)=>{
+  const c=ctx(res);requireFioFeature(c,'feed');
+  const r=await c.db.rpc('feed_professional_profiles',{p_shop:c.shopId});
+  dbError(r.error);res.json(r.data??[]);
+ });
+ app.post('/api/posts',rateLimitByUser('feed-posts',600_000,12),async(req,res)=>{
+  const c=ctx(res);requireFioFeature(c,'feed');
+  if(!['OWNER','BARBER'].includes(c.member.role)) throw new ApiError(403,'FORBIDDEN','Somente a equipe pode publicar no feed.');
+  const v=z.object({caption:z.string().trim().max(500).default(''),imagePath:z.string().min(5).max(500)}).strict().parse(req.body);
+  const expected=`${c.shopId}/${c.userId}/`;
+  if(!v.imagePath.startsWith(expected)||! /^[0-9a-f-]{36}\.webp$/i.test(v.imagePath.slice(expected.length))) throw new ApiError(400,'INVALID_IMAGE','O arquivo enviado não pertence a este perfil.');
+  const r=await c.db.from('feed_posts').insert({barbershop_id:c.shopId,author_id:c.userId,author_name:c.member.display_name,caption:v.caption,image_path:v.imagePath}).select('id,author_id,author_name,caption,image_path,created_at').single();
+  dbError(r.error);res.status(201).json(r.data);
+ });
+ app.delete('/api/posts/:id',async(req,res)=>{
+  const c=ctx(res),id=z.uuid().parse(req.params.id);requireFioFeature(c,'feed');
+  if(!['OWNER','BARBER'].includes(c.member.role)) throw new ApiError(403,'FORBIDDEN','Somente a equipe pode remover publicações.');
+  const existing=await c.db.from('feed_posts').select('id,author_id,image_path').eq('id',id).eq('barbershop_id',c.shopId).maybeSingle();dbError(existing.error);
+  if(!existing.data) throw new ApiError(404,'NOT_FOUND','Publicação não encontrada.');
+  if(c.member.role!=='OWNER'&&existing.data.author_id!==c.userId) throw new ApiError(403,'FORBIDDEN','Você só pode remover suas próprias publicações.');
+  const r=await c.db.from('feed_posts').delete().eq('id',id).eq('barbershop_id',c.shopId);dbError(r.error);res.json({ok:true,imagePath:existing.data.image_path});
+ });
+ app.post('/api/support/feedback',rateLimitByUser('feedback',600_000,5),async(req,res)=>{
+  const c=ctx(res),v=z.object({category:z.enum(['feedback','problem','question']),message:z.string().trim().min(3).max(1500)}).strict().parse(req.body);
+  const r=await c.db.from('support_feedback').insert({barbershop_id:c.shopId,user_id:c.userId,role:c.member.role,category:v.category,message:v.message});dbError(r.error);res.status(201).json({ok:true});
+ });
+ app.get('/api/conversations',async(_req,res)=>{
+  const c=ctx(res);if(c.member.role==='CLIENT')throw new ApiError(403,'FORBIDDEN','Assistente disponível apenas para a equipe.');requireFioFeature(c,'assistant');const r=await c.db.from('assistant_conversations').select('id,title,created_at').eq('barbershop_id',c.shopId).eq('user_id',c.userId).order('created_at',{ascending:false}).limit(50);dbError(r.error);res.json(r.data);
+ });
+ app.get('/api/conversations/:id',async(req,res)=>{
+  const c=ctx(res),id=z.uuid().parse(req.params.id);if(c.member.role==='CLIENT')throw new ApiError(403,'FORBIDDEN','Assistente disponível apenas para a equipe.');requireFioFeature(c,'assistant');
+  const r=await c.db.from('assistant_messages').select('id,role,content').eq('conversation_id',id).eq('barbershop_id',c.shopId).eq('user_id',c.userId).order('created_at').limit(200);dbError(r.error);res.json(r.data);
+ });
+ app.post('/api/assistant',rateLimitByUser('assistant',60_000,12),async(req,res)=>{const c=ctx(res);if(c.member.role==='CLIENT')throw new ApiError(403,'FORBIDDEN','Assistente disponível apenas para a equipe.');requireFioFeature(c,'assistant');res.json(await askAssistant(c,req.body));});
+ app.use('/api',(_req,res)=>res.status(404).json({code:'NOT_FOUND',message:'Recurso não encontrado.'}));
+ if(process.env.NODE_ENV==='production') {
+  const reservedPublicSlugs=new Set([
+   'owner',
+   'barber',
+   'client',
+   'login',
+   'reset-password',
+   'confirm-email',
+   'privacidade',
+   'termos',
+   'acesso',
+   'b',
+   'barbearia',
+   'platform',
+   'api'
+  ]);
+
+  app.get('/:publicSlug',async(req,res,next)=>{
+   const slug=String(req.params.publicSlug??'').toLowerCase();
+
+   if(
+    reservedPublicSlugs.has(slug)||
+    !/^[a-z0-9-]{3,60}$/.test(slug)
+   ){
+    next();
+    return;
+   }
+
+   const db=serviceDb();
+
+   const shop=await db
+    .from('barbershops')
+    .select(
+     'name,public_title,public_description,logo_url,logo_asset_path,custom_accent,accent_color'
+    )
+    .eq('slug',slug)
+    .eq('onboarding_completed',true)
+    .neq('platform_status','suspended')
+    .maybeSingle();
+
+   dbError(shop.error);
+
+   if(!shop.data){
+    next();
+    return;
+   }
+
+   const esc=(value:unknown)=>
+    String(value??'')
+     .replaceAll('&','&amp;')
+     .replaceAll('<','&lt;')
+     .replaceAll('>','&gt;')
+     .replaceAll('"','&quot;')
+     .replaceAll("'","&#39;");
+
+   const name=
+    shop.data.public_title||
+    shop.data.name;
+
+   const description=
+    shop.data.public_description||
+    `Agende seu horário com ${name}.`;
+
+   const rawImage=
+    shop.data.logo_url||
+    (
+     shop.data.logo_asset_path
+      ?publicStorageUrl(
+       'branding-assets',
+       shop.data.logo_asset_path
+      )
+      :''
+    );
+
+   const proto=
+    (
+     req.get('x-forwarded-proto')||
+     (req.secure?'https':'http')
+    )
+     .split(',')[0]
+     .trim();
+
+   const host=
+    (
+     req.get('x-forwarded-host')||
+     req.get('host')||
+     ''
+    )
+     .split(',')[0]
+     .trim();
+
+   const canonical=
+    host
+     ?`${proto}://${host}/${slug}`
+     :`/${slug}`;
+
+   const image=
+    rawImage&&/^https?:\/\//i.test(rawImage)
+     ?rawImage
+     :rawImage&&host
+      ?`${proto}://${host}${rawImage.startsWith('/')?'':'/'}${rawImage}`
+      :rawImage;
+
+   const accent=
+    shop.data.custom_accent||
+    shop.data.accent_color||
+    '#000000';
+
+   let html=
+    readFileSync(
+     resolve('dist/index.html'),
+     'utf8'
+    );
+
+   html=html
+    .replace(
+     /<title>[\s\S]*?<\/title>/i,
+     `<title>${esc(name)} · Agendamento</title>`
+    )
+    .replace(
+     /<meta\s+name="description"[\s\S]*?\/>/i,
+     `<meta name="description" content="${esc(description)}" />`
+    )
+    .replace(
+     /<meta\s+name="theme-color"[\s\S]*?\/>/i,
+     `<meta name="theme-color" content="${esc(accent)}" />`
+    );
+
+   if(image){
+    html=html
+     .replace(
+      /<link\s+rel="apple-touch-icon"[\s\S]*?\/>/i,
+      `<link rel="apple-touch-icon" href="${esc(image)}" />`
+     )
+     .replace(
+      /<link\s+rel="icon"[\s\S]*?\/>/i,
+      `<link rel="icon" href="${esc(image)}" />`
+     );
+   }
+
+   const social=[
+    `<meta property="og:type" content="website" />`,
+    `<meta property="og:title" content="${esc(name)}" />`,
+    `<meta property="og:description" content="${esc(description)}" />`,
+    `<meta property="og:url" content="${esc(canonical)}" />`,
+    image
+     ?`<meta property="og:image" content="${esc(image)}" />`
+     :'',
+    `<meta name="twitter:card" content="summary" />`,
+    `<meta name="twitter:title" content="${esc(name)}" />`,
+    `<meta name="twitter:description" content="${esc(description)}" />`,
+    image
+     ?`<meta name="twitter:image" content="${esc(image)}" />`
+     :''
+   ]
+    .filter(Boolean)
+    .join('\n    ');
+
+   html=html.replace(
+    '</head>',
+    `    ${social}\n  </head>`
+   );
+
+   res
+    .type('html')
+    .set('Cache-Control','no-store')
+    .send(html);
+  });
+
+  app.use(express.static(resolve('dist')));
+  app.get('/{*path}',(_req,res)=>res.sendFile(resolve('dist/index.html')));
+ }
+ app.use((error:unknown,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{
+  const parserError=error as {type?:string};
+  if(parserError?.type==='entity.too.large'){res.status(413).json({code:'PAYLOAD_TOO_LARGE',message:'O conteúdo enviado excede o limite permitido.'});return;}
+  if(parserError?.type==='entity.parse.failed'){res.status(400).json({code:'INVALID_JSON',message:'O conteúdo enviado é inválido.'});return;}
+  secureLog(String(res.getHeader('X-Request-Id')??''),error);
+  if(error instanceof ZodError) {res.status(400).json({code:'INVALID_INPUT',message:'Confira os campos informados.'});return;}
+  if(error instanceof ApiError) {if(error.status===429&&!res.hasHeader('Retry-After'))res.setHeader('Retry-After',error.code==='DAILY_LIMIT'?'86400':'60');res.status(error.status).json({code:error.code,message:error.message});return;}
+  res.status(500).json({code:'INTERNAL_ERROR',message:'Não foi possível concluir. Tente novamente.'});
+ });
+ return app;
+}
+
+
+
+==================== server\syncpay.ts ====================
+
+import { createHash,createHmac,timingSafeEqual } from 'node:crypto';
+import { createClient,type SupabaseClient } from '@supabase/supabase-js';
+import type { Request,Response as ExpressResponse } from 'express';
+import { z } from 'zod';
+import type { TenantContext } from './context.js';
+import { ApiError,dbError } from './errors.js';
+import { FIO_PLAN_CATALOG,type BillingCycle } from '../shared/fio-plans.js';
+
+const BASE='https://api.syncpayments.com.br/api/partner/v1';
+const PAID_PLANS=['SOLO','SOLO_PREMIUM','PRO','PREMIUM'] as const;
+const CYCLES=['monthly','annual'] as const;
+const CYCLE_DAYS:Record<BillingCycle,number>={weekly:7,monthly:30,annual:365};
+const BILLING_ADVANCE:Record<BillingCycle,number>={weekly:1,monthly:3,annual:7};
+const GRACE_DAYS:Record<BillingCycle,number>={weekly:2,monthly:5,annual:7};
+const MAX_RETRIES=3;
+const SUBSCRIPTION_EVENTS=new Set([
+ 'assinatura_criada','assinatura_ativada','assinatura_em_atraso','assinatura_suspensa',
+ 'assinatura_cancelada','assinatura_reativada','assinatura_renovada','assinatura_plano_alterado',
+ 'cobranca_gerada','cobranca_paga','cobranca_falhou','cobranca_retentativa','mandato_ativado','mandato_cancelado'
+]);
+
+const subscribeInput=z.object({
+ plan:z.enum(PAID_PLANS),cycle:z.enum(CYCLES),document:z.string().trim().min(11).max(24),acceptedTerms:z.literal(true)
+}).strict();
+
+const planResource=z.object({
+ token:z.string().min(8).max(200),name:z.string(),description:z.string().optional().nullable(),amount:z.union([z.string(),z.number()]),
+ periodicity_days:z.number().int().positive(),billing_advance_days:z.number().int().nonnegative().optional(),grace_period_days:z.number().int().nonnegative().optional(),
+ max_retry_attempts:z.number().int().nonnegative().optional(),billing_method:z.string(),status:z.string(),checkout_url:z.string().url().optional().nullable()
+}).passthrough();
+const listPlansResponse=z.object({data:z.array(planResource)}).passthrough();
+const createPlanResponse=z.object({data:planResource}).passthrough();
+const subscriberResource=z.object({
+ token:z.string().min(8).max(200),status:z.string().optional(),subscriber_email:z.string().optional().nullable(),
+ started_at:z.string().optional().nullable()
+}).passthrough();
+const listSubscribersResponse=z.object({data:z.array(subscriberResource)}).passthrough();
+const transactionResponse=z.object({data:z.object({
+ reference_id:z.string().min(8).max(200),status:z.string(),paid_at:z.string().optional().nullable(),transaction_date:z.string().optional().nullable()
+}).passthrough()}).passthrough();
+const refundResponse=z.object({data:z.object({
+ code:z.string().min(4).max(100),status:z.string(),requested_at:z.string().optional().nullable()
+}).passthrough()}).passthrough();
+
+const chargeSchema=z.object({
+ cycle_number:z.number().int().optional(),amount:z.union([z.string(),z.number()]).optional(),status:z.string().default('pending'),due_date:z.string().optional().nullable(),
+ expires_at:z.string().optional().nullable(),paid_at:z.string().optional().nullable(),payment:z.object({pix_code:z.string().optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable()}).passthrough().optional().nullable()
+}).passthrough();
+const loosePayment=z.object({pix_code:z.string().optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable(),expires_at:z.string().optional().nullable(),status:z.string().optional().nullable()}).passthrough();
+const looseSubscription=z.object({
+ token:z.string().optional(),subscription_token:z.string().optional(),status:z.string().optional(),subscriber_name:z.string().optional(),subscriber_email:z.string().optional(),
+ started_at:z.string().optional().nullable(),next_charge_at:z.string().optional().nullable(),next_billing_at:z.string().optional().nullable(),next_charge_date:z.string().optional().nullable(),
+ cancelled_at:z.string().optional().nullable(),plan:z.union([z.string(),z.object({token:z.string().optional(),grace_period_days:z.number().int().nonnegative().optional()}).passthrough()]).optional(),
+ plan_token:z.string().optional(),charges:z.array(chargeSchema).optional(),payment:loosePayment.optional().nullable()
+}).passthrough();
+const enrollResponse=z.object({
+ subscription_token:z.string().min(8).max(200),status:z.string(),billing_method:z.string(),payment:z.object({
+  pix_code:z.string().min(1).optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable(),expires_at:z.string().optional().nullable()
+ }).passthrough().optional().nullable()
+}).passthrough();
+const webhookEnvelope=z.object({
+ event:z.string().min(1).max(80),occurred_at:z.iso.datetime({offset:true}),subscription_token:z.string().min(8).max(200),
+ plan_token:z.string().min(8).max(200).optional(),status:z.string().max(80).optional(),next_charge_at:z.iso.datetime({offset:true}).nullable().optional()
+}).passthrough();
+
+type Fetcher=typeof fetch;
+type PaidPlan=typeof PAID_PLANS[number];
+type ProviderStatus='pending_first_payment'|'active'|'overdue'|'suspended'|'cancelled';
+type ProviderDetail={planReported:boolean;token:string;status:ProviderStatus;started_at:string|null;next_charge_at:string|null;cancelled_at:string|null;plan:{token:string;grace_period_days:number};charges:z.infer<typeof chargeSchema>[];payment:z.infer<typeof loosePayment>|null};
+type PlanMapping={plan_code:PaidPlan;billing_cycle:BillingCycle;amount_cents:number;periodicity_days:number;billing_method:string;provider_plan_token:string;checkout_url:string|null};
+type ProviderLink={id:string;barbershop_id:string;provider_subscription_token:string;provider_plan_token:string;plan_code:PaidPlan;billing_cycle:BillingCycle;amount_cents:number;provider_status:ProviderStatus;is_current:boolean;last_event_at:string|null};
+type EnrollmentIntent={id:string;state:'creating'|'uncertain';provider_subscription_token:string|null;same_offer:boolean;created:boolean};
+type OpenEnrollmentRow={id:string;provider_plan_token:string;plan_code:PaidPlan;billing_cycle:BillingCycle;state:'creating'|'uncertain';provider_subscription_token:string|null;created_at:string;updated_at:string};
+const enrollmentIntentSchema=z.object({id:z.uuid(),state:z.enum(['creating','uncertain']),provider_subscription_token:z.string().min(8).max(200).nullable(),same_offer:z.boolean(),created:z.boolean()});
+
+let tokenCache:{value:string;expiresAt:number}|null=null;
+
+class SyncpayHttpError extends Error{
+ constructor(readonly status:number,readonly payload:unknown){super(`syncpay_http_${status}`);this.name='SyncpayHttpError';}
+}
+
+function adminDb(){
+ const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+ if(!url||!key)throw new ApiError(503,'SETUP_REQUIRED','A configuração segura do servidor ainda não foi concluída.');
+ return createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+}
+
+function configured(){return Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);}
+function webhookSecrets(){
+ const named=[
+  process.env.SYNCPAY_WEBHOOK_SECRET,
+  process.env.SYNCPAY_WEBHOOK_SECRET_PREVIOUS,
+  process.env.SYNCPAY_WEBHOOK_SECRET_ACTIVATED,
+  process.env.SYNCPAY_WEBHOOK_SECRET_OVERDUE,
+  process.env.SYNCPAY_WEBHOOK_SECRET_SUSPENDED,
+  process.env.SYNCPAY_WEBHOOK_SECRET_CANCELLED,
+  process.env.SYNCPAY_WEBHOOK_SECRET_REACTIVATED,
+  process.env.SYNCPAY_WEBHOOK_SECRET_RENEWED
+ ];
+ const packed=(process.env.SYNCPAY_WEBHOOK_SECRETS??'').split(/[\n,;]/);
+ return [...new Set([...named,...packed].map(x=>x?.trim()).filter((x):x is string=>Boolean(x&&x.length>=8)))].slice(0,20);
+}
+function digits(value:string){return value.replace(/\D/g,'');}
+function safeEqual(a:string,b:string){const aa=Buffer.from(a),bb=Buffer.from(b);return aa.length===bb.length&&timingSafeEqual(aa,bb);}
+function cents(value:string|number){const n=typeof value==='number'?value:Number(value);return Number.isFinite(n)?Math.round(n*100):-1;}
+function brl(centsValue:number){return (centsValue/100).toFixed(2);}
+function iso(value:string|null|undefined){if(!value)return null;const d=new Date(value);return Number.isNaN(d.getTime())?null:d.toISOString();}
+
+function validCpf(value:string){
+ if(value.length!==11||/^(\d)\1+$/.test(value))return false;
+ const calc=(len:number)=>{let sum=0;for(let i=0;i<len;i++)sum+=Number(value[i])*(len+1-i);const r=(sum*10)%11;return r===10?0:r;};
+ return calc(9)===Number(value[9])&&calc(10)===Number(value[10]);
+}
+function validCnpj(value:string){
+ if(value.length!==14||/^(\d)\1+$/.test(value))return false;
+ const calc=(base:string,weights:number[])=>{const sum=base.split('').reduce((acc,n,i)=>acc+Number(n)*weights[i],0);const r=sum%11;return r<2?0:11-r;};
+ const d1=calc(value.slice(0,12),[5,4,3,2,9,8,7,6,5,4,3,2]);
+ const d2=calc(value.slice(0,12)+d1,[6,5,4,3,2,9,8,7,6,5,4,3,2]);
+ return d1===Number(value[12])&&d2===Number(value[13]);
+}
+function validDocument(value:string){return validCpf(value)||validCnpj(value);}
+
+function planConfig(plan:PaidPlan,cycle:BillingCycle){
+ const definition=FIO_PLAN_CATALOG.find(item=>item.code===plan);
+ const amount=definition?.prices[cycle];
+ if(!definition||definition.proposal||amount==null||amount<=0)throw new ApiError(400,'INVALID_PLAN','Escolha um plano pago válido.');
+ return {plan,cycle,amountCents:amount,periodicityDays:CYCLE_DAYS[cycle],name:`${definition.name} · ${cycle==='weekly'?'Semanal':cycle==='monthly'?'Mensal':'Anual'} · v1 · ${amount}`};
+}
+
+async function parseJson(response:globalThis.Response){
+ const text=await response.text();
+ if(!text)return {};
+ try{return JSON.parse(text) as unknown;}catch{return {message:'invalid_json'};}
+}
+
+function providerParse<T>(schema:z.ZodType<T>,value:unknown):T{
+ const parsed=schema.safeParse(value);
+ if(!parsed.success)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível atualizar a cobrança agora. Tente novamente em instantes.');
+ return parsed.data;
+}
+
+function normalizeProviderStatus(value:unknown):ProviderStatus{
+ const raw=String(value??'').toLowerCase().trim();
+ if(raw==='pending'||raw==='pending_payment'||raw==='pending_first_payment')return 'pending_first_payment';
+ if(raw==='active'||raw==='approved'||raw==='paid')return 'active';
+ if(raw==='overdue'||raw==='past_due'||raw==='late')return 'overdue';
+ if(raw==='suspended'||raw==='paused')return 'suspended';
+ if(raw==='cancelled'||raw==='canceled'||raw==='expired')return 'cancelled';
+ throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível atualizar a cobrança agora. Tente novamente em instantes.');
+}
+
+function normalizeProviderDetail(value:unknown,fallback:{token:string;planToken:string;gracePeriodDays:number}):ProviderDetail{
+ const root=value&&typeof value==='object'?value as Record<string,unknown>:{};
+ let raw:unknown=root.data??root;
+ if(raw&&typeof raw==='object'&&'subscription' in (raw as Record<string,unknown>))raw=(raw as Record<string,unknown>).subscription;
+ const detail=providerParse(looseSubscription,raw);
+ const plan=typeof detail.plan==='string'?{token:detail.plan}:detail.plan;
+ const token=(detail.token??detail.subscription_token??fallback.token).trim();
+ const planToken=(plan?.token??detail.plan_token??fallback.planToken).trim();
+ if(token.length<8||planToken.length<8)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível atualizar a cobrança agora. Tente novamente em instantes.');
+ if(token!==fallback.token)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível confirmar a cobrança solicitada.');
+ return {
+  planReported:Boolean(plan?.token||detail.plan_token),token,status:normalizeProviderStatus(detail.status),started_at:iso(detail.started_at),next_charge_at:iso(detail.next_charge_at??detail.next_billing_at??detail.next_charge_date),cancelled_at:iso(detail.cancelled_at),
+   plan:{token:planToken,grace_period_days:fallback.gracePeriodDays},
+  charges:detail.charges??[],payment:detail.payment??null
+ };
+}
+
+async function getAccessToken(fetcher:Fetcher,force=false){
+ if(!force&&tokenCache&&tokenCache.expiresAt-Date.now()>60_000)return tokenCache.value;
+ const clientId=process.env.SYNCPAY_CLIENT_ID,clientSecret=process.env.SYNCPAY_CLIENT_SECRET;
+ if(!clientId||!clientSecret)throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','A cobrança recorrente ainda não está disponível. Tente novamente mais tarde.');
+ let response:globalThis.Response;
+ try{response=await fetcher(`${BASE}/auth-token`,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({client_id:clientId,client_secret:clientSecret}),signal:AbortSignal.timeout(15000)});}catch{throw new ApiError(503,'SYNCPAY_UNAVAILABLE','Não foi possível acessar a cobrança agora. Tente novamente em instantes.');}
+ const payload=await parseJson(response);
+ if(!response.ok)throw new SyncpayHttpError(response.status,payload);
+ const parsed=providerParse(z.object({access_token:z.string().min(10),expires_in:z.number().positive().default(3600),expires_at:z.string().optional()}),payload);
+ const byField=parsed.expires_at?Date.parse(parsed.expires_at):NaN;
+ tokenCache={value:parsed.access_token,expiresAt:Number.isFinite(byField)?byField:Date.now()+parsed.expires_in*1000};
+ return tokenCache.value;
+}
+
+async function providerRequest(fetcher:Fetcher,path:string,init:RequestInit={},retry401=true):Promise<unknown>{
+ let token:string;
+ try{token=await getAccessToken(fetcher);}catch(e){throw providerApiError(e);}
+ let response:globalThis.Response;
+ try{response=await fetcher(`${BASE}${path}`,{...init,headers:{Accept:'application/json',Authorization:`Bearer ${token}`,...(init.body?{'Content-Type':'application/json'}:{}),...(init.headers??{})},signal:init.signal??AbortSignal.timeout(15000)});}catch{throw new ApiError(503,'SYNCPAY_UNAVAILABLE','Não foi possível acessar a cobrança agora. Tente novamente em instantes.');}
+ if(response.status===401&&retry401){tokenCache=null;try{await getAccessToken(fetcher,true);}catch(e){throw providerApiError(e);}return providerRequest(fetcher,path,init,false);}
+ const payload=await parseJson(response);
+ if(!response.ok)throw providerApiError(new SyncpayHttpError(response.status,payload));
+ return payload;
+}
+
+function providerApiError(error:unknown):ApiError{
+ if(error instanceof ApiError)return error;
+ if(error instanceof SyncpayHttpError){
+  const p=error.payload&&typeof error.payload==='object'?error.payload as Record<string,unknown>:{};
+  if(error.status===422&&p.action==='wait_for_approval')return new ApiError(503,'SYNCPAY_ACCOUNT_PENDING','A cobrança recorrente ainda não está disponível para esta conta.');
+  if(error.status===401||error.status===403)return new ApiError(503,'SYNCPAY_AUTH_ERROR','A cobrança recorrente está temporariamente indisponível. Tente novamente mais tarde.');
+  if(error.status===429)return new ApiError(429,'SYNCPAY_RATE_LIMIT','Muitas tentativas em pouco tempo. Aguarde um pouco e tente novamente.');
+  if(error.status===404)return new ApiError(409,'SYNCPAY_RESOURCE_NOT_FOUND','Não foi possível localizar esta cobrança. Atualize a página e tente novamente.');
+  const providerCode=String(p.error??p.error_code??'').toLowerCase();
+  if(error.status===409&&providerCode.includes('refund'))return new ApiError(409,'SYNCPAY_REFUND_IN_PROGRESS','Já existe um reembolso em andamento para esta cobrança.');
+  if(error.status===422&&providerCode.includes('refund'))return new ApiError(422,'SYNCPAY_REFUND_UNAVAILABLE','Esta cobrança não está elegível para reembolso automático. Fale com o suporte FIO.');
+  if(error.status===422)return new ApiError(422,'SYNCPAY_INVALID_REQUEST','Não foi possível criar a cobrança com esses dados. Confira as informações e tente novamente.');
+ }
+ return new ApiError(503,'SYNCPAY_UNAVAILABLE','Não foi possível acessar a cobrança agora. Tente novamente em instantes.');
+}
+
+async function ensureProviderPlan(db:SupabaseClient,plan:PaidPlan,cycle:BillingCycle,fetcher:Fetcher):Promise<PlanMapping>{
+ const config=planConfig(plan,cycle);
+ const local=await db.from('syncpay_plan_mappings').select('plan_code,billing_cycle,amount_cents,periodicity_days,billing_method,provider_plan_token,checkout_url').eq('plan_code',plan).eq('billing_cycle',cycle).eq('billing_method','qr_code').eq('amount_cents',config.amountCents).eq('active',true).maybeSingle();
+ dbError(local.error);
+ if(local.data)return local.data as PlanMapping;
+
+ const query=new URLSearchParams({page:'1',per_page:'100',status:'active',search:config.name});
+ const listed=providerParse(listPlansResponse,await providerRequest(fetcher,`/subscription-plans?${query.toString()}`));
+ let remote=listed.data.find(item=>item.name===config.name&&cents(item.amount)===config.amountCents&&item.periodicity_days===config.periodicityDays&&item.billing_method==='qr_code');
+ if(!remote){
+  const created=providerParse(createPlanResponse,await providerRequest(fetcher,'/subscription-plans',{method:'POST',body:JSON.stringify({
+   name:config.name,description:`Assinatura ${plan} do FIO no ciclo ${cycle}.`,amount:brl(config.amountCents),periodicity_days:config.periodicityDays,
+   billing_method:'qr_code',billing_advance_days:BILLING_ADVANCE[cycle],grace_period_days:GRACE_DAYS[cycle],max_retry_attempts:MAX_RETRIES
+  })}));
+  remote=created.data;
+ }
+ const row={plan_code:plan,billing_cycle:cycle,amount_cents:config.amountCents,periodicity_days:config.periodicityDays,billing_method:'qr_code',provider_plan_token:remote.token,checkout_url:remote.checkout_url??null,active:true,updated_at:new Date().toISOString()};
+ const saved=await db.from('syncpay_plan_mappings').upsert(row,{onConflict:'plan_code,billing_cycle,billing_method,amount_cents'}).select('plan_code,billing_cycle,amount_cents,periodicity_days,billing_method,provider_plan_token,checkout_url').single();
+ dbError(saved.error);return saved.data as PlanMapping;
+}
+
+async function getProviderDetail(token:string,fetcher:Fetcher,fallback:{planToken:string;gracePeriodDays:number}){return normalizeProviderDetail(await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(token)}`),{token,...fallback});}
+
+function paymentFromDetail(detail:ProviderDetail){
+ const charge=detail.charges.find(item=>['pending','created','waiting_payment'].includes(String(item.status).toLowerCase())&&item.payment?.pix_code);
+ if(charge)return {pixCode:charge.payment?.pix_code??null,qrCode:charge.payment?.qr_code??null,identifier:charge.payment?.identifier??null,expiresAt:iso(charge.expires_at)};
+ if(detail.payment?.pix_code)return {pixCode:detail.payment.pix_code??null,qrCode:detail.payment.qr_code??null,identifier:detail.payment.identifier??null,expiresAt:iso(detail.payment.expires_at)};
+ return null;
+}
+
+function paymentFromChargePayload(value:unknown){
+ let raw:unknown=value;
+ for(let depth=0;depth<4;depth++){
+  if(!raw||typeof raw!=='object')return null;
+  const record=raw as Record<string,unknown>;
+  if(record.charge&&typeof record.charge==='object'){
+   const parsed=chargeSchema.safeParse(record.charge);
+   const charge=parsed.success?parsed.data:null;
+   if(charge?.payment?.pix_code)return {pixCode:charge.payment.pix_code,qrCode:charge.payment.qr_code??null,identifier:charge.payment.identifier??null,expiresAt:iso(charge.expires_at)};
+  }
+  const direct=loosePayment.safeParse(record.payment??record);
+  if(direct.success&&direct.data.pix_code)return {pixCode:direct.data.pix_code,qrCode:direct.data.qr_code??null,identifier:direct.data.identifier??null,expiresAt:iso(direct.data.expires_at)};
+  raw=record.data??record.subscription??null;
+ }
+ return null;
+}
+
+function accessUntil(detail:ProviderDetail){
+ const next=iso(detail.next_charge_at);
+ if(detail.status==='active'||detail.status==='overdue'){
+  if(!next)return null;
+  return new Date(new Date(next).getTime()+(detail.plan.grace_period_days??0)*86_400_000).toISOString();
+ }
+ return null;
+}
+
+function stateEventKey(prefix:string,detail:ProviderDetail){
+ return createHash('sha256').update([prefix,detail.token,detail.status,detail.plan.token,detail.next_charge_at??'',detail.cancelled_at??'',JSON.stringify(detail.charges.map(c=>[c.cycle_number,c.status,c.paid_at,c.payment?.identifier]))].join('|')).digest('hex');
+}
+
+async function applyProviderTruth(db:SupabaseClient,detail:ProviderDetail,event:{key:string;name:string;occurredAt:string;bodyHash:string}){
+ await reconcilePlanChange(db,detail);
+ const mapped=await db.from('syncpay_plan_mappings').select('billing_cycle').eq('provider_plan_token',detail.plan.token).maybeSingle();dbError(mapped.error);
+ if(mapped.data)detail.plan.grace_period_days=GRACE_DAYS[mapped.data.billing_cycle as BillingCycle];
+ const until=accessUntil(detail);
+ if((detail.status==='active'||detail.status==='overdue')&&!until)throw new ApiError(503,'SYNCPAY_INCOMPLETE_STATE','Não foi possível confirmar a validade da assinatura agora. Tente novamente em instantes.');
+ const result=await db.rpc('apply_syncpay_subscription_state',{
+  p_event_key:event.key,p_event_name:event.name,p_occurred_at:event.occurredAt,p_body_sha256:event.bodyHash,
+  p_subscription_token:detail.token,p_provider_status:detail.status,p_plan_token:detail.plan.token,p_started_at:iso(detail.started_at),p_access_until:until
+ });
+ dbError(result.error);return result.data;
+}
+
+function firstPaidCharge(detail:ProviderDetail){
+ const paid=detail.charges.filter(item=>Boolean(item.paid_at)&&['paid','completed','approved'].includes(String(item.status).toLowerCase()));
+ return paid.sort((a,b)=>{
+  const ac=a.cycle_number??Number.MAX_SAFE_INTEGER,bc=b.cycle_number??Number.MAX_SAFE_INTEGER;
+  if(ac!==bc)return ac-bc;
+  return Date.parse(a.paid_at??'')-Date.parse(b.paid_at??'');
+ })[0]??null;
+}
+
+function refundWindow(detail:ProviderDetail,now=Date.now()){
+ const charge=firstPaidCharge(detail);
+ if(!charge?.paid_at)return {eligible:false,deadline:null,identifier:null};
+ if(charge.cycle_number!=null&&charge.cycle_number!==1)return {eligible:false,deadline:null,identifier:null};
+ const paidAt=Date.parse(charge.paid_at);
+ if(!Number.isFinite(paidAt))return {eligible:false,deadline:null,identifier:null};
+ const deadlineMs=paidAt+7*86_400_000;
+ return {eligible:now<=deadlineMs,deadline:new Date(deadlineMs).toISOString(),identifier:charge.payment?.identifier??null};
+}
+
+function billingResponse(link:ProviderLink,detail:ProviderDetail,paymentOverride?:{pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null}|null){
+ const refund=refundWindow(detail);
+ return {provider:'syncpay' as const,providerStatus:detail.status,plan:link.plan_code,cycle:link.billing_cycle,amountCents:link.amount_cents,nextChargeAt:iso(detail.next_charge_at),payment:paymentOverride??paymentFromDetail(detail),refund:{eligible:refund.eligible,deadline:refund.deadline}};
+}
+
+async function currentLink(db:SupabaseClient,shopId:string){
+ const r=await db.from('saas_provider_subscriptions').select('id,barbershop_id,provider_subscription_token,provider_plan_token,plan_code,billing_cycle,amount_cents,provider_status,is_current,last_event_at').eq('barbershop_id',shopId).eq('provider','syncpay').eq('is_current',true).maybeSingle();
+ dbError(r.error);return r.data as ProviderLink|null;
+}
+
+async function setEnrollmentIntent(db:SupabaseClient,id:string,state:'creating'|'uncertain'|'linked'|'failed',subscriptionToken:string|null,errorCode:string|null){
+ const r=await db.from('syncpay_enrollment_intents').update({state,provider_subscription_token:subscriptionToken,last_error_code:errorCode,updated_at:new Date().toISOString()}).eq('id',id);
+ dbError(r.error);
+}
+
+function enrollmentFailureIsKnown(error:unknown){
+ if(!(error instanceof ApiError))return false;
+ return ['INVALID_DOCUMENT','BILLING_EMAIL_REQUIRED','SYNCPAY_ACCOUNT_PENDING','SYNCPAY_AUTH_ERROR','SYNCPAY_RATE_LIMIT','SYNCPAY_RESOURCE_NOT_FOUND','SYNCPAY_INVALID_REQUEST'].includes(error.code);
+}
+
+function pickRecoverableSubscriber(items:z.infer<typeof subscriberResource>[],email:string,intentCreatedAt:string){
+ const wanted=email.trim().toLowerCase(),created=Date.parse(intentCreatedAt);
+ if(!wanted||!Number.isFinite(created))return null;
+ const floor=created-10*60_000,ceiling=Date.now()+5*60_000;
+ const candidates=items.filter(item=>{
+  const started=Date.parse(item.started_at??'');
+  return item.subscriber_email?.trim().toLowerCase()===wanted
+   && !['cancelled','canceled'].includes(String(item.status??'').toLowerCase())
+   && Number.isFinite(started)&&started>=floor&&started<=ceiling;
+ });
+ return candidates.sort((a,b)=>Date.parse(b.started_at??'')-Date.parse(a.started_at??''))[0]??null;
+}
+
+async function recoverOpenEnrollment(ctx:TenantContext,fetcher:Fetcher,forceReset=false){
+ const db=adminDb();
+ const open=await db.from('syncpay_enrollment_intents')
+  .select('id,provider_plan_token,plan_code,billing_cycle,state,provider_subscription_token,created_at,updated_at')
+  .eq('barbershop_id',ctx.shopId).in('state',['creating','uncertain']).order('created_at',{ascending:false}).limit(1).maybeSingle();
+ dbError(open.error);
+ if(!open.data)return {billing:null,blocked:false};
+ const intent=open.data as OpenEnrollmentRow;
+ const mapping=await db.from('syncpay_plan_mappings').select('provider_plan_token,billing_cycle').eq('provider_plan_token',intent.provider_plan_token).maybeSingle();
+ dbError(mapping.error);
+ if(!mapping.data){
+  const age=Date.now()-Date.parse(intent.updated_at);
+  if(Number.isFinite(age)&&age>=30*60_000){await setEnrollmentIntent(db,intent.id,'failed',null,'SYNCPAY_PLAN_MAPPING_MISSING');return {billing:null,blocked:false};}
+  return {billing:null,blocked:true};
+ }
+ const finalize=async(token:string)=>{
+  const detail=await getProviderDetail(token,fetcher,{planToken:intent.provider_plan_token,gracePeriodDays:GRACE_DAYS[intent.billing_cycle]});
+  const known=await db.from('saas_provider_subscriptions').select('id,barbershop_id').eq('provider_subscription_token',detail.token).maybeSingle();
+  dbError(known.error);
+  if(known.data){
+   if(known.data.barbershop_id!==ctx.shopId)throw new ApiError(409,'SYNCPAY_SUBSCRIPTION_CONFLICT','A assinatura recuperada pertence a outro estabelecimento. Fale com o suporte FIO.');
+   const demote=await db.from('saas_provider_subscriptions').update({is_current:false,updated_at:new Date().toISOString()}).eq('barbershop_id',ctx.shopId).eq('provider','syncpay').eq('is_current',true).neq('id',known.data.id);
+   dbError(demote.error);
+   const promote=await db.from('saas_provider_subscriptions').update({is_current:true,updated_at:new Date().toISOString()}).eq('id',known.data.id);
+   dbError(promote.error);
+  }else{
+   const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:detail.token,p_provider_plan_token:intent.provider_plan_token,p_actor:ctx.userId,p_terms_version:'fio-subscription-v1'});
+   dbError(bound.error);
+  }
+  await setEnrollmentIntent(db,intent.id,'linked',detail.token,null);
+  const link=await currentLink(db,ctx.shopId);
+  if(!link)throw new ApiError(503,'BILLING_STATE_ERROR','A assinatura existe, mas o FIO não conseguiu recuperar o vínculo.');
+  await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-auto-recovery',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
+  return billingResponse(link,detail);
+ };
+ if(intent.provider_subscription_token){
+  try{return {billing:await finalize(intent.provider_subscription_token),blocked:false};}
+  catch{return {billing:null,blocked:true};}
+ }
+ const user=await db.auth.admin.getUserById(ctx.userId),email=user.data.user?.email?.trim().toLowerCase()??'';
+ if(email){
+  try{
+   const query=new URLSearchParams({page:'1',per_page:'50',search:email});
+   const listed=providerParse(listSubscribersResponse,await providerRequest(fetcher,`/subscription-plans/${encodeURIComponent(intent.provider_plan_token)}/subscribers?${query.toString()}`));
+   const candidate=pickRecoverableSubscriber(listed.data,email,intent.created_at);
+   if(candidate)return {billing:await finalize(candidate.token),blocked:false};
+  }catch(error){
+   if(error instanceof ApiError&&['SYNCPAY_AUTH_ERROR','SYNCPAY_ACCOUNT_PENDING','SYNCPAY_RATE_LIMIT','SYNCPAY_UNAVAILABLE'].includes(error.code))return {billing:null,blocked:true};
+  }
+ }
+ const age=Date.now()-Date.parse(intent.updated_at);
+ const resetAfter=forceReset?5*60_000:30*60_000;
+ if(Number.isFinite(age)&&age>=resetAfter){
+  await setEnrollmentIntent(db,intent.id,'failed',null,forceReset?'SYNCPAY_ENROLLMENT_RESET_BY_OWNER':'SYNCPAY_STALE_ENROLLMENT');
+  return {billing:null,blocked:false};
+ }
+ return {billing:null,blocked:true};
+}
+
+export async function recoverSyncpayEnrollment(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode verificar a tentativa de assinatura.');
+ z.object({confirmed:z.literal(true)}).strict().parse(raw);
+ const result=await recoverOpenEnrollment(ctx,fetcher,true);
+ if(result.billing)return {configured:true,subscription:result.billing,cleared:false};
+ if(result.blocked)throw new ApiError(409,'SYNCPAY_ENROLLMENT_IN_PROGRESS','A tentativa ainda é recente. Aguarde até 5 minutos da última tentativa e verifique novamente.');
+ return {configured:true,subscription:null,cleared:true};
+}
+
+export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Esta ação é exclusiva do responsável pela barbearia.');
+ const input=subscribeInput.parse(raw),document=digits(input.document);
+ const modeResult=await ctx.db.from('barbershops').select('operation_mode').eq('id',ctx.shopId).single();dbError(modeResult.error);
+ if(!modeResult.data)throw new ApiError(404,'INVALID_SHOP','Barbearia não encontrada.');
+ const operationMode=modeResult.data.operation_mode as 'SHOP'|'SOLO';
+ if(operationMode==='SOLO'&&input.plan!=='SOLO'&&input.plan!=='SOLO_PREMIUM')throw new ApiError(400,'INVALID_PLAN','No modo solo, escolha FIO SOLO ou FIO SOLO PREMIUM.');
+ if(operationMode!=='SOLO'&&(input.plan==='SOLO'||input.plan==='SOLO_PREMIUM'))throw new ApiError(400,'INVALID_PLAN','Os planos FIO SOLO são exclusivos para quem trabalha sozinho.');
+ if(!validDocument(document))throw new ApiError(400,'INVALID_DOCUMENT','Informe um CPF ou CNPJ válido.');
+ if(!configured())throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','A cobrança recorrente ainda não está disponível. Tente novamente mais tarde.');
+ const recovered=await recoverOpenEnrollment(ctx,fetcher);
+ if(recovered.billing){
+  if(recovered.billing.plan===input.plan&&recovered.billing.cycle===input.cycle)return recovered.billing;
+  throw new ApiError(409,'SYNCPAY_SUBSCRIPTION_EXISTS','Já existe uma assinatura ou cobrança recorrente em andamento. Conclua ou cancele a atual antes de escolher outro plano.');
+ }
+ if(recovered.blocked)throw new ApiError(409,'SYNCPAY_ENROLLMENT_IN_PROGRESS','Uma tentativa recente ainda está sendo conferida. Aguarde alguns minutos e tente novamente.');
+ const db=adminDb(),mapping=await ensureProviderPlan(db,input.plan,input.cycle,fetcher);
+ const existing=await currentLink(db,ctx.shopId);
+ if(existing){
+  const detail=await getProviderDetail(existing.provider_subscription_token,fetcher,{planToken:existing.provider_plan_token,gracePeriodDays:GRACE_DAYS[existing.billing_cycle]});
+  await applyProviderTruth(db,detail,{key:stateEventKey('pre-enroll-reconcile',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify({status:detail.status,token:detail.token,plan:detail.plan.token,next:detail.next_charge_at})).digest('hex')});
+  if(['active','overdue','pending_first_payment'].includes(detail.status)){
+   if(existing.plan_code===input.plan&&existing.billing_cycle===input.cycle)return billingResponse(existing,detail);
+   throw new ApiError(409,'SYNCPAY_SUBSCRIPTION_EXISTS','Já existe uma assinatura ou cobrança recorrente em andamento. Conclua ou cancele a atual antes de escolher outro plano.');
+  }
+ }
+ const user=await db.auth.admin.getUserById(ctx.userId);
+ if(user.error||!user.data.user?.email)throw new ApiError(400,'BILLING_EMAIL_REQUIRED','Sua conta precisa de um e-mail válido para assinar o FIO.');
+ const begun=await db.rpc('begin_syncpay_enrollment',{p_shop:ctx.shopId,p_provider_plan_token:mapping.provider_plan_token,p_actor:ctx.userId});dbError(begun.error);
+ const intent=providerParse(enrollmentIntentSchema,begun.data) as EnrollmentIntent;
+ if(!intent.same_offer)throw new ApiError(409,'SYNCPAY_ENROLLMENT_IN_PROGRESS','Já existe uma tentativa de assinatura em verificação. Para evitar cobrança duplicada, aguarde a confirmação antes de escolher outro plano.');
+ if(!intent.created){
+  if(!intent.provider_subscription_token)throw new ApiError(409,'SYNCPAY_ENROLLMENT_UNCERTAIN','Uma tentativa anterior ainda está sendo verificada. Para evitar uma cobrança duplicada, não gere outro Pix agora.');
+  const detail=await getProviderDetail(intent.provider_subscription_token,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
+  try{
+   const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:detail.token,p_provider_plan_token:mapping.provider_plan_token,p_actor:ctx.userId,p_terms_version:'fio-subscription-v1'});dbError(bound.error);
+   await setEnrollmentIntent(db,intent.id,'linked',detail.token,null);
+   const link=await currentLink(db,ctx.shopId);
+   if(!link)throw new ApiError(503,'BILLING_STATE_ERROR','A assinatura existe, mas o FIO não conseguiu recuperar o vínculo. Entre em contato com o suporte.');
+   await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-recovery',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
+   return billingResponse(link,detail);
+  }catch(e){await setEnrollmentIntent(db,intent.id,'uncertain',detail.token,e instanceof ApiError?e.code:'BILLING_STATE_ERROR');throw e;}
+ }
+ const phone=digits(ctx.member.phone??'');
+ const payload:{name:string;email:string;document:string;phone?:string}={name:ctx.member.display_name,email:user.data.user.email,document};
+ if(phone.length>=8)payload.phone=phone;
+ let subscriptionToken:string|null=null;
+ try{
+  const enrolled=providerParse(enrollResponse,await providerRequest(fetcher,`/subscription-plans/${encodeURIComponent(mapping.provider_plan_token)}/enroll`,{method:'POST',body:JSON.stringify(payload)}));
+  subscriptionToken=enrolled.subscription_token;
+  await setEnrollmentIntent(db,intent.id,'creating',subscriptionToken,null);
+  const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:subscriptionToken,p_provider_plan_token:mapping.provider_plan_token,p_actor:ctx.userId,p_terms_version:'fio-subscription-v1'});dbError(bound.error);
+  await setEnrollmentIntent(db,intent.id,'linked',subscriptionToken,null);
+  const link=await currentLink(db,ctx.shopId);
+  if(!link)throw new ApiError(503,'BILLING_STATE_ERROR','A cobrança foi criada, mas o FIO não conseguiu vincular a assinatura. Não gere outra cobrança e entre em contato com o suporte.');
+  let detail:ProviderDetail;
+  try{
+   detail=await getProviderDetail(subscriptionToken,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
+  }catch(error){
+   // Enrollment and binding already succeeded. A temporary detail read failure
+   // must not mark the real subscription as uncertain or hide its initial Pix.
+   if(normalizeProviderStatus(enrolled.status)!=='pending_first_payment')throw error;
+   detail=normalizeProviderDetail({subscription_token:subscriptionToken,status:enrolled.status,plan_token:mapping.provider_plan_token,payment:enrolled.payment??null},{token:subscriptionToken,planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
+   const fallback=billingResponse(link,detail);
+   if(!fallback.payment?.pixCode&&enrolled.payment?.pix_code)fallback.payment={pixCode:enrolled.payment.pix_code,qrCode:enrolled.payment.qr_code??null,identifier:enrolled.payment.identifier??null,expiresAt:iso(enrolled.payment.expires_at)};
+   return fallback;
+  }
+  await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-confirmation',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
+  const current=await currentLink(db,ctx.shopId);
+  const response=billingResponse(current??link,detail);
+  // Some SyncPay responses expose the first Pix on /enroll while the detail
+  // endpoint is still catching up. Keep that code if reconciliation has none.
+  if(!response.payment?.pixCode&&enrolled.payment?.pix_code){
+   response.payment={pixCode:enrolled.payment.pix_code,qrCode:enrolled.payment.qr_code??null,identifier:enrolled.payment.identifier??null,expiresAt:iso(enrolled.payment.expires_at)};
+  }
+  return response;
+ }catch(e){
+  const known=!subscriptionToken&&enrollmentFailureIsKnown(e);
+  await setEnrollmentIntent(db,intent.id,known?'failed':'uncertain',subscriptionToken,e instanceof ApiError?e.code:'SYNCPAY_UNKNOWN_RESULT');
+  if(!known&&!subscriptionToken)throw new ApiError(503,'SYNCPAY_ENROLLMENT_UNCERTAIN','Não foi possível confirmar se a SyncPay criou a assinatura. Para evitar cobrança duplicada, não tente novamente agora.');
+  throw e;
+ }
+}
+
+type PlanChange={id:string;subscription_token:string;target_plan_token:string;state:string;charge_cycle:number|null;charge_amount_cents:number|null;charge_identifier:string|null;target_plan:PaidPlan;target_cycle:BillingCycle;result_type:string|null};
+async function pendingPlanChange(db:SupabaseClient,token:string){
+ const r=await db.from('syncpay_plan_changes').select('*').eq('subscription_token',token).in('state',['creating','uncertain','pending']).maybeSingle();dbError(r.error);return r.data as PlanChange|null;
+}
+export function planChangePaid(change:Pick<PlanChange,'charge_cycle'|'charge_amount_cents'|'charge_identifier'>,charges:ProviderDetail['charges']){
+ if(change.charge_cycle===null||change.charge_amount_cents===null)return false;
+ return charges.some(c=>c.cycle_number===change.charge_cycle&&cents(c.amount??-1)===change.charge_amount_cents&&c.status==='paid'&&Boolean(iso(c.paid_at))&&(!change.charge_identifier||c.payment?.identifier===change.charge_identifier));
+}
+async function reconcilePlanChange(db:SupabaseClient,detail:ProviderDetail){
+ const change=await pendingPlanChange(db,detail.token);if(!change)return;
+ const complete=change.state==='pending'&&detail.planReported&&detail.plan.token===change.target_plan_token&&(change.result_type==='downgrade'||change.result_type==='same_value'||planChangePaid(change,detail.charges));
+ if(complete){const r=await db.from('syncpay_plan_changes').update({state:'complete',updated_at:new Date().toISOString()}).eq('id',change.id).eq('state','pending');dbError(r.error);}
+}
+export async function changeSyncpayPlan(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode alterar o plano.');
+ const input=z.object({plan:z.enum(PAID_PLANS),cycle:z.enum(CYCLES),confirmed:z.literal(true)}).strict().parse(raw);
+ const modeResult=await ctx.db.from('barbershops').select('operation_mode').eq('id',ctx.shopId).single();dbError(modeResult.error);
+ if(!modeResult.data)throw new ApiError(404,'INVALID_SHOP','Barbearia não encontrada.');
+ const operationMode=modeResult.data.operation_mode as 'SHOP'|'SOLO';
+ if(operationMode==='SOLO'&&input.plan!=='SOLO'&&input.plan!=='SOLO_PREMIUM')throw new ApiError(400,'INVALID_PLAN','No modo solo, escolha FIO SOLO ou FIO SOLO PREMIUM.');
+ if(operationMode!=='SOLO'&&(input.plan==='SOLO'||input.plan==='SOLO_PREMIUM'))throw new ApiError(400,'INVALID_PLAN','Os planos FIO SOLO são exclusivos para quem trabalha sozinho.');
+ const db=adminDb(),link=await currentLink(db,ctx.shopId);
+ if(!link)throw new ApiError(409,'SYNCPAY_NO_SUBSCRIPTION','Não há assinatura paga para alterar.');
+ const existingChange=await pendingPlanChange(db,link.provider_subscription_token);
+ if(existingChange)throw new ApiError(409,'SYNCPAY_CHANGE_PENDING','Há uma troca em andamento. Atualize a cobrança antes de tentar novamente.');
+ const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
+ if(detail.status!=='active'||detail.charges.some(c=>['pending','created','waiting_payment'].includes(c.status)))throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','Regularize a cobrança atual antes de trocar de plano.');
+ const target=await ensureProviderPlan(db,input.plan,input.cycle,fetcher);
+ if(target.provider_plan_token===detail.plan.token)throw new ApiError(409,'SYNCPAY_SAME_PLAN','Este já é o plano e período atuais.');
+ // Provider product compatibility is checked before mutation; never assume separately created plans belong to one product.
+ const resources=await Promise.all([detail.plan.token,target.provider_plan_token].map(token=>providerRequest(fetcher,`/subscription-plans/${encodeURIComponent(token)}`)));
+ const compatibility=z.object({data:z.object({status:z.string(),billing_method:z.string(),product:z.object({reference_id:z.string().min(1)})})});
+ const current=compatibility.safeParse(resources[0]),next=compatibility.safeParse(resources[1]);
+ if(!current.success||!next.success||next.data.data.status!=='active'||current.data.data.product.reference_id!==next.data.data.product.reference_id||current.data.data.billing_method!==next.data.data.billing_method)throw new ApiError(409,'SYNCPAY_PLAN_INCOMPATIBLE','Os planos precisam ser vinculados ao mesmo produto de cobrança. Fale com o suporte.');
+ const created=await db.from('syncpay_plan_changes').insert({barbershop_id:ctx.shopId,subscription_token:link.provider_subscription_token,target_plan_token:target.provider_plan_token,target_plan:input.plan,target_cycle:input.cycle,actor:ctx.userId,state:'creating'}).select('id').single();
+ if(created.error?.code==='23505')throw new ApiError(409,'SYNCPAY_CHANGE_PENDING','Há uma troca em andamento.');dbError(created.error);
+ const id=created.data!.id;
+ try{
+  const result=await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(link.provider_subscription_token)}/change-plan`,{method:'PATCH',body:JSON.stringify({new_plan_token:target.provider_plan_token,reason:'Troca confirmada pelo responsável no FIO'})},false);
+  const response=providerParse(z.object({plan_change:z.object({type:z.enum(['upgrade','downgrade','same_value']),to_plan_token:z.string(),proration_amount:z.union([z.string(),z.number()]).nullable().optional(),proration_charge:chargeSchema.nullable().optional()})}),result);
+  if(response.plan_change.to_plan_token!==target.provider_plan_token)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Troca em verificação.');
+  const change=response.plan_change,charge=change.proration_charge;
+  if(change.type==='upgrade'&&(!charge||charge.cycle_number==null||cents(charge.amount??-1)<=0))throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Cobrança da diferença em verificação.');
+  const saved=await db.from('syncpay_plan_changes').update({state:'pending',result_type:change.type,charge_cycle:charge?.cycle_number??null,charge_amount_cents:charge?cents(charge.amount??-1):null,charge_identifier:charge?.payment?.identifier??null,updated_at:new Date().toISOString()}).eq('id',id);dbError(saved.error);
+ }catch(e){
+  const known=enrollmentFailureIsKnown(e);
+  const saved=await db.from('syncpay_plan_changes').update({state:known?'failed':'uncertain',updated_at:new Date().toISOString()}).eq('id',id);dbError(saved.error);
+  if(!known)throw new ApiError(503,'SYNCPAY_CHANGE_UNCERTAIN','Troca em verificação. Não repita a solicitação; consulte a cobrança.');throw e;
+ }
+ return getSyncpayBilling(ctx,fetcher);
+}
+export async function manageSyncpayCharge(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode gerenciar a cobrança.');
+ const input=z.object({action:z.enum(['cancel_pending','resend','cancel_active']),confirmed:z.literal(true)}).strict().parse(raw);
+ const db=adminDb(),link=await currentLink(db,ctx.shopId);
+ if(!link)throw new ApiError(409,'SYNCPAY_NO_SUBSCRIPTION','Nenhuma cobrança encontrada.');
+ if(await pendingPlanChange(db,link.provider_subscription_token))throw new ApiError(409,'SYNCPAY_CHANGE_PENDING','A troca está em andamento. Consulte o suporte.');
+ const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
+ if(input.action==='cancel_pending'&&detail.status!=='pending_first_payment')throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','A cobrança mudou. Atualize antes de continuar.');
+ if(input.action==='cancel_active'&&!['active','overdue','suspended'].includes(detail.status))throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','Esta assinatura não pode ser cancelada nesse estado. Atualize antes de continuar.');
+ if(input.action==='resend'&&!['pending_first_payment','overdue'].includes(detail.status))throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','Não há cobrança pendente para reenviar.');
+ let payload:unknown;
+ try{
+  if(input.action==='resend')payload=await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(link.provider_subscription_token)}/resend-charge`,{method:'PATCH'},false);
+  else payload=await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(link.provider_subscription_token)}/cancel`,{method:'PATCH',body:JSON.stringify({reason:input.action==='cancel_pending'?'Responsável cancelou a contratação antes do primeiro pagamento no FIO':'Responsável cancelou a renovação da assinatura pelo FIO'})},false);
+ }catch(error){
+  if(input.action==='resend'&&error instanceof ApiError&&error.code==='SYNCPAY_INVALID_REQUEST')throw new ApiError(422,'SYNCPAY_RESEND_REJECTED','A SyncPay não aceitou gerar outro Pix agora. Atualize o status e, se continuar assim, fale com o suporte antes de tentar novamente.');
+  throw error;
+ }
+ if(input.action==='resend'){
+  const resentPayment=paymentFromChargePayload(payload);
+  if(resentPayment?.pixCode)return {configured:true,subscription:{...billingResponse(link,detail,resentPayment),change:null}};
+ }
+ return getSyncpayBilling(ctx,fetcher);
+}
+
+export async function requestSyncpayRefund(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode solicitar reembolso.');
+ z.object({confirmed:z.literal(true)}).strict().parse(raw);
+ if(!configured())throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','O reembolso está temporariamente indisponível.');
+ const db=adminDb(),link=await currentLink(db,ctx.shopId);
+ if(!link)throw new ApiError(409,'SYNCPAY_NO_SUBSCRIPTION','Nenhuma assinatura paga foi encontrada.');
+ const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
+ const window=refundWindow(detail);
+ if(!window.eligible||!window.deadline)throw new ApiError(409,'SYNCPAY_REFUND_WINDOW_EXPIRED','O prazo de 7 dias para esta primeira contratação já terminou. Você ainda pode cancelar cobranças futuras.');
+ if(!window.identifier)throw new ApiError(409,'SYNCPAY_REFUND_MANUAL_REQUIRED','Não foi possível identificar automaticamente a transação paga. Fale com o suporte FIO para solicitar o reembolso.');
+ const existing=await db.from('syncpay_refund_requests').select('refund_code,status,requested_at').eq('barbershop_id',ctx.shopId).eq('subscription_token',link.provider_subscription_token).maybeSingle();
+ dbError(existing.error);
+ if(existing.data)return {refund:{code:existing.data.refund_code,status:existing.data.status,requestedAt:existing.data.requested_at},subscription:(await getSyncpayBilling(ctx,fetcher)).subscription,cancellation:'already_requested' as const};
+ const transaction=providerParse(transactionResponse,await providerRequest(fetcher,`/transaction/${encodeURIComponent(window.identifier)}`));
+ if(String(transaction.data.status).toLowerCase()!=='completed')throw new ApiError(409,'SYNCPAY_REFUND_NOT_READY','O pagamento ainda não está disponível para reembolso. Atualize o status e tente novamente.');
+ let refunded:z.infer<typeof refundResponse>;
+ try{
+  refunded=providerParse(refundResponse,await providerRequest(fetcher,`/transaction/${encodeURIComponent(transaction.data.reference_id)}/refund`,{method:'POST',body:JSON.stringify({
+   reason:'buyer_withdrawal',
+   reason_details:'Cliente solicitou cancelamento e reembolso da primeira contratação do FIO dentro do prazo de 7 dias.'
+  })},false));
+ }catch(error){
+  if(error instanceof ApiError&&error.code==='SYNCPAY_INVALID_REQUEST')throw new ApiError(422,'SYNCPAY_REFUND_UNAVAILABLE','A SyncPay não aceitou automatizar o reembolso desta cobrança. Fale com o suporte FIO.');
+  throw error;
+ }
+ const saved=await db.from('syncpay_refund_requests').insert({
+  barbershop_id:ctx.shopId,subscription_token:link.provider_subscription_token,transaction_reference_id:transaction.data.reference_id,
+  refund_code:refunded.data.code,status:refunded.data.status,requested_at:iso(refunded.data.requested_at)??new Date().toISOString(),created_by:ctx.userId
+ }).select('refund_code,status,requested_at').single();
+ dbError(saved.error);
+ const savedRefund=saved.data!;
+ let cancellation:'cancelled'|'needs_attention'='cancelled';
+ try{
+  await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(link.provider_subscription_token)}/cancel`,{method:'PATCH',body:JSON.stringify({reason:'Cliente solicitou reembolso da primeira contratação dentro do prazo de 7 dias'})},false);
+ }catch{cancellation='needs_attention';}
+ let subscription=null;
+ try{subscription=(await getSyncpayBilling(ctx,fetcher)).subscription;}catch{}
+ return {refund:{code:savedRefund.refund_code,status:savedRefund.status,requestedAt:savedRefund.requested_at},subscription,cancellation};
+}
+
+export async function getSyncpayBilling(ctx:TenantContext,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Esta ação é exclusiva do responsável pela barbearia.');
+ if(!configured())return {configured:false,subscription:null};
+ const db=adminDb(),link=await currentLink(db,ctx.shopId);
+ if(!link)return {configured:true,subscription:null};
+ const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
+ await applyProviderTruth(db,detail,{key:stateEventKey('owner-reconcile',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify({status:detail.status,token:detail.token,plan:detail.plan.token,next:detail.next_charge_at})).digest('hex')});
+ const reconciled=await currentLink(db,ctx.shopId);
+ const change=await pendingPlanChange(db,link.provider_subscription_token);
+ if(change){detail.payment=null;detail.charges=detail.charges.filter(c=>change.charge_cycle!==null&&c.cycle_number===change.charge_cycle&&cents(c.amount??-1)===change.charge_amount_cents&&(!change.charge_identifier||c.payment?.identifier===change.charge_identifier));}
+ return {configured:true,subscription:{...billingResponse(reconciled??link,detail),change:change?{plan:change.target_plan,cycle:change.target_cycle,state:change.state,type:change.result_type,amountCents:change.charge_amount_cents}:null}};
+}
+
+function isSyncpayDashboardTest(rawBody:Buffer){
+ const expected='This is a test webhook payload.';
+ if(rawBody.length===0||rawBody.length>2048)return false;
+ const body=rawBody.toString('utf8').replace(/\u0000/g,'').trim();
+ // Never swallow a real event merely because a field includes the test phrase.
+ if(/"(?:event|subscription_token)"\s*:/.test(body))return false;
+ if(body===expected)return true;
+ const containsExpected=(value:unknown,depth=0):boolean=>{
+  if(typeof value==='string')return value.trim()===expected;
+  if(!value||typeof value!=='object'||depth>3)return false;
+  if(Array.isArray(value))return value.some(item=>containsExpected(item,depth+1));
+  return Object.values(value as Record<string,unknown>).some(item=>containsExpected(item,depth+1));
+ };
+ try{
+  const parsed:unknown=JSON.parse(body);
+  if(parsed&&typeof parsed==='object'&&('event' in parsed||'subscription_token' in parsed))return false;
+  return containsExpected(parsed);
+ }catch{}
+ try{
+  const params=new URLSearchParams(body);
+  if(params.has('event')||params.has('subscription_token'))return false;
+  if([...params.values()].some(value=>value.trim()===expected))return true;
+ }catch{}
+ // Dashboard form-data reachability checks contain a dedicated message field.
+ if(body.startsWith('--')&&!/name="(?:event|subscription_token)"/.test(body))return body.split(/\r?\n/).some(line=>line===expected);
+ return false;
+}
+
+export function verifySyncpayWebhook(rawBody:Buffer,headers:Request['headers'],nowSeconds=Math.floor(Date.now()/1000)){
+ const secrets=webhookSecrets();
+ if(!secrets.length)return false;
+ const signature=String(headers['x-syncpay-signature']??'');
+ if(signature){
+  const parts=signature.split(',').map(x=>x.trim().split('=',2));
+  const t=Number(parts.find(([k])=>k==='t')?.[1]??0),v1=parts.find(([k])=>k==='v1')?.[1]??'';
+  if(Number.isFinite(t)&&t>0&&v1&&Math.abs(nowSeconds-t)<=300){
+   const signed=`${t}.${rawBody.toString('utf8')}`;
+   if(secrets.some(secret=>safeEqual(createHmac('sha256',secret).update(signed).digest('hex'),v1)))return true;
+  }
+ }
+ const auth=String(headers.authorization??'').match(/^Bearer\s+(.+)$/i)?.[1]??'';
+ return Boolean(auth&&secrets.some(secret=>safeEqual(secret,auth)));
+}
+
+export async function handleSyncpayWebhook(req:Request,res:ExpressResponse,fetcher:Fetcher=fetch){
+ const raw=Buffer.isBuffer(req.body)?req.body:Buffer.from('');
+ if(!raw.length)throw new ApiError(400,'INVALID_WEBHOOK','Webhook vazio.');
+ // The SyncPay dashboard's manual "send test" action uses a fixed synthetic payload.
+ // It is only a reachability check, so acknowledge that exact payload without mutating state.
+ // Real events still fail closed unless their HMAC/Bearer authentication is valid.
+ if(isSyncpayDashboardTest(raw)){res.status(200).json({received:true,test:true});return;}
+ if(!verifySyncpayWebhook(raw,req.headers))throw new ApiError(401,'INVALID_WEBHOOK_SIGNATURE','Assinatura do webhook inválida.');
+ let parsed:unknown;try{parsed=JSON.parse(raw.toString('utf8'));}catch{throw new ApiError(400,'INVALID_WEBHOOK','Webhook inválido.');}
+ const base=z.object({event:z.string().min(1).max(80)}).passthrough().parse(parsed);
+ if(!SUBSCRIPTION_EVENTS.has(base.event)){res.status(200).json({received:true,ignored:true});return;}
+ const event=webhookEnvelope.parse(parsed);
+ const db=adminDb();
+ const known=await db.from('saas_provider_subscriptions').select('id,provider_plan_token,billing_cycle').eq('provider','syncpay').eq('provider_subscription_token',event.subscription_token).maybeSingle();
+ dbError(known.error);
+ if(!known.data){res.status(200).json({received:true,ignored:true});return;}
+ const knownLink=known.data as {id:string;provider_plan_token:string;billing_cycle:BillingCycle};
+ const detail=await getProviderDetail(event.subscription_token,fetcher,{planToken:event.plan_token??knownLink.provider_plan_token,gracePeriodDays:GRACE_DAYS[knownLink.billing_cycle]});
+ const bodyHash=createHash('sha256').update(raw).digest('hex');
+ const key=createHash('sha256').update([event.event,event.subscription_token,event.occurred_at,event.plan_token??'',event.status??'',event.next_charge_at??''].join('|')).digest('hex');
+ await applyProviderTruth(db,detail,{key,name:event.event,occurredAt:new Date(event.occurred_at).toISOString(),bodyHash});
+ res.status(200).json({received:true});
+}
+
+export const syncpayInternals={planConfig,validDocument,accessUntil,stateEventKey,isSyncpayDashboardTest,normalizeProviderDetail,paymentFromChargePayload,refundWindow,pickRecoverableSubscriber};
+
+
+
+==================== shared\fio-plans.ts ====================
+
+import type { Plan } from './domain.js';
+
+export type BillingCycle = 'weekly'|'monthly'|'annual';
+
+export const SALE_BILLING_CYCLES =
+ ['monthly','annual'] as const satisfies readonly BillingCycle[];
+
+export interface FioPlanGroup {
+ title:string;
+ items:string[];
+}
+
+export interface FioPlanDefinition {
+ code:Plan;
+ name:string;
+ eyebrow:string;
+ description:string;
+ recommended?:boolean;
+ proposal?:boolean;
+ trialDays?:number;
+ prices:Record<BillingCycle,number|null>;
+ highlights:string[];
+ groups:FioPlanGroup[];
+}
+
+export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
+ {
+  code:'FREE',
+  name:'FIO FREE',
+  eyebrow:'PARA COMEÇAR',
+  description:'O essencial para organizar os primeiros agendamentos.',
+  prices:{weekly:0,monthly:0,annual:0},
+  highlights:['Até 85 clientes','Responsável + 1 profissional'],
+  groups:[
+   {title:'CAPACIDADE',items:[
+    'Até 85 clientes',
+    'Responsável + 1 profissional',
+    'Até 8 serviços'
+   ]},
+   {title:'AGENDA',items:[
+    'Agenda online',
+    'Agendamento dos clientes',
+    'Modo barbeiro solo'
+   ]},
+   {title:'EXPERIÊNCIA',items:[
+    'Página básica de agendamento',
+    'Logo da barbearia',
+    'App/PWA com identidade FIO'
+   ]}
+  ]
+ },
+ {
+  code:'SOLO',
+  name:'FIO SOLO',
+  eyebrow:'PARA QUEM TRABALHA SOZINHO',
+  description:'Tudo para organizar sua rotina, seu app e seus clientes em uma única agenda.',
+  recommended:true,
+  trialDays:14,
+  prices:{weekly:null,monthly:7990,annual:76704},
+  highlights:['Agenda e app profissional','Até 500 clientes'],
+  groups:[
+   {title:'CAPACIDADE',items:[
+    'Operação solo organizada',
+    'Até 500 clientes',
+    'Até 20 serviços',
+    'Até 5 pacotes de cortes'
+   ]},
+   {title:'PRESENÇA DIGITAL',items:[
+    'Mini site personalizado',
+    'App/PWA com identidade da barbearia',
+    'Logo, capa, fundo e cores'
+   ]},
+   {title:'COMUNICAÇÃO',items:[
+    'Feed da barbearia',
+    'Pacotes/planos de cortes'
+   ]},
+   {title:'INTELIGÊNCIA',items:[
+    'Assistente FIO',
+    '150 consultas de IA por usuário/dia'
+   ]}
+  ]
+ },
+ {
+  code:'SOLO_PREMIUM',
+  name:'FIO SOLO PREMIUM',
+  eyebrow:'SOLO SEM LIMITES',
+  description:'Para quem trabalha sozinho e quer o nível máximo do FIO.',
+  prices:{weekly:null,monthly:19790,annual:189984},
+  highlights:['Clientes sem limite','Serviços sem limite'],
+  groups:[
+   {title:'CAPACIDADE',items:[
+    'Operação solo sem limites',
+    'Clientes sem limite',
+    'Serviços sem limite',
+    'Pacotes de cortes sem limite'
+   ]},
+   {title:'PRESENÇA DIGITAL',items:[
+    'Mini site personalizado',
+    'App/PWA com identidade da barbearia',
+    'Logo, capa, fundo e cores'
+   ]},
+   {title:'RECURSOS',items:[
+    'Feed da barbearia',
+    'Pacotes/planos de cortes'
+   ]},
+   {title:'INTELIGÊNCIA',items:[
+    'Assistente FIO',
+    '500 consultas de IA por usuário/dia'
+   ]}
+  ]
+ },
+ {
+  code:'PRO',
+  name:'FIO PRO',
+  eyebrow:'RECOMENDADO',
+  description:'Para barbearias que querem crescer com presença digital e comunicação.',
+  recommended:true,
+  trialDays:14,
+  prices:{weekly:null,monthly:14990,annual:143904},
+  highlights:['Até 500 clientes','Até 5 profissionais + responsável'],
+  groups:[
+   {title:'CAPACIDADE',items:[
+    'Até 500 clientes',
+    'Até 5 profissionais + responsável',
+    'Até 20 serviços',
+    'Até 5 pacotes de cortes'
+   ]},
+   {title:'PRESENÇA DIGITAL',items:[
+    'Mini site personalizado',
+    'App/PWA com identidade da barbearia',
+    'Logo, capa, fundo e cores'
+   ]},
+   {title:'COMUNICAÇÃO',items:[
+    'Feed da barbearia',
+    'Pacotes/planos de cortes'
+   ]},
+   {title:'INTELIGÊNCIA',items:[
+    'Assistente FIO',
+    '150 consultas de IA por usuário/dia'
+   ]}
+  ]
+ },
+ {
+  code:'PREMIUM',
+  name:'FIO PREMIUM',
+  eyebrow:'PARA OPERAÇÕES MAIORES',
+  description:'Mais capacidade para equipes e carteiras de clientes maiores.',
+  prices:{weekly:null,monthly:29990,annual:287904},
+  highlights:['Até 2.000 clientes','Até 10 profissionais + responsável'],
+  groups:[
+   {title:'CAPACIDADE',items:[
+    'Até 2.000 clientes',
+    'Até 10 profissionais + responsável',
+    'Até 50 serviços',
+    'Até 15 pacotes de cortes'
+   ]},
+   {title:'PRESENÇA DIGITAL',items:[
+    'Mini site personalizado',
+    'App/PWA com identidade da barbearia',
+    'Logo, capa, fundo e cores'
+   ]},
+   {title:'COMUNICAÇÃO',items:[
+    'Feed da barbearia',
+    'Pacotes/planos de cortes'
+   ]},
+   {title:'INTELIGÊNCIA',items:[
+    'Assistente FIO',
+    '500 consultas de IA por usuário/dia'
+   ]}
+  ]
+ }
+];
+
+export const BILLING_LABELS:Record<BillingCycle,string>={
+ weekly:'Semanal',
+ monthly:'Mensal',
+ annual:'Anual'
+};
+
+export const billingSuffix=(cycle:BillingCycle)=>
+ cycle==='weekly'?'/ semana':
+ cycle==='monthly'?'/ mês':
+ '/ ano';
+
+export const findFioPlan=(plan:Plan)=>
+ FIO_PLAN_CATALOG.find(item=>item.code===plan)??FIO_PLAN_CATALOG[0];
+
+export const fioPlanPublicName=(plan:Plan)=>
+ plan==='SOLO'?'FIO PRO':
+ plan==='SOLO_PREMIUM'?'FIO PREMIUM':
+ `FIO ${plan}`;
+
+
+
+==================== shared\billing-state.ts ====================
+
+import type { BillingCycle } from './fio-plans.js';
+
+export type PaidPlan = 'SOLO' | 'SOLO_PREMIUM' | 'PRO' | 'PREMIUM';
+export type BillingState = {
+ change?:{plan:PaidPlan;cycle:BillingCycle;state:string;type:string|null;amountCents:number|null}|null;
+ provider:'syncpay'; providerStatus:string; plan:PaidPlan; cycle:BillingCycle;
+ amountCents:number; nextChargeAt:string|null;
+ payment:{pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null}|null;
+ refund?:{eligible:boolean;deadline:string|null}|null;
+};
+
+export function billingLocksNewSubscription(billing:BillingState|null){
+ return Boolean(billing && ['active','overdue','pending_first_payment'].includes(billing.providerStatus));
+}
+
+export function usablePix(billing:BillingState|null,now=Date.now()){
+ if(!billing?.payment?.pixCode || !(['pending_first_payment','overdue'].includes(billing.providerStatus)||(billing.providerStatus==='active'&&billing.change?.type==='upgrade'&&billing.change.state==='pending')))return false;
+ const expiry=billing.payment.expiresAt;
+ return !expiry || Date.parse(expiry)>now;
+}
+
+export function billingStatusLabel(status:string){
+ return ({pending_first_payment:'Contratação não finalizada',active:'Assinatura ativa',overdue:'Pagamento em atraso',suspended:'Assinatura suspensa',cancelled:'Assinatura cancelada'} as Record<string,string>)[status]??'Confirmação em andamento';
+}
+
+export function billingErrorMessage(code?:string){
+ const messages:Record<string,string>={
+  SYNCPAY_CHANGE_PENDING:'Há uma troca em andamento. Atualize a cobrança e aguarde a confirmação.',
+  SYNCPAY_CHANGE_UNCERTAIN:'A troca está em verificação. Não repita a solicitação; consulte o suporte.',
+  SYNCPAY_PLAN_INCOMPATIBLE:'Os planos de cobrança precisam ser vinculados ao mesmo produto. Fale com o suporte FIO.',
+  SYNCPAY_CHANGE_BLOCKED:'A assinatura tem uma pendência ou mudou de estado. Atualize a cobrança.',
+  SYNCPAY_SAME_PLAN:'Este já é o plano e período atuais.',
+  INVALID_DOCUMENT:'Informe um CPF ou CNPJ válido.',
+  SYNCPAY_INVALID_REQUEST:'Confira os dados de cobrança e tente novamente.',
+  SYNCPAY_RESEND_REJECTED:'A SyncPay não aceitou gerar outro Pix agora. Atualize o status e, se continuar assim, fale com o suporte antes de tentar novamente.',
+  SYNCPAY_RATE_LIMIT:'Muitas tentativas seguidas. Aguarde alguns minutos.',
+  SYNCPAY_ENROLLMENT_UNCERTAIN:'A SyncPay não confirmou a tentativa. Aguarde 5 minutos antes de liberar e tentar novamente, para evitar cobrança duplicada.',
+  SYNCPAY_ENROLLMENT_IN_PROGRESS:'Há uma tentativa recente em verificação. Aguarde até 5 minutos e use “Verificar tentativa anterior” novamente.',
+  SYNCPAY_SUBSCRIPTION_EXISTS:'Já existe uma assinatura ou cobrança em andamento. Consulte a cobrança atual.',
+  SYNCPAY_REFUND_WINDOW_EXPIRED:'O prazo de 7 dias desta primeira contratação terminou. Você ainda pode cancelar cobranças futuras.',
+  SYNCPAY_REFUND_MANUAL_REQUIRED:'Não foi possível identificar automaticamente a transação paga. Fale com o suporte FIO para solicitar o reembolso.',
+  SYNCPAY_REFUND_NOT_READY:'O pagamento ainda não está pronto para reembolso. Atualize o status e tente novamente.',
+  SYNCPAY_REFUND_IN_PROGRESS:'Já existe um reembolso em andamento para esta cobrança.',
+  SYNCPAY_REFUND_UNAVAILABLE:'Esta cobrança não está elegível para reembolso automático. Fale com o suporte FIO.',
+  SYNCPAY_NOT_CONFIGURED:'A assinatura está temporariamente indisponível. Fale com o suporte.',
+  SYNCPAY_AUTH_ERROR:'A assinatura está temporariamente indisponível. Fale com o suporte.',
+  SYNCPAY_ACCOUNT_PENDING:'A assinatura está temporariamente indisponível. Fale com o suporte.',
+  OFFLINE:'Não foi possível conectar. Confira sua conexão e tente novamente.'
+ };
+ return messages[code??'']??'Não foi possível confirmar a cobrança agora. Tente consultar novamente em instantes.';
+}
+
+
+
+==================== src\pages\FioPlans.tsx ====================
+
+import { useEffect,useMemo,useState } from 'react';
+import { ArrowLeft,Check,Copy,Crown,Gift,RefreshCw,ShieldCheck,WalletCards,X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { FIO_PLAN_CATALOG,type BillingCycle } from '../../shared/fio-plans';
+import { api,RequestError } from '../lib/api';
+import { QRCodeSVG } from 'qrcode.react';
+import { billingLocksNewSubscription,usablePix,type BillingState,type PaidPlan } from '../../shared/billing-state';
+import type { Plan } from '../../shared/domain';
+import type { WorkspaceProps } from './Workspace';
+import { useI18n } from '../i18n';
+
+type Screen='plans'|'review'|'pix'|'success'|'manage';
+
+function documentDigits(value:string){
+ return value.replace(/\D/g,'').slice(0,14);
+}
+
+function formatDocument(value:string){
+ const digits=documentDigits(value);
+
+ if(digits.length<=11){
+  return digits
+   .replace(/^(\d{3})(\d)/,'$1.$2')
+   .replace(/^(\d{3})\.(\d{3})(\d)/,'$1.$2.$3')
+   .replace(/\.(\d{3})(\d)/,'.$1-$2');
+ }
+
+ return digits
+  .replace(/^(\d{2})(\d)/,'$1.$2')
+  .replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3')
+  .replace(/\.(\d{3})(\d)/,'.$1/$2')
+  .replace(/(\d{4})(\d)/,'$1-$2');
+}
+
+export function FioPlans(p:WorkspaceProps){
+ const {t,formatCurrency,formatDate}=useI18n();
+ const navigate=useNavigate();
+
+ const amount=(cents:number)=>formatCurrency(cents/100,'BRL');
+ const date=(value?:string|null)=>value?formatDate(value,{day:'2-digit',month:'short',year:'numeric'}):'';
+ const cycleLabel=(value:BillingCycle)=>t(`fp.cycle.${value}`);
+ const providerStatus=(value:string)=>t(`fp.billingStatus.${['pending_first_payment','active','overdue','suspended','cancelled'].includes(value)?value:'default'}`);
+ const checkoutMessage=(error:unknown)=>error instanceof RequestError?error.message:t('fp.billingError');
+
+ const soloMode=p.data.shop.operation_mode==='SOLO';
+ const primaryPaid:PaidPlan=soloMode?'SOLO':'PRO';
+
+ const visiblePlans=useMemo(
+  ()=>FIO_PLAN_CATALOG.filter(plan=>
+   soloMode
+    ?['FREE','SOLO','SOLO_PREMIUM'].includes(plan.code)
+    :['FREE','PRO','PREMIUM'].includes(plan.code)
+  ),
+  [soloMode]
+ );
+
+ const initialPlan=visiblePlans.some(plan=>plan.code===p.data.plan)
+  ?p.data.plan
+  :'FREE';
+
+ const [screen,setScreen]=useState<Screen>('plans');
+ const [selectedPlan,setSelectedPlan]=useState<Plan>(initialPlan);
+ const [cycle,setCycle]=useState<BillingCycle>('annual');
+ const [document,setDocument]=useState('');
+ const [acceptedTerms,setAcceptedTerms]=useState(false);
+ const [changeAccepted,setChangeAccepted]=useState(false);
+ const [checkoutPlan,setCheckoutPlan]=useState<PaidPlan|null>(null);
+ const [changePlan,setChangePlan]=useState<PaidPlan|null>(null);
+ const [busy,setBusy]=useState(false);
+ const [billing,setBilling]=useState<BillingState|null>(null);
+ const [billingLoaded,setBillingLoaded]=useState(false);
+ const [billingConfigured,setBillingConfigured]=useState(false);
+ const [checkoutError,setCheckoutError]=useState('');
+ const [checkoutCode,setCheckoutCode]=useState('');
+ const [now,setNow]=useState(Date.now());
+
+ const sub=p.data.fioSubscription;
+ const trialUsed=Boolean(sub.trial_ends_at);
+ const trialActive=sub.status==='trialing'&&Boolean(sub.trial_ends_at)&&new Date(sub.trial_ends_at!)>new Date();
+ const billingLocked=billingLocksNewSubscription(billing);
+
+ const planDefinition=visiblePlans.find(plan=>plan.code===selectedPlan)??visiblePlans[0];
+ const planPrice=planDefinition.prices[cycle]??0;
+ const annualSaving=planDefinition.code!=='FREE'&&cycle==='annual'&&planDefinition.prices.monthly!=null&&planDefinition.prices.annual!=null
+  ?planDefinition.prices.monthly*12-planDefinition.prices.annual
+  :0;
+ const monthlyEquivalent=cycle==='annual'&&planPrice>0
+  ?Math.round(planPrice/12)
+  :null;
+
+ useEffect(()=>{
+  if(!visiblePlans.some(plan=>plan.code===selectedPlan))
+   setSelectedPlan(visiblePlans[0]?.code??'FREE');
+ },[visiblePlans,selectedPlan]);
+
+ useEffect(()=>{
+  let active=true;
+
+  void api<{configured:boolean;subscription:BillingState|null}>(
+   '/saas/billing',
+   p.data.shop.id
+  )
+   .then(result=>{
+    if(!active)return;
+    setBilling(result.subscription);
+    setBillingConfigured(result.configured);
+    setBillingLoaded(true);
+   })
+   .catch(error=>{
+    if(!active)return;
+    setCheckoutError(checkoutMessage(error));
+    setBillingLoaded(true);
+   });
+
+  return()=>{active=false;};
+ },[p.data.shop.id]);
+
+ useEffect(()=>{
+  if(screen!=='pix')return;
+
+  const timer=window.setInterval(
+   ()=>setNow(Date.now()),
+   1000
+  );
+
+  return()=>window.clearInterval(timer);
+ },[screen]);
+
+ useEffect(()=>{
+  if(
+   screen!=='pix'||
+   !billing||
+   billing.providerStatus==='active'
+  )
+   return;
+
+  let active=true;
+
+  const poll=window.setInterval(()=>{
+   void api<{configured:boolean;subscription:BillingState|null}>(
+    '/saas/billing',
+    p.data.shop.id
+   )
+    .then(async result=>{
+     if(!active)return;
+
+     setBilling(result.subscription);
+     setBillingConfigured(result.configured);
+
+     if(result.subscription?.providerStatus==='active'){
+      await p.refresh();
+      setScreen('success');
+     }
+    })
+    .catch(()=>undefined);
+  },5000);
+
+  return()=>{
+   active=false;
+   window.clearInterval(poll);
+  };
+ },[screen,billing?.providerStatus,p.data.shop.id,p.refresh]);
+
+ function shortName(code:Plan){
+  if(code==='FREE')return 'FREE';
+
+  if(soloMode){
+   if(code==='SOLO')return 'PRO';
+   if(code==='SOLO_PREMIUM')return 'PREMIUM';
+  }
+
+  return code==='PRO'?'PRO':'PREMIUM';
+ }
+
+ function displayName(code:Plan){
+  return `FIO ${shortName(code)}`;
+ }
+
+ function translatedItem(group:number,item:number){
+  return t(`fp.plan.${planDefinition.code}.g${group}i${item}`);
+ }
+
+ const compactFeatures=useMemo(()=>{
+  if(planDefinition.code==='FREE'){
+   return [
+    translatedItem(0,0),
+    translatedItem(0,1),
+    translatedItem(1,0),
+    translatedItem(1,1),
+    translatedItem(2,0)
+   ];
+  }
+
+  if(soloMode){
+   return [
+    translatedItem(0,1),
+    `${translatedItem(0,2)} · ${translatedItem(0,3)}`,
+    `${translatedItem(1,0)} · ${translatedItem(1,1)}`,
+    translatedItem(2,0),
+    `${translatedItem(3,0)} · ${translatedItem(3,1)}`
+   ];
+  }
+
+  return [
+   translatedItem(0,0),
+   translatedItem(0,1),
+   `${translatedItem(0,2)} · ${translatedItem(0,3)}`,
+   `${translatedItem(1,0)} · ${translatedItem(1,1)}`,
+   `${translatedItem(3,0)} · ${translatedItem(3,1)}`
+  ];
+ },[planDefinition.code,soloMode,t]);
+
+ function resetCheckout(){
+  setCheckoutPlan(null);
+  setChangePlan(null);
+  setDocument('');
+  setAcceptedTerms(false);
+  setChangeAccepted(false);
+  setCheckoutError('');
+  setCheckoutCode('');
+ }
+
+ function returnPlans(){
+  if(busy)return;
+  resetCheckout();
+  setScreen('plans');
+ }
+
+ async function startTrial(){
+  if(busy)return;
+
+  setBusy(true);
+  setCheckoutError('');
+
+  try{
+   await api(
+    '/saas/trial',
+    p.data.shop.id,
+    {confirmed:true}
+   );
+
+   await p.refresh();
+   p.notify(t('fp.trialStarted'));
+   setSelectedPlan(primaryPaid);
+  }catch(error){
+   p.notify(checkoutMessage(error));
+  }finally{
+   setBusy(false);
+  }
+ }
+
+ function choosePaid(code:PaidPlan){
+  setCheckoutError('');
+  setCheckoutCode('');
+  setSelectedPlan(code);
+
+  if(!billingLoaded){
+   setCheckoutError(t('fp.checking'));
+   return;
+  }
+
+  if(!billingConfigured){
+   setCheckoutError(t('fp.billingSupport'));
+   return;
+  }
+
+  if(
+   billing&&
+   ['pending_first_payment','overdue','suspended'].includes(billing.providerStatus)
+  ){
+   setSelectedPlan(billing.plan);
+
+   if(usablePix(billing))
+    setScreen('pix');
+   else
+    setScreen('manage');
+
+   return;
+  }
+
+  if(
+   billing?.providerStatus==='active'
+  ){
+   if(
+    billing.plan===code&&
+    billing.cycle===cycle
+   ){
+    setScreen('manage');
+    return;
+   }
+
+   setChangePlan(code);
+   setChangeAccepted(false);
+   setScreen('review');
+   return;
+  }
+
+  if(billingLocked){
+   setCheckoutError(t('fp.currentChargeFirst'));
+   return;
+  }
+
+  setCheckoutPlan(code);
+  setDocument('');
+  setAcceptedTerms(false);
+  setScreen('review');
+ }
+
+ async function subscribe(){
+  if(
+   !checkoutPlan||
+   !acceptedTerms||
+   busy
+  )
+   return;
+
+  const digits=documentDigits(document);
+
+  if(![11,14].includes(digits.length))
+   return;
+
+  setBusy(true);
+  setCheckoutError('');
+  setCheckoutCode('');
+
+  try{
+   const result=await api<BillingState>(
+    '/saas/subscribe',
+    p.data.shop.id,
+    {
+     plan:checkoutPlan,
+     cycle,
+     document:digits,
+     acceptedTerms:true
+    }
+   );
+
+   setBilling(result);
+
+   if(result.providerStatus==='active'){
+    await p.refresh();
+    setScreen('success');
+   }else{
+    setScreen('pix');
+   }
+
+   p.notify(
+    result.providerStatus==='active'
+     ?t('fp.subscriptionConfirmed')
+     :t('fp.chargeCreated')
+   );
+  }catch(error){
+   setCheckoutError(checkoutMessage(error));
+   setCheckoutCode(error instanceof RequestError?error.code:'');
+  }finally{
+   setBusy(false);
+  }
+ }
+
+ async function confirmChange(){
+  if(
+   !changePlan||
+   !changeAccepted||
+   busy
+  )
+   return;
+
+  setBusy(true);
+  setCheckoutError('');
+  setCheckoutCode('');
+
+  try{
+   const result=await api<{subscription:BillingState}>(
+    '/saas/change-plan',
+    p.data.shop.id,
+    {
+     plan:changePlan,
+     cycle,
+     confirmed:true
+    }
+   );
+
+   setBilling(result.subscription);
+   setSelectedPlan(changePlan);
+   setChangePlan(null);
+   await p.refresh();
+
+   if(result.subscription.providerStatus==='active'&&!result.subscription.change)
+    setScreen('success');
+   else if(usablePix(result.subscription))
+    setScreen('pix');
+   else
+    setScreen('manage');
+
+   p.notify(t('fp.changeRequested'));
+  }catch(error){
+   setCheckoutError(checkoutMessage(error));
+   setCheckoutCode(error instanceof RequestError?error.code:'');
+  }finally{
+   setBusy(false);
+  }
+ }
+
+ async function refreshBilling(showNotice=true){
+  if(busy)return;
+
+  setBusy(true);
+  setCheckoutError('');
+
+  try{
+   const result=await api<{configured:boolean;subscription:BillingState|null}>(
+    '/saas/billing',
+    p.data.shop.id
+   );
+
+   setBilling(result.subscription);
+   setBillingConfigured(result.configured);
+   setBillingLoaded(true);
+
+   if(result.subscription?.providerStatus==='active'){
+    await p.refresh();
+
+    if(screen==='pix')
+     setScreen('success');
+   }
+
+   if(showNotice){
+    if(result.subscription?.providerStatus==='active')
+     p.notify(t('fp.paymentConfirmed'));
+    else if(result.subscription)
+     p.notify(providerStatus(result.subscription.providerStatus));
+    else
+     p.notify(result.configured?t('fp.noCharge'):t('fp.billingSupport'));
+   }
+  }catch(error){
+   setCheckoutError(checkoutMessage(error));
+  }finally{
+   setBusy(false);
+  }
+ }
+
+ async function recoverEnrollment(){
+  if(busy)return;
+
+  setBusy(true);
+  setCheckoutError('');
+  setCheckoutCode('');
+
+  try{
+   const result=await api<{
+    configured:boolean;
+    subscription:BillingState|null;
+    cleared:boolean;
+   }>(
+    '/saas/recover-enrollment',
+    p.data.shop.id,
+    {confirmed:true}
+   );
+
+   setBilling(result.subscription);
+
+   if(result.subscription){
+    setSelectedPlan(result.subscription.plan);
+
+    if(usablePix(result.subscription))
+     setScreen('pix');
+    else
+     setScreen('manage');
+
+    p.notify(t('fp.recovered'));
+   }else{
+    setScreen('plans');
+    p.notify(t('fp.previousCleared'));
+   }
+  }catch(error){
+   setCheckoutError(checkoutMessage(error));
+   setCheckoutCode(error instanceof RequestError?error.code:'');
+  }finally{
+   setBusy(false);
+  }
+ }
+
+ async function manageCharge(action:'cancel_pending'|'resend'|'cancel_active'){
+  const question=
+   action==='cancel_pending'
+    ?t('fp.confirmCancelPending')
+    :action==='cancel_active'
+     ?t('fp.confirmCancelActive')
+     :t('fp.confirmNewPix');
+
+  if(!window.confirm(question))return;
+
+  setBusy(true);
+  setCheckoutError('');
+
+  try{
+   const result=await api<{subscription:BillingState|null}>(
+    '/saas/charge',
+    p.data.shop.id,
+    {action,confirmed:true}
+   );
+
+   setBilling(result.subscription);
+
+   if(action==='cancel_pending'){
+    setScreen('plans');
+    resetCheckout();
+    p.notify(t('fp.pendingCancelled'));
+   }else if(action==='cancel_active'){
+    await p.refresh();
+    setScreen('plans');
+    p.notify(t('fp.subscriptionCancelled'));
+   }else{
+    if(result.subscription&&usablePix(result.subscription))
+     setScreen('pix');
+
+    p.notify(t('fp.newPixReady'));
+   }
+  }catch(error){
+   setCheckoutError(checkoutMessage(error));
+  }finally{
+   setBusy(false);
+  }
+ }
+
+ async function requestRefund(){
+  if(
+   !billing?.refund?.eligible||
+   busy
+  )
+   return;
+
+  const deadline=billing.refund.deadline
+   ?date(billing.refund.deadline)
+   :t('fp.sevenDays');
+
+  if(!window.confirm(t('fp.confirmRefund',{deadline})))
+   return;
+
+  setBusy(true);
+  setCheckoutError('');
+
+  try{
+   const result=await api<{
+    subscription:BillingState|null;
+    refund:{
+     code:string;
+     status:string;
+     requestedAt:string;
+    };
+    cancellation:
+     'cancelled'|
+     'needs_attention'|
+     'already_requested';
+   }>(
+    '/saas/refund',
+    p.data.shop.id,
+    {confirmed:true}
+   );
+
+   setBilling(result.subscription);
+   await p.refresh();
+
+   if(result.cancellation==='needs_attention')
+    p.notify(t('fp.refundSupport'));
+   else
+    p.notify(t('fp.refundSent'));
+
+   setScreen('plans');
+  }catch(error){
+   setCheckoutError(checkoutMessage(error));
+  }finally{
+   setBusy(false);
+  }
+ }
+
+ async function copyPix(){
+  if(
+   !usablePix(billing)||
+   !billing?.payment?.pixCode
+  ){
+   p.notify(t('fp.pixUnavailable'));
+   return;
+  }
+
+  try{
+   await navigator.clipboard.writeText(
+    billing.payment.pixCode
+   );
+
+   p.notify(t('fp.pixCopied'));
+  }catch{
+   p.notify(t('fp.pixCopyFailed'));
+  }
+ }
+
+ const expiryText=useMemo(()=>{
+  const expiry=billing?.payment?.expiresAt;
+
+  if(!expiry)return '';
+
+  const delta=Math.max(
+   0,
+   Date.parse(expiry)-now
+  );
+
+  const totalSeconds=Math.floor(delta/1000);
+  const minutes=Math.floor(totalSeconds/60);
+  const seconds=totalSeconds%60;
+
+  return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+ },[billing?.payment?.expiresAt,now]);
+
+ if(screen==='review'){
+  const target=changePlan??checkoutPlan;
+
+  if(!target){
+   setScreen('plans');
+   return null;
+  }
+
+  const targetDefinition=FIO_PLAN_CATALOG.find(plan=>plan.code===target)!;
+  const total=targetDefinition.prices[cycle]??0;
+
+  return <section className="fio-payflow fio-payflow-review">
+   <header className="fio-payflow-titlebar">
+    <div>
+     <button className="fio-payflow-back" type="button" onClick={returnPlans} aria-label={t('common.back')}>
+      <ArrowLeft size={18}/>
+     </button>
+     <div>
+      <h1>{changePlan?t('fp.changeModal'):'Revisar e pagar'}</h1>
+      <span>{displayName(target)}</span>
+     </div>
+    </div>
+    <button className="fio-payflow-close" type="button" onClick={returnPlans} aria-label={t('ui.close')}>
+     <X size={20}/>
+    </button>
+   </header>
+
+   <div className="fio-payflow-review-card">
+    <div><span>{t('fp.plan')}</span><strong>{displayName(target)}</strong></div>
+    <div><span>{t('fp.period')}</span><strong>{cycleLabel(cycle)}</strong></div>
+    <div><span>{t('fp.value')}</span><strong>{amount(total)}</strong></div>
+   </div>
+
+   {!changePlan&&<>
+    <label className="fio-payflow-field">
+     <span>CPF ou CNPJ do responsável</span>
+     <input
+      value={document}
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="000.000.000-00"
+      maxLength={18}
+      onChange={event=>setDocument(formatDocument(event.target.value))}
+     />
+     <small>Enviado à SyncPay para identificar quem paga. O FIO não salva esse número.</small>
+    </label>
+
+    <details className="fio-payflow-disclosure">
+     <summary>{t('fp.cancelRefund')}</summary>
+     <p>{t('fp.cancelRefundDesc')}</p>
+     <p>{t('fp.noAutoRefund')}</p>
+    </details>
+
+    <label className="fio-payflow-consent">
+     <input
+      type="checkbox"
+      checked={acceptedTerms}
+      onChange={event=>setAcceptedTerms(event.target.checked)}
+     />
+     <span>
+      {t('fp.termsConsent')}{' '}
+      <a href="/termos" target="_blank" rel="noreferrer">Termos</a>
+      {' · '}
+      <a href="/privacidade" target="_blank" rel="noreferrer">Privacidade</a>
+     </span>
+    </label>
+   </>}
+
+   {changePlan&&<>
+    <div className="fio-payflow-note">
+     <ShieldCheck size={18}/>
+     <span>{t('fp.changeDesc')}</span>
+    </div>
+
+    <label className="fio-payflow-consent">
+     <input
+      type="checkbox"
+      checked={changeAccepted}
+      onChange={event=>setChangeAccepted(event.target.checked)}
+     />
+     <span>{t('fp.changeConsent')}</span>
+    </label>
+   </>}
+
+   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
+
+   {['SYNCPAY_ENROLLMENT_IN_PROGRESS','SYNCPAY_ENROLLMENT_UNCERTAIN'].includes(checkoutCode)&&
+    <button className="fio-payflow-secondary" disabled={busy} onClick={()=>void recoverEnrollment()}>
+     <RefreshCw size={16}/>
+     {t('fp.checkPrevious')}
+    </button>
+   }
+
+   <div className="fio-payflow-bottom-action">
+    <button
+     className="fio-payflow-primary"
+     disabled={
+      busy||
+      (
+       changePlan
+        ?!changeAccepted
+        :!acceptedTerms||![11,14].includes(documentDigits(document).length)
+      )
+     }
+     onClick={()=>void (changePlan?confirmChange():subscribe())}
+    >
+     {busy
+      ?t('fp.preparingPix')
+      :changePlan
+       ?t('fp.confirmChange')
+       :'Gerar Pix'
+     }
+     <span>→</span>
+    </button>
+   </div>
+  </section>;
+ }
+
+ if(screen==='pix'&&billing){
+  const canUsePix=usablePix(billing);
+
+  return <section className="fio-payflow fio-payflow-pix">
+   <header className="fio-payflow-titlebar">
+    <div>
+     <button className="fio-payflow-back" type="button" onClick={returnPlans} aria-label={t('common.back')}>
+      <ArrowLeft size={18}/>
+     </button>
+     <div>
+      <h1>{t('fp.pixPayment')}</h1>
+      <span>{displayName(billing.plan)}</span>
+     </div>
+    </div>
+    <button className="fio-payflow-close" type="button" onClick={returnPlans} aria-label={t('ui.close')}>
+     <X size={20}/>
+    </button>
+   </header>
+
+   <div className="fio-payflow-pix-center">
+    <span>{t('fp.payPixDesc')}</span>
+    <strong>{amount(billing.change?.amountCents??billing.amountCents)}</strong>
+   </div>
+
+   {canUsePix&&billing.payment?.pixCode?<>
+    <div className="fio-payflow-qr">
+     <QRCodeSVG
+      value={billing.payment.pixCode}
+      size={220}
+      level="M"
+      includeMargin
+      aria-label={t('fp.pixQrAria')}
+     />
+    </div>
+
+    <div className="fio-payflow-pix-copy">
+     <code>{billing.payment.pixCode}</code>
+     <button type="button" onClick={()=>void copyPix()}>{t('fp.copyPix')}</button>
+    </div>
+
+    <div className="fio-payflow-wait">
+     <i/>
+     <span>{providerStatus(billing.providerStatus)}</span>
+     {expiryText&&<small>expira em <b>{expiryText}</b></small>}
+    </div>
+
+    <ol className="fio-payflow-steps">
+     <li>Abra o app do seu banco.</li>
+     <li>Escolha pagar com Pix e leia o QR Code ou cole o código.</li>
+     <li>Confirme. O FIO libera o plano assim que receber a confirmação.</li>
+    </ol>
+   </>:<>
+    <div className="fio-payflow-note">
+     <WalletCards size={18}/>
+     <span>{t('fp.noValidPix')}</span>
+    </div>
+   </>}
+
+   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
+
+   <div className="fio-payflow-bottom-action">
+    <button className="fio-payflow-primary" disabled={busy} onClick={()=>void refreshBilling()}>
+     <RefreshCw size={17}/>
+     {busy?t('fp.updating'):t('fp.paidRefresh')}
+    </button>
+
+    {['pending_first_payment','overdue'].includes(billing.providerStatus)&&!billing.change&&
+     <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void manageCharge('cancel_pending')}>
+      {t('fp.cancelPending')}
+     </button>
+    }
+   </div>
+  </section>;
+ }
+
+ if(screen==='success'){
+  return <section className="fio-payflow fio-payflow-success">
+   <header className="fio-payflow-titlebar">
+    <div>
+     <div>
+      <h1>Tudo certo</h1>
+      <span>{displayName(selectedPlan)}</span>
+     </div>
+    </div>
+   </header>
+
+   <div className="fio-payflow-success-center">
+    <span className="fio-payflow-success-icon"><Check size={30}/></span>
+    <h2>{t('fp.paymentConfirmed')}</h2>
+    <p>{displayName(selectedPlan)} já está ativo.</p>
+   </div>
+
+   <div className="fio-payflow-bottom-action">
+    <button className="fio-payflow-primary" onClick={()=>navigate(p.base)}>
+     Ir para o app
+    </button>
+   </div>
+  </section>;
+ }
+
+ if(screen==='manage'&&billing){
+  return <section className="fio-payflow fio-payflow-manage">
+   <header className="fio-payflow-titlebar">
+    <div>
+     <button className="fio-payflow-back" type="button" onClick={returnPlans} aria-label={t('common.back')}>
+      <ArrowLeft size={18}/>
+     </button>
+     <div>
+      <h1>{t('fp.subscription')}</h1>
+      <span>{displayName(billing.plan)}</span>
+     </div>
+    </div>
+    <button className="fio-payflow-close" type="button" onClick={returnPlans} aria-label={t('ui.close')}>
+     <X size={20}/>
+    </button>
+   </header>
+
+   <div className="fio-payflow-manage-status">
+    <Crown size={24}/>
+    <div>
+     <strong>{providerStatus(billing.providerStatus)}</strong>
+     <span>{displayName(billing.plan)} · {cycleLabel(billing.cycle)}</span>
+    </div>
+   </div>
+
+   <div className="fio-payflow-review-card">
+    <div><span>{t('fp.plan')}</span><strong>{displayName(billing.plan)}</strong></div>
+    <div><span>{t('fp.period')}</span><strong>{cycleLabel(billing.cycle)}</strong></div>
+    <div><span>{t('fp.value')}</span><strong>{amount(billing.amountCents)}</strong></div>
+   </div>
+
+   {billing.change&&<div className="fio-payflow-note">
+    <RefreshCw size={18}/>
+    <span>{t('fp.changePending',{plan:displayName(billing.change.plan),cycle:cycleLabel(billing.change.cycle)})}</span>
+   </div>}
+
+   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
+
+   <div className="fio-payflow-bottom-action">
+    <button className="fio-payflow-primary" disabled={busy} onClick={()=>void refreshBilling()}>
+     <RefreshCw size={17}/>
+     {busy?t('fp.updating'):t('fp.refreshStatus')}
+    </button>
+
+    {billing.providerStatus==='pending_first_payment'&&!billing.change&&
+     <button className="fio-payflow-secondary" disabled={busy} onClick={()=>void manageCharge('resend')}>
+      {t('fp.newPix')}
+     </button>
+    }
+
+    {billing.providerStatus==='active'&&!billing.change&&billing.refund?.eligible&&
+     <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void requestRefund()}>
+      {t('fp.cancelRefundButton')}
+     </button>
+    }
+
+    {['active','overdue','suspended'].includes(billing.providerStatus)&&!billing.change&&!billing.refund?.eligible&&
+     <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void manageCharge('cancel_active')}>
+      {t('fp.cancelSubscription')}
+     </button>
+    }
+   </div>
+  </section>;
+ }
+
+ const paidSelected=selectedPlan!=='FREE';
+ const selectedPaid=paidSelected?selectedPlan as PaidPlan:null;
+ const currentSamePlan=p.data.plan===selectedPlan;
+ const selectedBillingCurrent=Boolean(
+  billing?.providerStatus==='active'&&
+  billing.plan===selectedPlan&&
+  billing.cycle===cycle
+ );
+
+ return <section className="fio-payflow fio-payflow-plans">
+  <div className="fio-payflow-plan-controls">
+  <div className="fio-payflow-cycle" role="tablist" aria-label={t('fp.subscriptionPeriod')}>
+   <button type="button" className={cycle==='annual'?'active':''} aria-selected={cycle==='annual'} onClick={()=>setCycle('annual')}>
+    Anual <small>-20%</small>
+   </button>
+   <button type="button" className={cycle==='monthly'?'active':''} aria-selected={cycle==='monthly'} onClick={()=>setCycle('monthly')}>
+    Mensal
+   </button>
+  </div>
+
+  <div className="fio-payflow-tabs" role="tablist" aria-label={t('fp.title')}>
+   {visiblePlans.map(plan=>
+    <button
+     type="button"
+     key={plan.code}
+     role="tab"
+     aria-selected={selectedPlan===plan.code}
+     className={selectedPlan===plan.code?'active':''}
+     onClick={()=>setSelectedPlan(plan.code)}
+    >
+     {shortName(plan.code)}
+    </button>
+   )}
+  </div>
+  </div>
+
+  <div className="fio-payflow-plan-scroll">
+  <article className="fio-payflow-card" data-plan={selectedPlan}>
+   <span className="fio-payflow-eyebrow">{t(`fp.plan.${planDefinition.code}.eyebrow`)}</span>
+   <h2>{displayName(planDefinition.code)}</h2>
+
+   <div className="fio-payflow-price">
+    <strong>{planPrice===0?amount(0):amount(planPrice)}</strong>
+    <span>{planPrice===0?'grátis':cycle==='annual'?'/ano':'/mês'}</span>
+   </div>
+
+   {monthlyEquivalent!==null&&
+    <small className="fio-payflow-equivalent">
+     equivale a {amount(monthlyEquivalent)}/mês
+    </small>
+   }
+
+   <div className="fio-payflow-badges">
+    {annualSaving>0&&<span>Economia de {amount(annualSaving)}/ano</span>}
+    {selectedPlan===primaryPaid&&!trialUsed&&<span className="trial"><Gift size={13}/>14 dias grátis</span>}
+   </div>
+
+   <div className="fio-payflow-features">
+    {compactFeatures.filter(Boolean).map((feature,index)=>
+     <div key={`${selectedPlan}-${index}`}>
+      <Check size={15}/>
+      <span>{feature}</span>
+     </div>
+    )}
+   </div>
+  </article>
+
+  {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
+  </div>
+
+  <div className="fio-payflow-bottom-action fio-payflow-plan-action">
+   {selectedPlan==='FREE'
+    ?<button className="fio-payflow-primary" disabled>
+      {currentSamePlan?t('fp.currentPlan'):t('fp.freePlan')}
+     </button>
+    :selectedBillingCurrent
+     ?<button className="fio-payflow-primary" onClick={()=>setScreen('manage')}>
+       {t('fp.viewSubscription')}
+      </button>
+     :<button
+       className="fio-payflow-primary"
+       disabled={busy||!billingLoaded||!billingConfigured}
+       onClick={()=>selectedPaid&&choosePaid(selectedPaid)}
+      >
+       {billing?.providerStatus==='active'
+        ?`Trocar para ${displayName(selectedPlan)}`
+        :`Assinar ${displayName(selectedPlan)}`
+       }
+      </button>
+   }
+
+   {selectedPlan===primaryPaid&&!trialUsed&&p.data.plan==='FREE'&&!billingLocked&&
+    <button className="fio-payflow-trial" disabled={busy} onClick={()=>void startTrial()}>
+     {t('fp.trialCta',{plan:displayName(selectedPlan)})}
+    </button>
+   }
+  </div>
+ </section>;
+}
+
+
+
+==================== package.json ====================
+
+{
+  "name": "fio-saas-v2",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:web": "vite --host 127.0.0.1",
+    "dev:api": "tsx watch --env-file-if-exists=.env server/index.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build && tsc -p tsconfig.server.json",
+    "start": "node --env-file-if-exists=.env scripts/start.mjs",
+    "push:dispatch": "node --env-file-if-exists=.env dist-server/server/push-worker.js",
+    "build:portable": "node --import ./scripts/wasm-esbuild.mjs node_modules/vite/bin/vite.js build --configLoader native && tsc -p tsconfig.server.json",
+    "test:portable": "node --import ./scripts/wasm-esbuild.mjs node_modules/vitest/vitest.mjs run --configLoader native",
+    "test": "vitest run",
+    "test:ui": "playwright test --config tests/billing.playwright.config.ts",
+    "seed:users": "node --env-file-if-exists=.env scripts/seed-test-users.mjs",
+    "verify": "npm run typecheck && npm test && npm run build",
+    "test:billing-ui": "playwright test --config tests/billing.playwright.config.ts",
+    "check:release": "node scripts/check-release.mjs"
+  },
+  "dependencies": {
+    "@fontsource/dm-sans": "^5.3.0",
+    "@supabase/supabase-js": "2.116.0",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "lucide-react": "^0.468.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "7.18.4",
+    "stripe": "^22.6.2",
+    "web-push": "3.6.7",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.10",
+    "@playwright/test": "^1.55.1",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.18.6",
+    "@types/react": "^19.1.14",
+    "@types/react-dom": "^19.1.9",
+    "@types/supertest": "^6.0.3",
+    "@types/web-push": "3.6.4",
+    "@vitejs/plugin-react": "^5.0.3",
+    "concurrently": "^9.2.1",
+    "esbuild-wasm": "^0.28.2",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7",
+    "vitest": "4.1.11"
+  }
+}
+
