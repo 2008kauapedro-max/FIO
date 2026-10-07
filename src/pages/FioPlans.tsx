@@ -809,8 +809,8 @@ export function FioPlans(p:WorkspaceProps){
      >
       <CreditCard size={18}/>
       <span>
-       <strong>CartÃ£o</strong>
-       <small>CrÃ©dito Â· pagamento seguro pela Stripe</small>
+       <strong>Cartão</strong>
+       <small>Crédito · pagamento seguro pela Stripe</small>
       </span>
      </button>
 
@@ -833,11 +833,11 @@ export function FioPlans(p:WorkspaceProps){
     {paymentMethod==='card'
      ?<div className="fio-payflow-note">
        <ShieldCheck size={18}/>
-       <span>VocÃª serÃ¡ direcionado ao Checkout seguro da Stripe. O FIO nÃ£o recebe nem armazena os dados do seu cartÃ£o.</span>
+       <span>Você será direcionado ao Checkout seguro da Stripe. O FIO não recebe nem armazena os dados do seu cartão.</span>
       </div>
      :<>
       <label className="fio-payflow-field">
-       <span>CPF ou CNPJ do responsÃ¡vel</span>
+       <span>CPF ou CNPJ do responsável</span>
        <input
         value={document}
         inputMode="numeric"
@@ -846,7 +846,7 @@ export function FioPlans(p:WorkspaceProps){
         maxLength={18}
         onChange={event=>setDocument(formatDocument(event.target.value))}
        />
-       <small>Enviado Ã  SyncPay para identificar quem paga. O FIO nÃ£o salva esse nÃºmero.</small>
+       <small>Enviado à SyncPay para identificar quem paga. O FIO não salva esse número.</small>
       </label>
 
       <details className="fio-payflow-disclosure">
@@ -866,7 +866,7 @@ export function FioPlans(p:WorkspaceProps){
      <span>
       {t('fp.termsConsent')}{' '}
       <a href="/termos" target="_blank" rel="noreferrer">Termos</a>
-      {' Â· '}
+      {' · '}
       <a href="/privacidade" target="_blank" rel="noreferrer">Privacidade</a>
      </span>
     </label>
@@ -920,7 +920,7 @@ export function FioPlans(p:WorkspaceProps){
       :changePlan
        ?t('fp.confirmChange')
        :paymentMethod==='card'
-        ?'Continuar com cartÃ£o'
+        ?'Continuar com cartão'
         :'Gerar Pix'
      }
      <span>→</span>

@@ -8,9 +8,9 @@ describe('Stripe na UI do FIO',()=>{
 
  it('oferece Cartao e Pix mantendo o Pix QR legado da SyncPay',()=>{
   expect(ui).toContain("type PaymentMethod='card'|'pix'");
-  expect(ui).toContain('Continuar com cartÃ£o');
+  expect(ui).toContain('Continuar com cartão');
   expect(ui).toContain("'Gerar Pix'");
-  expect(ui).not.toContain('Pix AutomÃ¡tico');
+  expect(ui).not.toContain('Pix Automático');
  });
 
  it('Cartao usa apenas Checkout Stripe hospedado',()=>{
@@ -21,7 +21,7 @@ describe('Stripe na UI do FIO',()=>{
 
  it('CPF/CNPJ permanece no fluxo Pix SyncPay',()=>{
   expect(ui).toContain("paymentMethod==='card'");
-  expect(ui).toContain('CPF ou CNPJ do responsÃ¡vel');
+  expect(ui).toContain('CPF ou CNPJ do responsável');
   expect(ui).toContain('document:digits');
  });
 
