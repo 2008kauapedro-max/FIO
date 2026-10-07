@@ -11,9 +11,10 @@ import { askAssistant } from './assistant.js';
 import { bookingSchema } from '../shared/domain.js';
 import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment } from './syncpay.js';
 import { createStripeCheckoutSession,createStripeBillingPortal,getStripeBilling,handleStripeWebhook,stripeCheckoutConfigured,getStripeRefundPolicy,requestStripeRefund } from './stripe.js';
-import { randomUUID } from 'node:crypto';
+import { createHash,randomUUID,timingSafeEqual } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
-import {publicPushConfig,validPushEndpoint} from './platform-push.js';
+import {dispatchPlatformPush,publicPushConfig,validPushEndpoint} from './platform-push.js';
+import {dispatchAppointmentPush} from './appointment-push.js';
 type Authenticator = typeof authenticate;
 
 function serviceDb(){
@@ -37,6 +38,12 @@ function secureLog(requestId:string,error:unknown){
  if(!(error instanceof ApiError)&&!(error instanceof ZodError))console.error(JSON.stringify({event:'api_error',requestId,status:500,code:'INTERNAL_ERROR'}));
 }
 
+
+function secureSecretEqual(a:string,b:string){
+ const left=createHash('sha256').update(a).digest();
+ const right=createHash('sha256').update(b).digest();
+ return timingSafeEqual(left,right);
+}
 
 function normalizedOrigin(value:string|undefined){
  if(!value)return '';
@@ -99,6 +106,39 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/webhooks/stripe',express.raw({type:'application/json',limit:'256kb'}),async(req,res)=>handleStripeWebhook(req,res));
  app.use(express.json({limit:'12kb'}));
  app.get('/api/health',rateLimit('health',{windowMs:60_000,max:30}), (_req, res) =>res.set('Cache-Control','no-store').json({status:'ok'}));
+ app.post('/api/internal/push/dispatch',rateLimit('push-dispatch',{windowMs:60_000,max:12}),async(req,res)=>{
+  const expected=process.env.PUSH_DISPATCH_SECRET?.trim()??'';
+  const authorization=req.get('authorization')??'';
+  const token=authorization.startsWith('Bearer ')
+   ?authorization.slice(7).trim()
+   :'';
+
+  if(
+   !expected||
+   !token||
+   !secureSecretEqual(token,expected)
+  ){
+   res.status(401).json({
+    code:'UNAUTHORIZED',
+    message:'Acesso negado.'
+   });
+   return;
+  }
+
+  const db=serviceDb();
+
+  const [platform,appointments]=await Promise.all([
+   dispatchPlatformPush(db),
+   dispatchAppointmentPush(db)
+  ]);
+
+  res.json({
+   ok:true,
+   platform,
+   appointments
+  });
+ });
+
  app.get('/api/public/shop/:slug',rateLimit('public-shop',{windowMs:60_000,max:60}),async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
   const shop=await db.from('barbershops').select('id,name,slug,operation_mode,public_title,public_description,logo_url,cover_url,background_url,accent_color,logo_asset_path,cover_asset_path,background_asset_path,theme_mode,palette_key,custom_accent,whatsapp,instagram,address').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);
