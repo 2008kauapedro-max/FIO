@@ -4,6 +4,7 @@ import { Check,ChevronLeft,ChevronRight,Copy,ExternalLink,ImagePlus,Plus,Share2,
 import { api,supabase } from '../lib/api';
 import { optimizeImage } from '../lib/images';
 import { QRCodeSVG } from 'qrcode.react';
+import { downloadQrCode,type QrFormat } from '../lib/qr-export';
 
 type Service={id?:string;_key:string;name:string;description?:string|null;duration_minutes:number;price_cents:number;active:boolean;_durationInput?:string;_priceInput?:string};
 type DaySchedule={weekday:number;enabled:boolean;opensAt:string;closesAt:string};
@@ -83,14 +84,15 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
   if(!logo)return;
 
   try{
-   const key='fio-loading-brands-v1';
-   const lastKey='fio-loading-last-shop-v1';
+   const key='fio-loading-brands-v2';
+   const lastKey='fio-loading-last-shop-v2';
    const previous=JSON.parse(
     localStorage.getItem(key)||'{}'
    );
 
    const brand={
     shopId,
+    slug,
     name:name.trim()||displayName.trim()||'',
     logo
    };
@@ -118,6 +120,7 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
  },[
   shopId,
   logoPath,
+  slug,
   name,
   displayName
  ]);
@@ -313,24 +316,22 @@ export function OwnerOnboarding({onDone,shopId:initialShopId}:Props){
    url:publicLink
   });
  };
- const downloadQr=()=>{
+ const downloadQr=async(format:QrFormat)=>{
   const svg=qrRef.current?.querySelector('svg');if(!svg||!publicLink)return;
-  const source=`<?xml version="1.0" encoding="UTF-8"?>${new XMLSerializer().serializeToString(svg)}`;
-  const url=URL.createObjectURL(new Blob([source],{type:'image/svg+xml;charset=utf-8'}));
-  const anchor=document.createElement('a');anchor.href=url;anchor.download=`${slug||'fio'}-qr-code.svg`;document.body.appendChild(anchor);anchor.click();anchor.remove();
-  window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+  try{await downloadQrCode(svg,slug,format);}
+  catch(e){setError((e as Error).message||'Não foi possível exportar o QR Code.');}
  };
  const canContinue=step===1?Boolean(
   displayName.trim().length>=2&&
-  ownerPhone.replace(/D/g,'').length>=10&&
-  ownerPhone.replace(/D/g,'').length<=13&&
+  ownerPhone.replace(/\D/g,'').length>=10&&
+  ownerPhone.replace(/\D/g,'').length<=13&&
   name.trim().length>=2&&
   /^[a-z0-9-]{3,60}$/.test(slug)&&
-  whatsapp.replace(/D/g,'').length>=10
+  whatsapp.replace(/\D/g,'').length>=10
  ):step===2?services.some(s=>s.active&&validService(s)):step===3?validSchedules.length>0:step===4?Boolean(paletteKey&&logoPath):true;
 
  if(loading)return <div className="owner-onboarding ob-loading">{t('onboarding.loading')}</div>;
- if(success)return <div className="owner-onboarding ob-success"><span className="ob-success-mark"><Check/></span><p className="eyebrow">{t('onboarding.readyEyebrow')}</p><h1>{operationMode==='SOLO'?t('onboarding.soloReady'):t('onboarding.shopReady')}</h1><p className="ob-muted">{t('onboarding.spaceAvailable')}</p><div className="ob-success-actions"><a href={`/${slug}`} target="_blank" rel="noreferrer"><ExternalLink size={16}/>{t('onboarding.viewClient')}</a><button onClick={()=>void copy()}><Copy size={16}/>{t('onboarding.copyLink')}</button><button onClick={()=>void share()}><Share2 size={16}/>{t('onboarding.share')}</button><button onClick={onDone}>{t('onboarding.enterManagement')}</button></div><div className="ob-qr"><div className="ob-qr-code" ref={qrRef} aria-label={t('onboarding.qrLabel')}><QRCodeSVG value={publicLink} size={180} level="M" includeMargin bgColor="#ffffff" fgColor="#000000"/></div><button type="button" className="secondary" onClick={downloadQr}>{t('onboarding.downloadQr')}</button></div></div>;
+ if(success)return <div className="owner-onboarding ob-success"><span className="ob-success-mark"><Check/></span><p className="eyebrow">{t('onboarding.readyEyebrow')}</p><h1>{operationMode==='SOLO'?t('onboarding.soloReady'):t('onboarding.shopReady')}</h1><p className="ob-muted">{t('onboarding.spaceAvailable')}</p><div className="ob-success-actions"><a href={`/${slug}`} target="_blank" rel="noreferrer"><ExternalLink size={16}/>{t('onboarding.viewClient')}</a><button onClick={()=>void copy()}><Copy size={16}/>{t('onboarding.copyLink')}</button><button onClick={()=>void share()}><Share2 size={16}/>{t('onboarding.share')}</button><button onClick={onDone}>{t('onboarding.enterManagement')}</button></div><div className="ob-qr"><div className="ob-qr-code" ref={qrRef} aria-label={t('onboarding.qrLabel')}><QRCodeSVG value={publicLink} size={180} level="M" includeMargin bgColor="#ffffff" fgColor="#000000"/></div><div className="ob-qr-downloads"><button type="button" className="secondary" onClick={()=>void downloadQr('png')}>Baixar PNG</button><button type="button" className="secondary" onClick={()=>void downloadQr('svg')}>Baixar SVG</button><button type="button" className="secondary" onClick={()=>void downloadQr('pdf')}>Baixar PDF</button></div></div></div>;
  if(!shopId&&step!==1)return null;
 
  return <main className="owner-onboarding" style={previewStyle}>

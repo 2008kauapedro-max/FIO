@@ -118,6 +118,164 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const instagram=shop.data.instagram?`@${String(shop.data.instagram).replace(/^@+/,'').trim()}`:null;
   res.set('Cache-Control','no-store').json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:publicPlans.data??[]});
  });
+
+ app.get('/api/public/share/:slug',rateLimit('public-share',{windowMs:60_000,max:60}),async(req,res)=>{
+  const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug);
+  const db=serviceDb();
+
+  const shop=await db
+   .from('barbershops')
+   .select('name,public_title,public_description,logo_url,logo_asset_path,custom_accent,accent_color')
+   .eq('slug',slug)
+   .eq('onboarding_completed',true)
+   .neq('platform_status','suspended')
+   .maybeSingle();
+
+  dbError(shop.error);
+
+  if(!shop.data)
+   throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
+
+  const esc=(value:unknown)=>
+   String(value??'')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#39;");
+
+  const name=
+   shop.data.public_title||
+   shop.data.name;
+
+  const description=
+   shop.data.public_description||
+   `Agende seu horário com ${name}.`;
+
+  const image=
+   shop.data.logo_url||
+   (
+    shop.data.logo_asset_path
+     ?publicStorageUrl(
+       'branding-assets',
+       shop.data.logo_asset_path
+      )
+     :''
+   );
+
+  const accent=
+   shop.data.custom_accent||
+   shop.data.accent_color||
+   '#000000';
+
+  const proto=
+   (
+    req.get('x-forwarded-proto')||
+    req.protocol||
+    'https'
+   )
+    .split(',')[0]
+    .trim();
+
+  const host=
+   (
+    req.get('x-forwarded-host')||
+    req.get('host')||
+    ''
+   )
+    .split(',')[0]
+    .trim();
+
+  if(!host)
+   throw new ApiError(
+    503,
+    'SHARE_PREVIEW_UNAVAILABLE',
+    'Prévia temporariamente indisponível.'
+   );
+
+  const origin=`${proto}://${host}`;
+  const canonical=`${origin}/${slug}`;
+
+  let html='';
+
+  try{
+   html=readFileSync(
+    resolve('dist/index.html'),
+    'utf8'
+   );
+  }catch{
+   const shell=await fetch(
+    `${origin}/index.html`,
+    {headers:{accept:'text/html'}}
+   );
+
+   if(!shell.ok)
+    throw new ApiError(
+     503,
+     'SHARE_PREVIEW_UNAVAILABLE',
+     'Prévia temporariamente indisponível.'
+    );
+
+   html=await shell.text();
+  }
+
+  html=html
+   .replace(
+    /<title>[\s\S]*?<\/title>/i,
+    `<title>${esc(name)} · Agendamento</title>`
+   )
+   .replace(
+    /<meta\s+name="description"[\s\S]*?\/>/i,
+    `<meta name="description" content="${esc(description)}" />`
+   )
+   .replace(
+    /<meta\s+name="theme-color"[\s\S]*?\/>/i,
+    `<meta name="theme-color" content="${esc(accent)}" />`
+   );
+
+  if(image){
+   html=html
+    .replace(
+     /<link\s+rel="apple-touch-icon"[\s\S]*?\/>/i,
+     `<link rel="apple-touch-icon" href="${esc(image)}" />`
+    )
+    .replace(
+     /<link\s+rel="icon"[\s\S]*?\/>/i,
+     `<link rel="icon" href="${esc(image)}" />`
+    );
+  }
+
+  const social=[
+   `<meta property="og:type" content="website" />`,
+   `<meta property="og:title" content="${esc(name)}" />`,
+   `<meta property="og:description" content="${esc(description)}" />`,
+   `<meta property="og:url" content="${esc(canonical)}" />`,
+   image
+    ?`<meta property="og:image" content="${esc(image)}" />`
+    :'',
+   `<meta name="twitter:card" content="summary" />`,
+   `<meta name="twitter:title" content="${esc(name)}" />`,
+   `<meta name="twitter:description" content="${esc(description)}" />`,
+   image
+    ?`<meta name="twitter:image" content="${esc(image)}" />`
+    :''
+  ]
+   .filter(Boolean)
+   .join('\n    ');
+
+  html=html.replace(
+   '</head>',
+   `    ${social}\n  </head>`
+  );
+
+  res
+   .type('html')
+   .set(
+    'Cache-Control',
+    'public, max-age=0, s-maxage=300, stale-while-revalidate=86400'
+   )
+   .send(html);
+ });
  app.get('/api/public/manifest/:slug',rateLimit('public-manifest',{windowMs:60_000,max:30}),async(req,res)=>{
   const slug=z.string().regex(/^[a-z0-9-]{3,60}$/).parse(req.params.slug),db=serviceDb();
   const shop=await db.from('barbershops').select('name,public_title,logo_url,logo_asset_path,accent_color,custom_accent').eq('slug',slug).eq('onboarding_completed',true).neq('platform_status','suspended').maybeSingle();dbError(shop.error);

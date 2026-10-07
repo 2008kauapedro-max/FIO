@@ -95,6 +95,36 @@ export function PublicPortal(){
  const title=useMemo(()=>data?.shop.public_title||data?.shop.name||'FIO',[data]);
  useEffect(()=>{
   if(!data)return;
+
+  try{
+   const key='fio-loading-brands-v2';
+   const previous=JSON.parse(
+    localStorage.getItem(key)||'{}'
+   );
+
+   const brand={
+    shopId:data.shop.id,
+    slug:data.shop.slug,
+    name:title,
+    logo:data.shop.logo_url||''
+   };
+
+   localStorage.setItem(
+    key,
+    JSON.stringify({
+     ...previous,
+     [data.shop.id]:brand
+    })
+   );
+
+   window.dispatchEvent(
+    new CustomEvent(
+     'fio-loading-brand',
+     {detail:brand}
+    )
+   );
+  }catch{}
+
   const oldTitle=document.title;document.title=title;
   let apple=document.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
   const created=!apple;

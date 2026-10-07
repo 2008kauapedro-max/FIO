@@ -21,8 +21,8 @@ export function ShopIdentity({slug}:{slug:string}){
      typeof window!=='undefined'
     ){
      try{
-      const key='fio-loading-brands-v1';
-      const lastKey='fio-loading-last-shop-v1';
+      const key='fio-loading-brands-v2';
+      const lastKey='fio-loading-last-shop-v2';
       const previous=JSON.parse(
        localStorage.getItem(key)||'{}'
       );
@@ -31,6 +31,7 @@ export function ShopIdentity({slug}:{slug:string}){
        ...previous,
        [String(brand.id)]:{
         shopId:String(brand.id),
+        slug,
         name:String(
          brand.public_title||
          brand.name||

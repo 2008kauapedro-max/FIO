@@ -17,7 +17,7 @@ describe('MVP sem Power e sem criação manual indevida',()=>{
   const staff=workspace.slice(start,end);
 
   expect(staff).toContain("const canCreateManual=owner&&!solo;");
-  expect(staff).toContain("canCreateManual&&new URLSearchParams(location.search).has('novo')");
+  expect(staff).toContain("canCreateManual&&new URLSearchParams(routeLocation.search).has('novo')");
   expect(staff).toContain('canCreateManual&&<button type="button" className="simple-new-booking"');
   expect(staff).toContain('canCreateManual&&booking&&');
  });

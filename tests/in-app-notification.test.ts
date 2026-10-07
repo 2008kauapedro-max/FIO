@@ -1,4 +1,4 @@
-﻿import {describe,expect,it} from 'vitest';
+import {describe,expect,it} from 'vitest';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 
@@ -11,9 +11,9 @@ describe('notificacao in-app',()=>{
   const app=read('src/App.tsx');
 
   expect(app).toContain('fio-inapp-notice');
-  expect(app).toContain("toast===t('app.newAppointment')");
+  expect(app).toContain("toast.startsWith('Novo agendamento feito por')");
   expect(app).toContain("t('app.noticeOpenAgenda')");
-  expect(app).toContain("navigate(base+'/agenda')");
+  expect(app).toContain("navigate(base+'/agenda?appointment='+encodeURIComponent(bookingNotice!.id))");
  });
 
  it('respeita mobile e safe area',()=>{

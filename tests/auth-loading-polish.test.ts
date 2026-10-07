@@ -53,7 +53,7 @@ describe('acesso e loading sem flash',()=>{
 
   expect(app)
    .toContain(
-    "const LOADING_BRANDS_KEY='fio-loading-brands-v1'"
+    "const LOADING_BRANDS_KEY='fio-loading-brands-v2'"
    );
 
   expect(app)
@@ -68,7 +68,7 @@ describe('acesso e loading sem flash',()=>{
 
   expect(identity)
    .toContain(
-    'fio-loading-brands-v1'
+    'fio-loading-brands-v2'
    );
  });
 

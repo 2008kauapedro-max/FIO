@@ -4,9 +4,9 @@ import {appointmentLink} from './lib/appointment-link';
 import { clientContext,rememberClientShop } from './lib/client-context';
 import { useCallback,useEffect,useRef,useState,lazy,Suspense,type CSSProperties } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
-import { LayoutDashboard,CalendarDays,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,Images,Megaphone,Sun,Moon,Crown,CircleHelp,Settings,MoreHorizontal,Power,Plus,Trash2 } from 'lucide-react';
+import { LayoutDashboard,CalendarDays,Bell,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,Images,Megaphone,Sun,Moon,Crown,CircleHelp,Settings,MoreHorizontal,Power,Plus,Trash2 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
-import type { Bootstrap,Membership,Role } from '../shared/domain';
+import type { Bootstrap,Membership,Notification,Role } from '../shared/domain';
 import { planAllows,type FioFeature } from '../shared/entitlements';
 import { fioPlanPublicName } from '../shared/fio-plans';
 import { roleHome } from '../shared/domain';
@@ -21,12 +21,14 @@ import { GuidedTour } from './components/GuidedTour';
 import { FioPlans } from './pages/FioPlans';
 import { LegalPage } from './pages/Legal';
 import { Modal } from './components/ui';
+import { WhatsAppIcon } from './components/WhatsAppIcon';
 const PlatformApp=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformApp})));
 const PlatformLogin=lazy(()=>import('./pages/Platform').then(m=>({default:m.PlatformLogin})));
 
 
 type LoadingBrand={
  shopId:string;
+ slug?:string;
  name:string;
  logo:string;
 };
@@ -41,8 +43,8 @@ type MembershipWithBrand=Membership&{
  }|null;
 };
 
-const LOADING_BRANDS_KEY='fio-loading-brands-v1';
-const LOADING_LAST_KEY='fio-loading-last-shop-v1';
+const LOADING_BRANDS_KEY='fio-loading-brands-v2';
+const LOADING_LAST_KEY='fio-loading-last-shop-v2';
 
 function storageLogo(
  logoUrl?:string|null,
@@ -109,22 +111,27 @@ function cacheLoadingBrand(brand:LoadingBrand){
  }catch{}
 }
 
-function currentLoadingBrand(){
+function currentLoadingBrand():LoadingBrand|null{
  const brands=readLoadingBrands();
-
+ const pathname=window.location.pathname;
+ const params=new URLSearchParams(window.location.search);
+ const pathSlug=pathname.match(/^\/(?:b\/|barbearia\/)?([a-z0-9-]{3,60})\/?$/)?.[1]??'';
+ const reserved=new Set(['login','owner','barber','client','platform','acesso','termos','privacidade','reset-password','confirm-email']);
+ const requested=pathSlug&&!reserved.has(pathSlug)
+  ?pathSlug
+  :params.get('shop')||(
+   pathname.startsWith('/client')||
+   (pathname==='/login'&&params.get('audience')==='client')
+    ?clientContext(pathname,window.location.search):''
+  );
+ if(requested)return Object.values(brands).find(b=>b.slug===requested)??null;
+ const staff=pathname.startsWith('/owner')||pathname.startsWith('/barber')||
+  (pathname==='/login'&&params.get('audience')!=='client');
+ if(!staff)return null;
  try{
-  const selected=
-   sessionStorage.getItem('fio-shop')||
-   localStorage.getItem(LOADING_LAST_KEY)||
-   '';
-
-  if(selected&&brands[selected])
-   return brands[selected];
-
-  return Object.values(brands)[0]??null;
- }catch{
-  return Object.values(brands)[0]??null;
- }
+  const id=sessionStorage.getItem('fio-shop');
+  return id?brands[id]??null:null;
+ }catch{return null;}
 }
 
 function AppLoading(){
@@ -147,10 +154,7 @@ function AppLoading(){
    const detail=
     (event as CustomEvent<LoadingBrand>).detail;
 
-   if(detail?.shopId)
-    setBrand(detail);
-   else
-    setBrand(currentLoadingBrand());
+   setBrand(currentLoadingBrand());
   };
 
   window.addEventListener(
@@ -245,6 +249,8 @@ export default function App(){
  const isPublicPortal=location.pathname.startsWith('/b/')||location.pathname.startsWith('/barbearia/')||isCleanPublicSlug;
  const demo=false,demoRole='OWNER' as Role;
  const [session,setSession]=useState<Session|null>(null),[authReady,setAuthReady]=useState(!supabase),[memberships,setMemberships]=useState<Membership[]|null>(null),[onboardingShopId,setOnboardingShopId]=useState(''),[clientJoinPending,setClientJoinPending]=useState(false),[shopId,setShopId]=useState(sessionStorage.getItem('fio-shop')??''),[data,setData]=useState<Bootstrap|null>(null),[error,setError]=useState(''),[toast,setToast]=useState(''),[menu,setMenu]=useState(false);
+ const [notificationOpen,setNotificationOpen]=useState(false);
+ const [bookingNotice,setBookingNotice]=useState<{id:string;name:string;phone:string|null}|null>(null);
  const [theme,setTheme]=useState<Theme>(()=>(localStorage.getItem('fio-theme')==='light'?'light':'dark'));
  const [installPrompt,setInstallPrompt]=useState<InstallPromptEvent|null>(null);
  const [bootHold,setBootHold]=useState(true);
@@ -320,6 +326,7 @@ export default function App(){
 
    cacheLoadingBrand({
     shopId:brand.id,
+    slug:brand.slug,
     name:brand.name,
     logo:storageLogo(
      brand.logo_url,
@@ -355,15 +362,24 @@ export default function App(){
  useEffect(()=>{
   if(!supabase||!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;
   let refreshTimer:number|undefined;
-  const scheduleRefresh=(showNew:boolean,createdBy?:string)=>{
+  const scheduleRefresh=(showNew:boolean,createdBy?:string,appointmentId?:string)=>{
    if(refreshTimer)window.clearTimeout(refreshTimer);
    refreshTimer=window.setTimeout(()=>{
-    void refresh().catch(()=>undefined);
-    if(showNew&&activeRole!=='CLIENT'&&createdBy!==session.user.id)setToast(t('app.newAppointment'));
+    const show=showNew&&activeRole!=='CLIENT'&&createdBy!==session.user.id&&Boolean(appointmentId);
+    if(!show){void refresh().catch(()=>undefined);return;}
+    void api<Bootstrap>('/bootstrap',shopId).then(next=>{
+     setData(next);
+     const appointment=next.appointments.find(a=>a.id===appointmentId);
+     if(!appointment)return;
+     const customer=next.customers.find(c=>c.id===appointment.client_id);
+     const name=customer?.name?.trim()||'um cliente';
+     setBookingNotice({id:appointment.id,name,phone:customer?.phone??null});
+     setToast('Novo agendamento feito por '+name+'.');
+    }).catch(()=>void refresh().catch(()=>undefined));
    },180);
   };
   const channel=supabase.channel(`fio-appointments-${shopId}-${session.user.id}`)
-   .on('postgres_changes',{event:'INSERT',schema:'public',table:'appointments',filter:`barbershop_id=eq.${shopId}`},payload=>{const record=payload.new as {created_by?:string};scheduleRefresh(true,record.created_by);})
+   .on('postgres_changes',{event:'INSERT',schema:'public',table:'appointments',filter:`barbershop_id=eq.${shopId}`},payload=>{const record=payload.new as {id?:string;created_by?:string};scheduleRefresh(true,record.created_by,record.id);})
    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'appointments',filter:`barbershop_id=eq.${shopId}`},()=>scheduleRefresh(false))
    .subscribe();
   return()=>{if(refreshTimer)window.clearTimeout(refreshTimer);void supabase?.removeChannel(channel);};
@@ -391,6 +407,7 @@ export default function App(){
 
   cacheLoadingBrand({
    shopId:data.shop.id,
+   slug:data.shop.slug,
    name:data.shop.public_title||data.shop.name,
    logo:storageLogo(
     data.shop.logo_url,
@@ -399,6 +416,7 @@ export default function App(){
   });
  },[
   data?.shop.id,
+  data?.shop.slug,
   data?.shop.name,
   data?.shop.public_title,
   data?.shop.logo_url,
@@ -530,6 +548,32 @@ export default function App(){
   default:content=<Dashboard {...props}/>;
  }
  const toggleTheme=()=>setTheme(t=>t==='dark'?'light':'dark');
+ const notices=[...data.notifications].sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at));
+ const unreadCount=notices.filter(n=>!n.read_at).length;
+ async function openNotice(item:Notification){
+  if(!data)return;
+  const noticeShopId=data.shop.id;
+
+  setNotificationOpen(false);
+
+  if(!item.read_at){
+   try{
+    await api('/notifications/'+item.id+'/read',noticeShopId,{},'PATCH');
+
+    setData(current=>current&&current.shop.id===noticeShopId?{
+     ...current,
+     notifications:current.notifications.map(n=>
+      n.id===item.id
+       ?{...n,read_at:new Date().toISOString()}
+       :n
+     )
+    }:current);
+   }catch{/* navegação não depende da marcação como lida */}
+  }
+
+  if(item.appointment_id)
+   navigate(base+'/agenda?appointment='+encodeURIComponent(item.appointment_id));
+ }
  const clientAccent=data.shop.custom_accent||data.shop.accent_color||'#ffffff';
  const clientShellStyle=role==='CLIENT'
   ?({
@@ -538,8 +582,7 @@ export default function App(){
    } as CSSProperties)
   :undefined;
 
- const toastIsBooking=
-  toast===t('app.newAppointment');
+ const toastIsBooking=Boolean(bookingNotice)&&toast.startsWith('Novo agendamento feito por');
 
  const toastIsError=
   /não foi|falh|erro|indisponível|expir|aguarde|pendente/i
@@ -597,7 +640,7 @@ export default function App(){
    </div>
   </aside>
   <div className="workspace" inert={menu}>
-   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?t('nav.settings'):navLabel(page)}</strong></div><div className="header-right">{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">{planLabel}</NavLink>:role==='BARBER'?<span className="plan-badge">{planLabel}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?t('app.useLightTheme'):t('app.useDarkTheme')} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label={t('app.openMenu')} onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
+   <header className="topbar"><div className="mobile-brand">{role==='CLIENT'?<Link to={base} className="client-mobile-brand">{data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={24}/>}<span>{data.shop.public_title||data.shop.name}</span></Link>:<Link to={base} className="sidebar-logo" aria-label="FIO"><img src={theme==='dark'?'/FIOlogo+nome/Branco.png':'/FIOlogo+nome/Preto.png'} alt="FIO"/></Link>}</div><div className="breadcrumb"><span>{data.shop.name}</span><span>/</span><strong>{page==='/configuracoes'?t('nav.settings'):navLabel(page)}</strong></div><div className="header-right"><div className="fio-notification-anchor"><button type="button" className="icon-button fio-notification-bell" aria-label={'Notificações'+(unreadCount?' ('+unreadCount+' não lidas)':'')} aria-expanded={notificationOpen} onClick={()=>setNotificationOpen(v=>!v)}><Bell size={19}/>{unreadCount>0&&<span className="fio-notification-count">{unreadCount>99?'99+':unreadCount}</span>}</button>{notificationOpen&&<section className="fio-notification-menu" aria-label="Notificações"><header><strong>Notificações</strong><button type="button" aria-label="Fechar notificações" onClick={()=>setNotificationOpen(false)}><X size={17}/></button></header>{notices.length?<div className="fio-notification-items">{notices.slice(0,30).map(item=><button key={item.id} type="button" className={item.read_at?'is-read':''} onClick={()=>void openNotice(item)}><strong>{item.title}</strong><span>{item.body}</span><small>{new Date(item.created_at).toLocaleDateString('pt-BR')}</small></button>)}</div>:<p>Nenhuma notificação por enquanto.</p>}</section>}</div>{role==='OWNER'?<NavLink to={`${base}/plano-fio`} className="plan-badge plan-badge-link">{planLabel}</NavLink>:role==='BARBER'?<span className="plan-badge">{planLabel}</span>:null}<button className="icon-button compact-theme" aria-label={theme==='dark'?t('app.useLightTheme'):t('app.useDarkTheme')} onClick={toggleTheme}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button><button className="icon-button mobile-menu-button" aria-label={t('app.openMenu')} onClick={()=>setMenu(true)}><Menu size={22}/></button></div></header>
    <main
     key={`${base}:${shopId}:${page}`}
     data-tour={
@@ -646,13 +689,14 @@ export default function App(){
      </span>
     </span>
 
+    {toastIsBooking&&bookingNotice?.phone&&<a className="fio-inapp-notice-action" href={'https://wa.me/'+bookingNotice.phone.replace(/\D/g,'')} target="_blank" rel="noopener noreferrer"><WhatsAppIcon size={16}/> WhatsApp</a>}
     {toastIsBooking&&
      <button
       type="button"
       className="fio-inapp-notice-action"
       onClick={()=>{
        setToast('');
-       navigate(base+'/agenda');
+       navigate(base+'/agenda?appointment='+encodeURIComponent(bookingNotice!.id));
       }}
      >
       {t('app.noticeOpenAgenda')}
@@ -663,7 +707,7 @@ export default function App(){
      type="button"
      className="fio-inapp-notice-close"
      aria-label={t('app.closeNotice')}
-     onClick={()=>setToast('')}
+     onClick={()=>{setToast('');setBookingNotice(null);}}
     >
      <X size={17}/>
     </button>

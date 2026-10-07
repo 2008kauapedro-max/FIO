@@ -6,7 +6,7 @@ import {StaffSchedule} from '../components/StaffSchedule';
 import {BusinessHoursSettings} from '../components/BusinessHoursSettings';
 import {AgendaMonthCalendar} from '../components/AgendaMonthCalendar';
 import {BookingFlow as BookingModal} from '../components/BookingFlow';
-import { useState,useEffect,type FormEvent,type CSSProperties } from 'react';
+import { useState,useEffect,useRef,type FormEvent,type CSSProperties } from 'react';
 import { useLocation,useNavigate } from 'react-router-dom';
 import { ArrowUpRight,ArrowLeft,ChevronLeft,ChevronRight,Plus,Scissors,Clock3,Users,CalendarDays,Check,Search,Copy,SlidersHorizontal,MessageCircle,Star,Link as LinkIcon,Download,X,Share2,SquarePlus,UserRound,Store,ShieldCheck,KeyRound,LogOut,Palette,Eye,EyeOff,Info,Crown,CircleHelp,FileText,Shield,MessageSquareText,Bug,Send,ImagePlus,RefreshCw,Languages } from 'lucide-react';
 import type { Bootstrap,Appointment,Service } from '../../shared/domain';
@@ -14,6 +14,8 @@ import { money } from '../../shared/domain';
 import { fioPlanPublicName } from '../../shared/fio-plans';
 import { api,supabase } from '../lib/api';
 import { optimizeImage } from '../lib/images';
+import { QRCodeSVG } from 'qrcode.react';
+import { downloadQrCode,type QrFormat } from '../lib/qr-export';
 import { planAllows } from '../../shared/entitlements';
 import { Empty,Field,Modal,PageTitle,ArrowLink } from '../components/ui';
 export interface WorkspaceProps {data:Bootstrap;demo:boolean;base:string;refresh:()=>Promise<void>;notify:(text:string)=>void;updateDemo:(fn:(d:Bootstrap)=>Bootstrap)=>void;canInstall?:boolean;installApp?:()=>Promise<void>}
@@ -1754,6 +1756,13 @@ export function Support(p:WorkspaceProps){
 }
 export function Settings(p:WorkspaceProps){
  const {t,formatDate}=useI18n();
+ const shareQrRef=useRef<HTMLDivElement>(null);
+ async function exportAccessQr(format:QrFormat){
+  const svg=shareQrRef.current?.querySelector('svg');
+  if(!svg)return;
+  try{await downloadQrCode(svg,p.data.shop.slug,format);}
+  catch(e){p.notify((e as Error).message||'Não foi possível exportar o QR Code.');}
+ }
  const owner=p.data.membership.role==='OWNER',solo=p.data.shop.operation_mode==='SOLO',navigate=useNavigate();
  const planDisplay=fioPlanPublicName(p.data.plan);
  const [section,setSection]=useState<'home'|'profile'|'barbershop'|'plan'|'access'|'account'|'language'|'hours'|'schedule'|'theme'|'help'>('home');
@@ -1966,6 +1975,7 @@ export function Settings(p:WorkspaceProps){
        {owner&&!solo&&<button onClick={()=>copy(links.equipe)}><LinkIcon size={17}/><div><span>{t('settings.teamApp')}</span><small>{links.equipe}</small></div><Copy size={16}/></button>}
        <button onClick={()=>copy(links.clientes)}><LinkIcon size={17}/><div><span>{t('settings.clientLink')}</span><small>{links.clientes}</small></div><Copy size={16}/></button>
       </div>
+      <div className="settings-qr-card"><div ref={shareQrRef} className="settings-qr-svg"><QRCodeSVG value={links.clientes} size={180} level="M" includeMargin bgColor="#fff" fgColor="#000" /></div><p>QR Code do minissite da barbearia</p><div className="ob-qr-downloads"><button type="button" className="secondary" onClick={()=>void exportAccessQr('png')}>Baixar PNG</button><button type="button" className="secondary" onClick={()=>void exportAccessQr('svg')}>Baixar SVG</button><button type="button" className="secondary" onClick={()=>void exportAccessQr('pdf')}>Baixar PDF</button></div></div>
      </section>
      {owner&&!solo&&<section className="settings-card">
       <div className="section-title"><h2>{t('settings.permissions')}</h2><span className="muted">{t('settings.permissionsDesc')}</span></div>
