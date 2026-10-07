@@ -5868,3 +5868,24 @@ body:has(.workspace),
 .ob-qr-downloads{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
 .ob-qr-downloads button{flex:1 1 90px}
 @media(max-width:760px){.fio-notification-menu{position:fixed;top:58px;right:10px;width:calc(100vw - 20px);max-height:70dvh}}
+
+/* FIO_PREMIUM_AI_20261007 */
+.fio-payflow-feature-ai-premium{
+ position:relative;
+ margin:4px -5px 0;
+ padding:0 7px;
+ border:1px solid color-mix(in srgb,var(--text) 26%,transparent)!important;
+ border-radius:9px;
+ background:
+  radial-gradient(circle at 15% 50%,color-mix(in srgb,var(--text) 12%,transparent),transparent 38%),
+  linear-gradient(105deg,color-mix(in srgb,var(--surface) 92%,var(--text) 8%),var(--surface));
+ box-shadow:0 0 18px color-mix(in srgb,var(--text) 9%,transparent);
+ font-weight:800;
+}
+.fio-payflow-feature-ai-premium span{
+ color:var(--text);
+}
+.fio-payflow-feature-ai-premium svg{
+ color:var(--text);
+ filter:drop-shadow(0 0 5px color-mix(in srgb,var(--text) 45%,transparent));
+}

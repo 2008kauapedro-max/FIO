@@ -1174,12 +1174,19 @@ export function FioPlans(p:WorkspaceProps){
    </div>
 
    <div className="fio-payflow-features">
-    {compactFeatures.filter(Boolean).map((feature,index)=>
-     <div key={`${selectedPlan}-${index}`}>
+    {compactFeatures.filter(Boolean).map((feature,index)=>{
+     const premiumAi=
+      ['PREMIUM','SOLO_PREMIUM'].includes(selectedPlan)&&
+      index===compactFeatures.filter(Boolean).length-1;
+
+     return <div
+      key={`${selectedPlan}-${index}`}
+      className={premiumAi?'fio-payflow-feature-ai-premium':''}
+     >
       <Check size={15}/>
       <span>{feature}</span>
-     </div>
-    )}
+     </div>;
+    })}
    </div>
   </article>
 

@@ -9,11 +9,11 @@ describe('catálogo comercial oficial do FIO',()=>{
   expect(SALE_BILLING_CYCLES).toEqual(['monthly','annual']);
  });
 
- it('usa os preços oficiais e 20% OFF no anual do SOLO PREMIUM',()=>{
+ it('usa os preços oficiais dos planos vendidos',()=>{
   expect(FIO_PLAN_CATALOG.find(x=>x.code==='SOLO')?.prices).toMatchObject({weekly:null,monthly:7990,annual:76704});
   expect(FIO_PLAN_CATALOG.find(x=>x.code==='SOLO_PREMIUM')?.prices).toMatchObject({weekly:null,monthly:19790,annual:189984});
   expect(FIO_PLAN_CATALOG.find(x=>x.code==='PRO')?.prices).toMatchObject({weekly:null,monthly:14990,annual:143904});
-  expect(FIO_PLAN_CATALOG.find(x=>x.code==='PREMIUM')?.prices).toMatchObject({weekly:null,monthly:29990,annual:287904});
+  expect(FIO_PLAN_CATALOG.find(x=>x.code==='PREMIUM')?.prices).toMatchObject({weekly:null,monthly:29990,annual:289000});
  });
 
  it('backend vende SOLO, SOLO PREMIUM, PRO e PREMIUM, mas não PLUS nem semanal',()=>{

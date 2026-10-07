@@ -76,7 +76,7 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
    ]},
    {title:'INTELIGÊNCIA',items:[
     'Assistente FIO',
-    '150 consultas de IA por usuário/dia'
+    '60 consultas de IA por usuário/dia'
    ]}
   ]
  },
@@ -84,9 +84,9 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
   code:'SOLO_PREMIUM',
   name:'FIO SOLO PREMIUM',
   eyebrow:'SOLO SEM LIMITES',
-  description:'Para quem trabalha sozinho e quer o nível máximo do FIO.',
+  description:'Para quem trabalha sozinho e quer o máximo do FIO, com IA sem limite diário e mais capacidade de uso.',
   prices:{weekly:null,monthly:19790,annual:189984},
-  highlights:['Clientes sem limite','Serviços sem limite'],
+  highlights:['Clientes sem limite','IA sem limite diário'],
   groups:[
    {title:'CAPACIDADE',items:[
     'Operação solo sem limites',
@@ -105,7 +105,7 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
    ]},
    {title:'INTELIGÊNCIA',items:[
     'Assistente FIO',
-    '500 consultas de IA por usuário/dia'
+    'IA sem limite diário'
    ]}
   ]
  },
@@ -136,7 +136,7 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
    ]},
    {title:'INTELIGÊNCIA',items:[
     'Assistente FIO',
-    '150 consultas de IA por usuário/dia'
+    '60 consultas de IA por usuário/dia'
    ]}
   ]
  },
@@ -144,9 +144,9 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
   code:'PREMIUM',
   name:'FIO PREMIUM',
   eyebrow:'PARA OPERAÇÕES MAIORES',
-  description:'Mais capacidade para equipes e carteiras de clientes maiores.',
-  prices:{weekly:null,monthly:29990,annual:287904},
-  highlights:['Até 2.000 clientes','Até 10 profissionais + responsável'],
+  description:'Para equipes que querem o máximo do FIO, com mais capacidade e IA sem limite diário.',
+  prices:{weekly:null,monthly:29990,annual:289000},
+  highlights:['IA sem limite diário','Até 10 profissionais + responsável'],
   groups:[
    {title:'CAPACIDADE',items:[
     'Até 2.000 clientes',
@@ -165,7 +165,7 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
    ]},
    {title:'INTELIGÊNCIA',items:[
     'Assistente FIO',
-    '500 consultas de IA por usuário/dia'
+    'IA sem limite diário'
    ]}
   ]
  }
