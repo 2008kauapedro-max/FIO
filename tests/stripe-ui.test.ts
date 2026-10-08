@@ -7,10 +7,11 @@ describe('Stripe na UI do FIO',()=>{
  const stripe=readFileSync('server/stripe.ts','utf8');
 
  it('oferece Cartao e Pix mantendo o Pix QR legado da SyncPay',()=>{
-  expect(ui).toContain("type PaymentMethod='card'|'pix'");
+  expect(ui).toContain("type PaymentMethod='card'|'pix'|'pix-auto'|'sync-card'");
   expect(ui).toContain('Continuar com cartão');
   expect(ui).toContain("'Gerar Pix'");
-  expect(ui).not.toContain('Pix Automático');
+  expect(ui).toContain('pixAutomaticoConfigured');
+  expect(ui).toContain("method:paymentMethod==='sync-card'?'credit_card':paymentMethod==='pix-auto'?'pix_automatico':'qr_code'");
  });
 
  it('Cartao usa apenas Checkout Stripe hospedado',()=>{

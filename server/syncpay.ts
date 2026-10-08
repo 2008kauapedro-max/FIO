@@ -12,6 +12,14 @@ const CYCLES=['monthly','annual'] as const;
 const CYCLE_DAYS:Record<BillingCycle,number>={weekly:7,monthly:30,annual:365};
 const BILLING_ADVANCE:Record<BillingCycle,number>={weekly:1,monthly:3,annual:7};
 const GRACE_DAYS:Record<BillingCycle,number>={weekly:2,monthly:5,annual:7};
+// Prazo de 48h apenas para NOVAS contratações Pix Automático. Preserva contratos legados.
+const PIX_AUTO_GRACE_DAYS=2;
+// PAN/CVV currently reaches our Express API: this is PCI scope, even without DB storage.
+// Require an independent explicit compliance gate; never enable solely via a checkout flag.
+export function syncpayCardConfigured(){return process.env.FIO_ENABLE_SYNCPAY_CARD==='true'&&process.env.FIO_CARD_PCI_REVIEWED==='true'&&Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);}
+// New legacy QR subscriptions are opt-in only. Existing QR subscriptions can still be viewed/cancelled/refunded.
+export function syncpayLegacyPixCheckoutConfigured(){return process.env.FIO_ENABLE_LEGACY_PIX_CHECKOUT==='true'&&Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);}
+export function syncpayPixAutomaticoConfigured(){return process.env.FIO_ENABLE_PIX_AUTOMATICO==='true' && Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);}
 const MAX_RETRIES=3;
 const SUBSCRIPTION_EVENTS=new Set([
  'assinatura_criada','assinatura_ativada','assinatura_em_atraso','assinatura_suspensa',
@@ -20,7 +28,7 @@ const SUBSCRIPTION_EVENTS=new Set([
 ]);
 
 const subscribeInput=z.object({
- plan:z.enum(PAID_PLANS),cycle:z.enum(CYCLES),document:z.string().trim().min(11).max(24),acceptedTerms:z.literal(true)
+ plan:z.enum(PAID_PLANS),cycle:z.enum(CYCLES),document:z.string().trim().min(11).max(24),method:z.enum(['qr_code','pix_automatico','credit_card']).default('qr_code'),cardToken:z.string().max(300).optional(),acceptedTerms:z.literal(true)
 }).strict();
 
 const planResource=z.object({
@@ -46,7 +54,7 @@ const chargeSchema=z.object({
  cycle_number:z.number().int().optional(),amount:z.union([z.string(),z.number()]).optional(),status:z.string().default('pending'),due_date:z.string().optional().nullable(),
  expires_at:z.string().optional().nullable(),paid_at:z.string().optional().nullable(),payment:z.object({pix_code:z.string().optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable()}).passthrough().optional().nullable()
 }).passthrough();
-const loosePayment=z.object({pix_code:z.string().optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable(),expires_at:z.string().optional().nullable(),status:z.string().optional().nullable()}).passthrough();
+const loosePayment=z.object({pix_code:z.string().optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable(),expires_at:z.string().optional().nullable(),status:z.string().optional().nullable(),mandate_id:z.string().optional().nullable(),mandate_status:z.string().optional().nullable()}).passthrough();
 const looseSubscription=z.object({
  token:z.string().optional(),subscription_token:z.string().optional(),status:z.string().optional(),subscriber_name:z.string().optional(),subscriber_email:z.string().optional(),
  started_at:z.string().optional().nullable(),next_charge_at:z.string().optional().nullable(),next_billing_at:z.string().optional().nullable(),next_charge_date:z.string().optional().nullable(),
@@ -55,7 +63,7 @@ const looseSubscription=z.object({
 }).passthrough();
 const enrollResponse=z.object({
  subscription_token:z.string().min(8).max(200),status:z.string(),billing_method:z.string(),payment:z.object({
-  pix_code:z.string().min(1).optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable(),expires_at:z.string().optional().nullable()
+  pix_code:z.string().min(1).optional().nullable(),qr_code:z.string().optional().nullable(),identifier:z.string().optional().nullable(),expires_at:z.string().optional().nullable(),mandate_id:z.string().optional().nullable(),mandate_status:z.string().optional().nullable(),status:z.string().optional().nullable(),card_brand:z.string().optional().nullable(),card_last4:z.string().optional().nullable()
  }).passthrough().optional().nullable()
 }).passthrough();
 const webhookEnvelope=z.object({
@@ -207,33 +215,37 @@ function providerApiError(error:unknown):ApiError{
  return new ApiError(503,'SYNCPAY_UNAVAILABLE','Não foi possível acessar a cobrança agora. Tente novamente em instantes.');
 }
 
-async function ensureProviderPlan(db:SupabaseClient,plan:PaidPlan,cycle:BillingCycle,fetcher:Fetcher):Promise<PlanMapping>{
+async function ensureProviderPlan(db:SupabaseClient,plan:PaidPlan,cycle:BillingCycle,fetcher:Fetcher,method:'qr_code'|'pix_automatico'|'credit_card'='qr_code'):Promise<PlanMapping>{
  const config=planConfig(plan,cycle);
- const local=await db.from('syncpay_plan_mappings').select('plan_code,billing_cycle,amount_cents,periodicity_days,billing_method,provider_plan_token,checkout_url').eq('plan_code',plan).eq('billing_cycle',cycle).eq('billing_method','qr_code').eq('amount_cents',config.amountCents).eq('active',true).maybeSingle();
+ const providerPlanName=method==='pix_automatico'?config.name+' · Pix Automático':method==='credit_card'?config.name+' · Cartão recorrente':config.name;
+ const providerGrace=method==='qr_code'?GRACE_DAYS[cycle]:PIX_AUTO_GRACE_DAYS;
+ const local=await db.from('syncpay_plan_mappings').select('plan_code,billing_cycle,amount_cents,periodicity_days,billing_method,provider_plan_token,checkout_url').eq('plan_code',plan).eq('billing_cycle',cycle).eq('billing_method',method).eq('amount_cents',config.amountCents).eq('active',true).maybeSingle();
  dbError(local.error);
  if(local.data)return local.data as PlanMapping;
 
- const query=new URLSearchParams({page:'1',per_page:'100',status:'active',search:config.name});
+ const query=new URLSearchParams({page:'1',per_page:'100',status:'active',search:providerPlanName});
  const listed=providerParse(listPlansResponse,await providerRequest(fetcher,`/subscription-plans?${query.toString()}`));
- let remote=listed.data.find(item=>item.name===config.name&&cents(item.amount)===config.amountCents&&item.periodicity_days===config.periodicityDays&&item.billing_method==='qr_code');
+ let remote=listed.data.find(item=>item.name===providerPlanName&&cents(item.amount)===config.amountCents&&item.periodicity_days===config.periodicityDays&&item.billing_method===method);
  if(!remote){
   const created=providerParse(createPlanResponse,await providerRequest(fetcher,'/subscription-plans',{method:'POST',body:JSON.stringify({
-   name:config.name,description:`Assinatura ${plan} do FIO no ciclo ${cycle}.`,amount:brl(config.amountCents),periodicity_days:config.periodicityDays,
-   billing_method:'qr_code',billing_advance_days:BILLING_ADVANCE[cycle],grace_period_days:GRACE_DAYS[cycle],max_retry_attempts:MAX_RETRIES
+   name:providerPlanName,description:`Assinatura ${plan} do FIO no ciclo ${cycle}.`,amount:brl(config.amountCents),periodicity_days:config.periodicityDays,
+   billing_method:method,billing_advance_days:BILLING_ADVANCE[cycle],grace_period_days:providerGrace,max_retry_attempts:MAX_RETRIES
   })}));
   remote=created.data;
  }
- const row={plan_code:plan,billing_cycle:cycle,amount_cents:config.amountCents,periodicity_days:config.periodicityDays,billing_method:'qr_code',provider_plan_token:remote.token,checkout_url:remote.checkout_url??null,active:true,updated_at:new Date().toISOString()};
+ const row={plan_code:plan,billing_cycle:cycle,amount_cents:config.amountCents,periodicity_days:config.periodicityDays,billing_method:method,provider_plan_token:remote.token,checkout_url:remote.checkout_url??null,active:true,updated_at:new Date().toISOString()};
  const saved=await db.from('syncpay_plan_mappings').upsert(row,{onConflict:'plan_code,billing_cycle,billing_method,amount_cents'}).select('plan_code,billing_cycle,amount_cents,periodicity_days,billing_method,provider_plan_token,checkout_url').single();
  dbError(saved.error);return saved.data as PlanMapping;
 }
 
 async function getProviderDetail(token:string,fetcher:Fetcher,fallback:{planToken:string;gracePeriodDays:number}){return normalizeProviderDetail(await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(token)}`),{token,...fallback});}
 
-function paymentFromDetail(detail:ProviderDetail){
+type PaymentView={pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null;mandateStatus?:string|null};
+function paymentFromDetail(detail:ProviderDetail):PaymentView|null{
  const charge=detail.charges.find(item=>['pending','created','waiting_payment'].includes(String(item.status).toLowerCase())&&item.payment?.pix_code);
  if(charge)return {pixCode:charge.payment?.pix_code??null,qrCode:charge.payment?.qr_code??null,identifier:charge.payment?.identifier??null,expiresAt:iso(charge.expires_at)};
  if(detail.payment?.pix_code)return {pixCode:detail.payment.pix_code??null,qrCode:detail.payment.qr_code??null,identifier:detail.payment.identifier??null,expiresAt:iso(detail.payment.expires_at)};
+ if(detail.payment?.mandate_id&&detail.payment.qr_code)return {pixCode:null,qrCode:detail.payment.qr_code,identifier:detail.payment.mandate_id,expiresAt:null,mandateStatus:detail.payment.mandate_status??null};
  return null;
 }
 
@@ -269,8 +281,8 @@ function stateEventKey(prefix:string,detail:ProviderDetail){
 
 async function applyProviderTruth(db:SupabaseClient,detail:ProviderDetail,event:{key:string;name:string;occurredAt:string;bodyHash:string}){
  await reconcilePlanChange(db,detail);
- const mapped=await db.from('syncpay_plan_mappings').select('billing_cycle').eq('provider_plan_token',detail.plan.token).maybeSingle();dbError(mapped.error);
- if(mapped.data)detail.plan.grace_period_days=GRACE_DAYS[mapped.data.billing_cycle as BillingCycle];
+ const mapped=await db.from('syncpay_plan_mappings').select('billing_cycle,billing_method').eq('provider_plan_token',detail.plan.token).maybeSingle();dbError(mapped.error);
+ if(mapped.data)detail.plan.grace_period_days=['pix_automatico','credit_card'].includes(mapped.data.billing_method)?PIX_AUTO_GRACE_DAYS:GRACE_DAYS[mapped.data.billing_cycle as BillingCycle];
  const until=accessUntil(detail);
  if((detail.status==='active'||detail.status==='overdue')&&!until)throw new ApiError(503,'SYNCPAY_INCOMPLETE_STATE','Não foi possível confirmar a validade da assinatura agora. Tente novamente em instantes.');
  const result=await db.rpc('apply_syncpay_subscription_state',{
@@ -299,9 +311,17 @@ function refundWindow(detail:ProviderDetail,now=Date.now()){
  return {eligible:now<=deadlineMs,deadline:new Date(deadlineMs).toISOString(),identifier:charge.payment?.identifier??null};
 }
 
-function billingResponse(link:ProviderLink,detail:ProviderDetail,paymentOverride?:{pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null}|null){
+export function sameSyncpayOffer(a:{plan:string;cycle:string;billingMethod?:string},b:{plan:string;cycle:string;method:string}){
+ return a.plan===b.plan&&a.cycle===b.cycle&&a.billingMethod===b.method;
+}
+function billingResponse(link:ProviderLink,detail:ProviderDetail,paymentOverride?:PaymentView|null,method:'qr_code'|'pix_automatico'|'credit_card'='qr_code'){
  const refund=refundWindow(detail);
- return {provider:'syncpay' as const,providerStatus:detail.status,plan:link.plan_code,cycle:link.billing_cycle,amountCents:link.amount_cents,nextChargeAt:iso(detail.next_charge_at),payment:paymentOverride??paymentFromDetail(detail),refund:{eligible:refund.eligible,deadline:refund.deadline}};
+ const mandate=detail.payment?.mandate_id&&detail.payment?.qr_code
+  ?{pixCode:null,qrCode:detail.payment.qr_code,identifier:detail.payment.mandate_id,expiresAt:null,mandateStatus:detail.payment.mandate_status??null}
+  :null;
+ // Em Pix Automático, um QR comum de cobrança nunca deve substituir o mandato bancário.
+ const payment=method==='pix_automatico'?(paymentOverride??mandate):(paymentOverride??paymentFromDetail(detail));
+ return {provider:'syncpay' as const,billingMethod:method,providerStatus:detail.status,plan:link.plan_code,cycle:link.billing_cycle,amountCents:link.amount_cents,nextChargeAt:iso(detail.next_charge_at),payment,refund:{eligible:refund.eligible,deadline:refund.deadline}};
 }
 
 async function currentLink(db:SupabaseClient,shopId:string){
@@ -340,15 +360,16 @@ async function recoverOpenEnrollment(ctx:TenantContext,fetcher:Fetcher,forceRese
  dbError(open.error);
  if(!open.data)return {billing:null,blocked:false};
  const intent=open.data as OpenEnrollmentRow;
- const mapping=await db.from('syncpay_plan_mappings').select('provider_plan_token,billing_cycle').eq('provider_plan_token',intent.provider_plan_token).maybeSingle();
+ const mapping=await db.from('syncpay_plan_mappings').select('provider_plan_token,billing_cycle,billing_method').eq('provider_plan_token',intent.provider_plan_token).maybeSingle();
  dbError(mapping.error);
  if(!mapping.data){
   const age=Date.now()-Date.parse(intent.updated_at);
   if(Number.isFinite(age)&&age>=30*60_000){await setEnrollmentIntent(db,intent.id,'failed',null,'SYNCPAY_PLAN_MAPPING_MISSING');return {billing:null,blocked:false};}
   return {billing:null,blocked:true};
  }
+ const enrollmentMethod=mapping.data.billing_method as 'qr_code'|'pix_automatico'|'credit_card';
  const finalize=async(token:string)=>{
-  const detail=await getProviderDetail(token,fetcher,{planToken:intent.provider_plan_token,gracePeriodDays:GRACE_DAYS[intent.billing_cycle]});
+  const detail=await getProviderDetail(token,fetcher,{planToken:intent.provider_plan_token,gracePeriodDays:enrollmentMethod==='qr_code'?GRACE_DAYS[intent.billing_cycle]:PIX_AUTO_GRACE_DAYS});
   const known=await db.from('saas_provider_subscriptions').select('id,barbershop_id').eq('provider_subscription_token',detail.token).maybeSingle();
   dbError(known.error);
   if(known.data){
@@ -358,14 +379,14 @@ async function recoverOpenEnrollment(ctx:TenantContext,fetcher:Fetcher,forceRese
    const promote=await db.from('saas_provider_subscriptions').update({is_current:true,updated_at:new Date().toISOString()}).eq('id',known.data.id);
    dbError(promote.error);
   }else{
-   const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:detail.token,p_provider_plan_token:intent.provider_plan_token,p_actor:ctx.userId,p_terms_version:'fio-subscription-v1'});
+   const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:detail.token,p_provider_plan_token:intent.provider_plan_token,p_actor:ctx.userId,p_terms_version:enrollmentMethod==='credit_card'?'fio-card-recurring-v1':enrollmentMethod==='pix_automatico'?'fio-pixauto-terms-v1':'fio-subscription-v1'});
    dbError(bound.error);
   }
   await setEnrollmentIntent(db,intent.id,'linked',detail.token,null);
   const link=await currentLink(db,ctx.shopId);
   if(!link)throw new ApiError(503,'BILLING_STATE_ERROR','A assinatura existe, mas o FIO não conseguiu recuperar o vínculo.');
   await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-auto-recovery',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
-  return billingResponse(link,detail);
+  return billingResponse(link,detail,undefined,enrollmentMethod);
  };
  if(intent.provider_subscription_token){
   try{return {billing:await finalize(intent.provider_subscription_token),blocked:false};}
@@ -400,9 +421,28 @@ export async function recoverSyncpayEnrollment(ctx:TenantContext,raw:unknown,fet
  return {configured:true,subscription:null,cleared:true};
 }
 
+
+const cardSealResponse=z.object({data:z.object({token:z.string().regex(/^card_token\./),brand:z.string().max(40).optional(),last4:z.string().regex(/^\d{4}$/).optional()})});
+export async function sealSyncpayCard(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode preparar o cartão.');
+ if(!syncpayCardConfigured())throw new ApiError(503,'SYNCPAY_CARD_NOT_AVAILABLE','A modalidade de cartão está desativada.');
+ const input=z.object({card:z.object({number:z.string().regex(/^\d{13,19}$/),holder_name:z.string().trim().min(5).max(80),expiry_month:z.string().regex(/^(0[1-9]|1[0-2])$/),expiry_year:z.string().regex(/^20\d{2}$/),cvv:z.string().regex(/^\d{3,4}$/)}).strict()}).strict().parse(raw);
+ const now=new Date(), expMonth=Number(input.card.expiry_month), expYear=Number(input.card.expiry_year);
+ if(expYear<now.getUTCFullYear()||(expYear===now.getUTCFullYear()&&expMonth<now.getUTCMonth()+1))throw new ApiError(400,'CARD_EXPIRED','Validade do cartão vencida.');
+ // O objeto com PAN/CVV só existe nesta requisição e não deve ser registrado em logs nem banco.
+ const response=providerParse(cardSealResponse,await providerRequest(fetcher,'/card-tokens',{method:'POST',body:JSON.stringify({card:input.card})},false));
+ return {token:response.data.token,brand:response.data.brand??null,last4:response.data.last4??null};
+}
 export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Esta ação é exclusiva do responsável pela barbearia.');
  const input=subscribeInput.parse(raw),document=digits(input.document);
+ if(input.method==='qr_code'&&!syncpayLegacyPixCheckoutConfigured())throw new ApiError(503,'SYNCPAY_LEGACY_PIX_DISABLED','Novas assinaturas por Pix manual estão indisponíveis. Utilize Pix Automático ou cartão quando habilitados.');
+ if(input.method==='pix_automatico'&&!syncpayPixAutomaticoConfigured())throw new ApiError(503,'SYNCPAY_PIX_AUTO_NOT_AVAILABLE','O Pix Automático ainda não está disponível nesta conta.');
+ if(input.method==='credit_card'){
+  if(!syncpayCardConfigured())throw new ApiError(503,'SYNCPAY_CARD_NOT_AVAILABLE','Cartão SyncPay não habilitado.');
+  if(input.cycle!=='monthly')throw new ApiError(422,'SYNCPAY_CARD_ANNUAL_SEPARATE','Plano anual parcelado é uma compra única; não pode ser aberto como assinatura mensal.');
+  if(!input.cardToken||!/^card_token\.[a-zA-Z0-9._-]{8,260}$/.test(input.cardToken))throw new ApiError(400,'SYNCPAY_CARD_TOKEN_INVALID','Token do cartão inválido ou ausente.');
+ } else if(input.cardToken){throw new ApiError(400,'SYNCPAY_CARD_TOKEN_FORBIDDEN','Token de cartão inesperado para este pagamento.');}
  const modeResult=await ctx.db.from('barbershops').select('operation_mode').eq('id',ctx.shopId).single();dbError(modeResult.error);
  if(!modeResult.data)throw new ApiError(404,'INVALID_SHOP','Barbearia não encontrada.');
  const operationMode=modeResult.data.operation_mode as 'SHOP'|'SOLO';
@@ -412,17 +452,18 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
  if(!configured())throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','A cobrança recorrente ainda não está disponível. Tente novamente mais tarde.');
  const recovered=await recoverOpenEnrollment(ctx,fetcher);
  if(recovered.billing){
-  if(recovered.billing.plan===input.plan&&recovered.billing.cycle===input.cycle)return recovered.billing;
+  if(sameSyncpayOffer(recovered.billing,{plan:input.plan,cycle:input.cycle,method:input.method}))return recovered.billing;
   throw new ApiError(409,'SYNCPAY_SUBSCRIPTION_EXISTS','Já existe uma assinatura ou cobrança recorrente em andamento. Conclua ou cancele a atual antes de escolher outro plano.');
  }
  if(recovered.blocked)throw new ApiError(409,'SYNCPAY_ENROLLMENT_IN_PROGRESS','Uma tentativa recente ainda está sendo conferida. Aguarde alguns minutos e tente novamente.');
- const db=adminDb(),mapping=await ensureProviderPlan(db,input.plan,input.cycle,fetcher);
+ const db=adminDb(),mapping=await ensureProviderPlan(db,input.plan,input.cycle,fetcher,input.method);
  const existing=await currentLink(db,ctx.shopId);
  if(existing){
   const detail=await getProviderDetail(existing.provider_subscription_token,fetcher,{planToken:existing.provider_plan_token,gracePeriodDays:GRACE_DAYS[existing.billing_cycle]});
   await applyProviderTruth(db,detail,{key:stateEventKey('pre-enroll-reconcile',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify({status:detail.status,token:detail.token,plan:detail.plan.token,next:detail.next_charge_at})).digest('hex')});
   if(['active','overdue','pending_first_payment'].includes(detail.status)){
-   if(existing.plan_code===input.plan&&existing.billing_cycle===input.cycle)return billingResponse(existing,detail);
+   const previousMethod=await db.from('syncpay_plan_mappings').select('billing_method').eq('provider_plan_token',existing.provider_plan_token).maybeSingle();dbError(previousMethod.error);
+   if(sameSyncpayOffer({plan:existing.plan_code,cycle:existing.billing_cycle,billingMethod:previousMethod.data?.billing_method},{plan:input.plan,cycle:input.cycle,method:input.method}))return billingResponse(existing,detail,undefined,input.method);
    throw new ApiError(409,'SYNCPAY_SUBSCRIPTION_EXISTS','Já existe uma assinatura ou cobrança recorrente em andamento. Conclua ou cancele a atual antes de escolher outro plano.');
   }
  }
@@ -433,49 +474,60 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
  if(!intent.same_offer)throw new ApiError(409,'SYNCPAY_ENROLLMENT_IN_PROGRESS','Já existe uma tentativa de assinatura em verificação. Para evitar cobrança duplicada, aguarde a confirmação antes de escolher outro plano.');
  if(!intent.created){
   if(!intent.provider_subscription_token)throw new ApiError(409,'SYNCPAY_ENROLLMENT_UNCERTAIN','Uma tentativa anterior ainda está sendo verificada. Para evitar uma cobrança duplicada, não gere outro Pix agora.');
-  const detail=await getProviderDetail(intent.provider_subscription_token,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
+  const detail=await getProviderDetail(intent.provider_subscription_token,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:input.method==='qr_code'?GRACE_DAYS[input.cycle]:PIX_AUTO_GRACE_DAYS});
   try{
-   const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:detail.token,p_provider_plan_token:mapping.provider_plan_token,p_actor:ctx.userId,p_terms_version:'fio-subscription-v1'});dbError(bound.error);
+   const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:detail.token,p_provider_plan_token:mapping.provider_plan_token,p_actor:ctx.userId,p_terms_version:input.method==='credit_card'?'fio-card-recurring-v1':input.method==='pix_automatico'?'fio-pixauto-terms-v1':'fio-subscription-v1'});dbError(bound.error);
    await setEnrollmentIntent(db,intent.id,'linked',detail.token,null);
    const link=await currentLink(db,ctx.shopId);
    if(!link)throw new ApiError(503,'BILLING_STATE_ERROR','A assinatura existe, mas o FIO não conseguiu recuperar o vínculo. Entre em contato com o suporte.');
    await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-recovery',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
-   return billingResponse(link,detail);
+   return billingResponse(link,detail,undefined,input.method);
   }catch(e){await setEnrollmentIntent(db,intent.id,'uncertain',detail.token,e instanceof ApiError?e.code:'BILLING_STATE_ERROR');throw e;}
  }
  const phone=digits(ctx.member.phone??'');
- const payload:{name:string;email:string;document:string;phone?:string}={name:ctx.member.display_name,email:user.data.user.email,document};
+ const payload:{name:string;email:string;document:string;phone?:string;card?:{token:string}}={name:ctx.member.display_name,email:user.data.user.email,document};
+  if(input.method==='credit_card'&&phone.length<10)throw new ApiError(400,'SYNCPAY_CARD_PHONE_REQUIRED','Informe um telefone válido no seu perfil antes de pagar com cartão.');
  if(phone.length>=8)payload.phone=phone;
+  if(input.method==='credit_card')payload.card={token:input.cardToken!};
  let subscriptionToken:string|null=null;
  try{
   const enrolled=providerParse(enrollResponse,await providerRequest(fetcher,`/subscription-plans/${encodeURIComponent(mapping.provider_plan_token)}/enroll`,{method:'POST',body:JSON.stringify(payload)}));
   subscriptionToken=enrolled.subscription_token;
+  if(enrolled.billing_method!==input.method)throw new ApiError(503,'SYNCPAY_METHOD_MISMATCH','O provedor devolveu uma modalidade de pagamento diferente da solicitada. Nenhuma nova tentativa deve ser iniciada.');
   await setEnrollmentIntent(db,intent.id,'creating',subscriptionToken,null);
-  const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:subscriptionToken,p_provider_plan_token:mapping.provider_plan_token,p_actor:ctx.userId,p_terms_version:'fio-subscription-v1'});dbError(bound.error);
+  const bound=await db.rpc('bind_syncpay_subscription',{p_shop:ctx.shopId,p_subscription_token:subscriptionToken,p_provider_plan_token:mapping.provider_plan_token,p_actor:ctx.userId,p_terms_version:input.method==='credit_card'?'fio-card-recurring-v1':input.method==='pix_automatico'?'fio-pixauto-terms-v1':'fio-subscription-v1'});dbError(bound.error);
   await setEnrollmentIntent(db,intent.id,'linked',subscriptionToken,null);
   const link=await currentLink(db,ctx.shopId);
   if(!link)throw new ApiError(503,'BILLING_STATE_ERROR','A cobrança foi criada, mas o FIO não conseguiu vincular a assinatura. Não gere outra cobrança e entre em contato com o suporte.');
   let detail:ProviderDetail;
   try{
-   detail=await getProviderDetail(subscriptionToken,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
+   detail=await getProviderDetail(subscriptionToken,fetcher,{planToken:mapping.provider_plan_token,gracePeriodDays:input.method==='qr_code'?GRACE_DAYS[input.cycle]:PIX_AUTO_GRACE_DAYS});
   }catch(error){
    // Enrollment and binding already succeeded. A temporary detail read failure
    // must not mark the real subscription as uncertain or hide its initial Pix.
    if(normalizeProviderStatus(enrolled.status)!=='pending_first_payment')throw error;
-   detail=normalizeProviderDetail({subscription_token:subscriptionToken,status:enrolled.status,plan_token:mapping.provider_plan_token,payment:enrolled.payment??null},{token:subscriptionToken,planToken:mapping.provider_plan_token,gracePeriodDays:GRACE_DAYS[input.cycle]});
-   const fallback=billingResponse(link,detail);
+   detail=normalizeProviderDetail({subscription_token:subscriptionToken,status:enrolled.status,plan_token:mapping.provider_plan_token,payment:enrolled.payment??null},{token:subscriptionToken,planToken:mapping.provider_plan_token,gracePeriodDays:input.method==='qr_code'?GRACE_DAYS[input.cycle]:PIX_AUTO_GRACE_DAYS});
+   const fallback=billingResponse(link,detail,undefined,input.method);
    if(!fallback.payment?.pixCode&&enrolled.payment?.pix_code)fallback.payment={pixCode:enrolled.payment.pix_code,qrCode:enrolled.payment.qr_code??null,identifier:enrolled.payment.identifier??null,expiresAt:iso(enrolled.payment.expires_at)};
-   return fallback;
+   if(input.method==='pix_automatico'&&enrolled.payment?.mandate_id&&enrolled.payment.qr_code){
+    fallback.payment={pixCode:null,qrCode:enrolled.payment.qr_code,identifier:enrolled.payment.mandate_id,expiresAt:null,mandateStatus:enrolled.payment.mandate_status??null};
+   }
+   fallback.billingMethod=input.method;
+   return input.method==='credit_card'?{...fallback,cardPaymentStatus:enrolled.payment?.status??null}:fallback;
   }
   await applyProviderTruth(db,detail,{key:stateEventKey('enrollment-confirmation',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify(detail)).digest('hex')});
   const current=await currentLink(db,ctx.shopId);
-  const response=billingResponse(current??link,detail);
+  const response=billingResponse(current??link,detail,undefined,input.method);
   // Some SyncPay responses expose the first Pix on /enroll while the detail
   // endpoint is still catching up. Keep that code if reconciliation has none.
+  if(input.method==='pix_automatico'&&enrolled.payment?.mandate_id&&enrolled.payment.qr_code&&!response.payment?.qrCode){
+   response.payment={pixCode:null,qrCode:enrolled.payment.qr_code,identifier:enrolled.payment.mandate_id,expiresAt:null,mandateStatus:enrolled.payment.mandate_status??null};
+  }
+  response.billingMethod=input.method;
   if(!response.payment?.pixCode&&enrolled.payment?.pix_code){
    response.payment={pixCode:enrolled.payment.pix_code,qrCode:enrolled.payment.qr_code??null,identifier:enrolled.payment.identifier??null,expiresAt:iso(enrolled.payment.expires_at)};
   }
-  return response;
+  return input.method==='credit_card'?{...response,cardPaymentStatus:enrolled.payment?.status??null}:response;
  }catch(e){
   const known=!subscriptionToken&&enrollmentFailureIsKnown(e);
   await setEnrollmentIntent(db,intent.id,known?'failed':'uncertain',subscriptionToken,e instanceof ApiError?e.code:'SYNCPAY_UNKNOWN_RESULT');
@@ -572,7 +624,14 @@ export async function requestSyncpayRefund(ctx:TenantContext,raw:unknown,fetcher
  if(!window.identifier)throw new ApiError(409,'SYNCPAY_REFUND_MANUAL_REQUIRED','Não foi possível identificar automaticamente a transação paga. Fale com o suporte FIO para solicitar o reembolso.');
  const existing=await db.from('syncpay_refund_requests').select('refund_code,status,requested_at').eq('barbershop_id',ctx.shopId).eq('subscription_token',link.provider_subscription_token).maybeSingle();
  dbError(existing.error);
- if(existing.data)return {refund:{code:existing.data.refund_code,status:existing.data.status,requestedAt:existing.data.requested_at},subscription:(await getSyncpayBilling(ctx,fetcher)).subscription,cancellation:'already_requested' as const};
+ if(existing.data){
+  // Retentativa de reembolso nunca cria segunda devolução; mas pode reparar cancelamento pendente.
+  let cancellation:'already_requested'|'needs_attention'='already_requested';
+  try{
+   if(detail.status!=='cancelled')await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(link.provider_subscription_token)}/cancel`,{method:'PATCH',body:JSON.stringify({reason:'Cancelar renovações após pedido de reembolso registrado no FIO'})},false);
+  }catch{cancellation='needs_attention';}
+  return {refund:{code:existing.data.refund_code,status:existing.data.status,requestedAt:existing.data.requested_at},subscription:(await getSyncpayBilling(ctx,fetcher)).subscription,cancellation};
+ }
  const transaction=providerParse(transactionResponse,await providerRequest(fetcher,`/transaction/${encodeURIComponent(window.identifier)}`));
  if(String(transaction.data.status).toLowerCase()!=='completed')throw new ApiError(409,'SYNCPAY_REFUND_NOT_READY','O pagamento ainda não está disponível para reembolso. Atualize o status e tente novamente.');
  let refunded:z.infer<typeof refundResponse>;
@@ -600,6 +659,22 @@ export async function requestSyncpayRefund(ctx:TenantContext,raw:unknown,fetcher
  return {refund:{code:savedRefund.refund_code,status:savedRefund.status,requestedAt:savedRefund.requested_at},subscription,cancellation};
 }
 
+export async function getSyncpayRefundTracking(ctx:TenantContext,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode consultar o reembolso.');
+ const db=adminDb();
+ const link=await currentLink(db,ctx.shopId);
+ if(!link)return {requested:false,status:null,code:null,requestedAt:null,subscriptionCancelled:null};
+ const existing=await db.from('syncpay_refund_requests').select('refund_code,status,requested_at').eq('barbershop_id',ctx.shopId).eq('subscription_token',link.provider_subscription_token).maybeSingle();
+ dbError(existing.error);
+ if(!existing.data)return {requested:false,status:null,code:null,requestedAt:null,subscriptionCancelled:null};
+ // Consulta exclusivamente pelo código gerado e armazenado pelo FIO. Nunca aceita token ou código do cliente.
+ const result=await providerRequest(fetcher,'/refunds/'+encodeURIComponent(existing.data.refund_code));
+ const parsed=providerParse(z.object({data:z.object({code:z.string().min(1),status:z.string().min(1)}).passthrough()}).passthrough(),result);
+ if(parsed.data.code!==existing.data.refund_code)throw new ApiError(503,'SYNCPAY_INVALID_RESPONSE','Não foi possível confirmar este reembolso.');
+ const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
+ return {requested:true,status:parsed.data.status,code:existing.data.refund_code,requestedAt:existing.data.requested_at,subscriptionCancelled:detail.status==='cancelled'};
+}
+
 export async function getSyncpayBilling(ctx:TenantContext,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Esta ação é exclusiva do responsável pela barbearia.');
  if(!configured())return {configured:false,subscription:null};
@@ -608,9 +683,12 @@ export async function getSyncpayBilling(ctx:TenantContext,fetcher:Fetcher=fetch)
  const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
  await applyProviderTruth(db,detail,{key:stateEventKey('owner-reconcile',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify({status:detail.status,token:detail.token,plan:detail.plan.token,next:detail.next_charge_at})).digest('hex')});
  const reconciled=await currentLink(db,ctx.shopId);
+ const effectiveLink=reconciled??link;
+ const planMethod=await db.from('syncpay_plan_mappings').select('billing_method').eq('provider_plan_token',effectiveLink.provider_plan_token).maybeSingle();dbError(planMethod.error);
+ const effectiveMethod=planMethod.data?.billing_method==='credit_card'?'credit_card':planMethod.data?.billing_method==='pix_automatico'?'pix_automatico':'qr_code';
  const change=await pendingPlanChange(db,link.provider_subscription_token);
  if(change){detail.payment=null;detail.charges=detail.charges.filter(c=>change.charge_cycle!==null&&c.cycle_number===change.charge_cycle&&cents(c.amount??-1)===change.charge_amount_cents&&(!change.charge_identifier||c.payment?.identifier===change.charge_identifier));}
- return {configured:true,subscription:{...billingResponse(reconciled??link,detail),change:change?{plan:change.target_plan,cycle:change.target_cycle,state:change.state,type:change.result_type,amountCents:change.charge_amount_cents}:null}};
+ return {configured:true,subscription:{...billingResponse(effectiveLink,detail,undefined,effectiveMethod),change:change?{plan:change.target_plan,cycle:change.target_cycle,state:change.state,type:change.result_type,amountCents:change.charge_amount_cents}:null}};
 }
 
 function isSyncpayDashboardTest(rawBody:Buffer){

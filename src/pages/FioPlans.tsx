@@ -8,10 +8,12 @@ import { billingLocksNewSubscription,usablePix,type BillingState,type PaidPlan }
 import type { Plan } from '../../shared/domain';
 import type { WorkspaceProps } from './Workspace';
 import { useI18n } from '../i18n';
+import {annualCheckoutPreview} from '../../shared/syncpay-annual-checkout';
+import {refundStatusDisplay} from '../../shared/syncpay-refund-status';
 import './legal-payments.css';
 
-type Screen='plans'|'review'|'pix'|'success'|'manage'|'refund';
-type PaymentMethod='card'|'pix';
+type Screen='plans'|'review'|'pix'|'pix-auto'|'success'|'manage'|'refund';
+type PaymentMethod='card'|'pix'|'pix-auto'|'sync-card';
 
 function documentDigits(value:string){
  return value.replace(/\D/g,'').slice(0,14);
@@ -91,6 +93,18 @@ export function FioPlans(p:WorkspaceProps){
  const [billingLoaded,setBillingLoaded]=useState(false);
  const [billingConfigured,setBillingConfigured]=useState(false);
  const [stripeConfigured,setStripeConfigured]=useState(false);
+ const [pixAutomaticoConfigured,setPixAutomaticoConfigured]=useState(false);
+ const [legacyPixCheckoutConfigured,setLegacyPixCheckoutConfigured]=useState(false);
+ const [syncpayCardConfigured,setSyncpayCardConfigured]=useState(false);
+ const [cardNumber,setCardNumber]=useState('');
+ const [cardHolder,setCardHolder]=useState('');
+ const [cardMonth,setCardMonth]=useState('');
+ const [cardYear,setCardYear]=useState('');
+ const [cardCvv,setCardCvv]=useState('');
+ const [annualInstallments,setAnnualInstallments]=useState(1);
+ const [refundTracking,setRefundTracking]=useState<{requested:boolean;status:string|null;code:string|null;requestedAt:string|null;subscriptionCancelled:boolean|null}|null>(null);
+ const [refundTrackingLoading,setRefundTrackingLoading]=useState(false);
+ const [refundTrackingError,setRefundTrackingError]=useState('');
  const [paymentMethod,setPaymentMethod]=useState<PaymentMethod>('card');
  const [stripeReturn,setStripeReturn]=useState<'pending'|'checking'|'cancelled'|null>(null);
  const [checkoutError,setCheckoutError]=useState('');
@@ -119,7 +133,7 @@ export function FioPlans(p:WorkspaceProps){
  useEffect(()=>{
   let active=true;
 
-  void api<{configured:boolean;stripeConfigured:boolean;subscription:BillingState|null}>(
+  void api<{configured:boolean;stripeConfigured:boolean;pixAutomaticoConfigured:boolean;syncpayCardConfigured:boolean;legacyPixCheckoutConfigured:boolean;subscription:BillingState|null}>(
    '/saas/billing',
    p.data.shop.id
   )
@@ -128,7 +142,10 @@ export function FioPlans(p:WorkspaceProps){
     setBilling(result.subscription);
     setBillingConfigured(result.configured);
     setStripeConfigured(result.stripeConfigured);
-    setPaymentMethod(result.stripeConfigured?'card':'pix');
+    setPixAutomaticoConfigured(Boolean(result.pixAutomaticoConfigured));
+    setLegacyPixCheckoutConfigured(Boolean(result.legacyPixCheckoutConfigured));
+    setSyncpayCardConfigured(Boolean(result.syncpayCardConfigured));
+    setPaymentMethod(result.pixAutomaticoConfigured?'pix-auto':result.syncpayCardConfigured?'sync-card':result.stripeConfigured?'card':'pix');
     setBillingLoaded(true);
    })
    .catch(error=>{
@@ -141,7 +158,7 @@ export function FioPlans(p:WorkspaceProps){
  },[p.data.shop.id]);
 
  useEffect(()=>{
-  if(screen!=='pix')return;
+  if(screen!=='pix'&&screen!=='pix-auto')return;
 
   const timer=window.setInterval(
    ()=>setNow(Date.now()),
@@ -153,7 +170,7 @@ export function FioPlans(p:WorkspaceProps){
 
  useEffect(()=>{
   if(
-   screen!=='pix'||
+   (screen!=='pix'&&screen!=='pix-auto')||
    !billing||
    billing.providerStatus==='active'
   )
@@ -169,7 +186,7 @@ export function FioPlans(p:WorkspaceProps){
     .then(async result=>{
      if(!active)return;
 
-     setBilling(result.subscription);
+     setBilling(previous=>{const next=result.subscription;return next?.billingMethod==='pix_automatico'&&!next.payment?.qrCode&&previous?.payment?.qrCode?{...next,payment:previous.payment}:next;});
      setBillingConfigured(result.configured);
 
      if(result.subscription?.providerStatus==='active'){
@@ -391,7 +408,7 @@ export function FioPlans(p:WorkspaceProps){
   setCheckoutPlan(code);
   setDocument('');
   setAcceptedTerms(false);
-  setPaymentMethod(stripeConfigured?'card':'pix');
+  setPaymentMethod(pixAutomaticoConfigured?'pix-auto':syncpayCardConfigured?'sync-card':stripeConfigured?'card':'pix');
   setScreen('review');
  }
 
@@ -446,6 +463,9 @@ export function FioPlans(p:WorkspaceProps){
   }
 
   if(!billingConfigured)return;
+  if(paymentMethod==='pix'&&!legacyPixCheckoutConfigured)return;
+  if(paymentMethod==='pix-auto'&&!pixAutomaticoConfigured)return;
+  if(paymentMethod==='sync-card'&&(!syncpayCardConfigured||cycle!=='monthly'))return;
 
   const digits=documentDigits(document);
 
@@ -457,16 +477,22 @@ export function FioPlans(p:WorkspaceProps){
   setCheckoutCode('');
 
   try{
-   const result=await api<BillingState>(
-    '/saas/subscribe',
-    p.data.shop.id,
-    {
-     plan:checkoutPlan,
-     cycle,
-     document:digits,
-     acceptedTerms:true
+// O PAN/CVV vai somente para a selagem, nunca para armazenamento local ou assinatura.
+    let cardToken:string|undefined;
+    if(paymentMethod==='sync-card'){
+     const sealed=await api<{token:string;brand:string|null;last4:string|null}>(
+      '/saas/syncpay/card-token',p.data.shop.id,{card:{number:cardNumber.replace(/\D/g,''),holder_name:cardHolder.trim(),expiry_month:cardMonth,expiry_year:cardYear,cvv:cardCvv}}
+     );
+     cardToken=sealed.token;
+     setCardNumber('');setCardCvv('');
     }
-   );
+    const result=await api<BillingState>(
+     '/saas/subscribe',p.data.shop.id,{
+      plan:checkoutPlan,cycle,document:digits,
+      method:paymentMethod==='sync-card'?'credit_card':paymentMethod==='pix-auto'?'pix_automatico':'qr_code',
+      ...(cardToken?{cardToken}:{}),acceptedTerms:true
+     }
+    );
 
    setBilling(result);
 
@@ -474,7 +500,7 @@ export function FioPlans(p:WorkspaceProps){
     await p.refresh();
     setScreen('success');
    }else{
-    setScreen('pix');
+    setScreen(paymentMethod==='sync-card'?'manage':paymentMethod==='pix-auto'?'pix-auto':'pix');
    }
 
    p.notify(
@@ -662,8 +688,13 @@ export function FioPlans(p:WorkspaceProps){
     p.notify(t('fp.pendingCancelled'));
    }else if(action==='cancel_active'){
     await p.refresh();
-    setScreen('plans');
-    p.notify(t('fp.subscriptionCancelled'));
+    if(result.subscription?.providerStatus==='cancelled'){
+     setScreen('plans');
+     p.notify(result.subscription.billingMethod==='pix_automatico'?'Assinatura cancelada na SyncPay. Confira também a autorização do Pix Automático no seu banco.':t('fp.subscriptionCancelled'));
+    }else{
+     setScreen('manage');
+     p.notify('A SyncPay ainda está confirmando o cancelamento. Verifique novamente para conferir o fim das cobranças.');
+    }
    }else{
     if(result.subscription&&usablePix(result.subscription))
      setScreen('pix');
@@ -676,6 +707,34 @@ export function FioPlans(p:WorkspaceProps){
    setBusy(false);
   }
  }
+
+ async function refreshRefundTracking(){
+  if(!billing||billing.provider!=='syncpay')return;
+  setRefundTrackingLoading(true);
+  setRefundTrackingError('');
+  try{
+   const found=await api<{requested:boolean;status:string|null;code:string|null;requestedAt:string|null;subscriptionCancelled:boolean|null}>(
+    '/saas/syncpay/refund-status',p.data.shop.id
+   );
+   setRefundTracking(found);
+  }catch{
+   setRefundTrackingError('Não foi possível consultar o andamento na SyncPay agora. Tente atualizar ou fale com o suporte.');
+  }finally{setRefundTrackingLoading(false);}
+ }
+
+ useEffect(()=>{
+  if(screen!=='refund'||billing?.provider!=='syncpay')return;
+  let valid=true;
+  setRefundTrackingLoading(true);
+  setRefundTracking(null);
+  setRefundTrackingError('');
+  void api<{requested:boolean;status:string|null;code:string|null;requestedAt:string|null;subscriptionCancelled:boolean|null}>(
+   '/saas/syncpay/refund-status',p.data.shop.id
+  ).then(result=>{if(valid)setRefundTracking(result);})
+   .catch(()=>{if(valid)setRefundTrackingError('Não foi possível consultar o andamento do reembolso na SyncPay.');})
+   .finally(()=>{if(valid)setRefundTrackingLoading(false);});
+  return()=>{valid=false;};
+ },[screen,p.data.shop.id,billing?.provider]);
 
  async function requestRefund(){
   if(
@@ -720,7 +779,10 @@ export function FioPlans(p:WorkspaceProps){
    else
     p.notify(t('fp.refundSent'));
 
-   setScreen('plans');
+   if(result.subscription){
+    setScreen('refund');
+    await refreshRefundTracking().catch(()=>{});
+   }else setScreen('plans');
   }catch(error){
    setCheckoutError(checkoutMessage(error));
   }finally{
@@ -775,6 +837,7 @@ export function FioPlans(p:WorkspaceProps){
 
   const targetDefinition=FIO_PLAN_CATALOG.find(plan=>plan.code===target)!;
   const total=targetDefinition.prices[cycle]??0;
+  const annualPreview=total>0?annualCheckoutPreview(total,annualInstallments):null;
 
   return <section className="fio-payflow fio-payflow-review">
    <header className="fio-payflow-titlebar">
@@ -799,13 +862,35 @@ export function FioPlans(p:WorkspaceProps){
    </div>
 
    {!changePlan&&<>
+    {syncpayCardConfigured&&cycle==='annual'&&<div className="fio-payflow-note fio-annual-card-options">
+      <CreditCard size={18}/>
+      <div style={{flex:1,minWidth:0}}>
+       <strong>Compra anual no cartão — até 12 parcelas</strong>
+       <p>Uma única compra de 365 dias de acesso, sem renovação automática. Não são doze mensalidades.</p>
+       <label htmlFor="fio-annual-installments">Número de parcelas</label>
+       <select id="fio-annual-installments" aria-label="Quantidade de parcelas anuais" value={annualInstallments} onChange={event=>setAnnualInstallments(Number(event.target.value))}>
+        {Array.from({length:12},(_,i)=>i+1).map(i=><option key={i} value={i}>{i}x</option>)}
+       </select>
+       <p>Preço anual do plano: <strong>{amount(total)}</strong>.</p>
+       <p>{annualPreview?.totalCents!==null&&annualPreview?.totalCents!==undefined?'Total para 1x: '+amount(annualPreview.totalCents):'O total com as taxas da SyncPay ainda não foi confirmado.'}</p>
+       <p>{annualPreview?.explanation}</p>
+       <p><a className="fio-legal-text-link" href="/cartao-e-parcelamento" target="_blank" rel="noopener noreferrer">Ver condições de cartão e parcelamento</a></p>
+       <button className="fio-payflow-secondary" type="button" disabled>Compra anual em preparação</button>
+      </div>
+     </div>}
     <div className="fio-payflow-methods" role="radiogroup" aria-label="Forma de pagamento">
+      {syncpayCardConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='sync-card'} disabled={cycle!=='monthly'} className={paymentMethod==='sync-card'?'active':''} onClick={()=>setPaymentMethod('sync-card')}>
+       <CreditCard size={18}/><span><strong>Cartão SyncPay</strong><small>Assinatura mensal recorrente</small></span>
+      </button>}
+      {pixAutomaticoConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='pix-auto'} className={paymentMethod==='pix-auto'?'active':''} onClick={()=>setPaymentMethod('pix-auto')}>
+       <WalletCards size={18}/><span><strong>Pix Automático</strong><small>Autorize uma vez no app do banco</small></span>
+      </button>}
      <button
       type="button"
       role="radio"
       aria-checked={paymentMethod==='card'}
       className={paymentMethod==='card'?'active':''}
-      disabled={!stripeConfigured}
+      disabled={!stripeConfigured||pixAutomaticoConfigured||syncpayCardConfigured}
       onClick={()=>setPaymentMethod('card')}
      >
       <CreditCard size={18}/>
@@ -815,7 +900,7 @@ export function FioPlans(p:WorkspaceProps){
       </span>
      </button>
 
-     <button
+     {legacyPixCheckoutConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&<button
       type="button"
       role="radio"
       aria-checked={paymentMethod==='pix'}
@@ -828,10 +913,23 @@ export function FioPlans(p:WorkspaceProps){
        <strong>Pix</strong>
        <small>Pagamento pela SyncPay</small>
       </span>
-     </button>
+     </button>}
     </div>
+    {!legacyPixCheckoutConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&!stripeConfigured&&
+     <div className="fio-payflow-note" role="status">Novos pagamentos estão temporariamente indisponíveis. O FIO está preparando Pix Automático e cartão. Os contratos existentes continuam acessíveis em Minha assinatura.</div>}
 
-    {paymentMethod==='card'
+    {paymentMethod==='sync-card'?<>
+      <div className="fio-payflow-note"><ShieldCheck size={18}/><span>O cartão é usado para autorizar uma assinatura mensal. A confirmação de acesso depende da SyncPay. Os dados não ficam salvos no FIO.</span></div>
+      <label className="fio-payflow-field"><span>CPF ou CNPJ do titular</span><input value={document} inputMode="numeric" autoComplete="off" maxLength={18} onChange={event=>setDocument(formatDocument(event.target.value))}/></label>
+      <label className="fio-payflow-field"><span>Nome impresso no cartão</span><input value={cardHolder} autoComplete="cc-name" onChange={event=>setCardHolder(event.target.value)} /></label>
+      <label className="fio-payflow-field"><span>Número do cartão</span><input value={cardNumber} inputMode="numeric" autoComplete="cc-number" onChange={event=>setCardNumber(event.target.value.replace(/\D/g,'').slice(0,19))}/></label>
+      <div className="fio-payflow-review-card">
+       <label className="fio-payflow-field"><span>Mês (MM)</span><input value={cardMonth} inputMode="numeric" autoComplete="cc-exp-month" maxLength={2} onChange={event=>setCardMonth(event.target.value.replace(/\D/g,'').slice(0,2))}/></label>
+       <label className="fio-payflow-field"><span>Ano (AAAA)</span><input value={cardYear} inputMode="numeric" autoComplete="cc-exp-year" maxLength={4} onChange={event=>setCardYear(event.target.value.replace(/\D/g,'').slice(0,4))}/></label>
+       <label className="fio-payflow-field"><span>CVV</span><input value={cardCvv} type="password" inputMode="numeric" autoComplete="cc-csc" maxLength={4} onChange={event=>setCardCvv(event.target.value.replace(/\D/g,'').slice(0,4))}/></label>
+      </div>
+      <div className="fio-legal-inline"><a className="fio-legal-text-link" href="/cartao-e-parcelamento" target="_blank" rel="noopener noreferrer">Condições do cartão</a></div>
+     </>:paymentMethod==='card'
      ?<div className="fio-payflow-note">
        <ShieldCheck size={18}/>
        <span>Você será direcionado ao Checkout seguro da Stripe. O FIO não recebe nem armazena os dados do seu cartão.</span>
@@ -913,8 +1011,10 @@ export function FioPlans(p:WorkspaceProps){
         ?!changeAccepted
         :!acceptedTerms||
          (paymentMethod==='card'
-          ?!stripeConfigured
-          :!billingConfigured||![11,14].includes(documentDigits(document).length))
+           ?!stripeConfigured
+           :paymentMethod==='sync-card'
+            ?!syncpayCardConfigured||cycle!=='monthly'||!([11,14].includes(documentDigits(document).length))||cardNumber.length<13||cardHolder.trim().length<5||cardMonth.length!==2||cardYear.length!==4||cardCvv.length<3
+            :!billingConfigured||(paymentMethod==='pix'&&!legacyPixCheckoutConfigured)||![11,14].includes(documentDigits(document).length))
       )
      }
      onClick={()=>void (changePlan?confirmChange():subscribe())}
@@ -927,11 +1027,24 @@ export function FioPlans(p:WorkspaceProps){
        ?t('fp.confirmChange')
        :paymentMethod==='card'
         ?'Continuar com cartão'
-        :'Gerar Pix'
+        :paymentMethod==='sync-card'?'Autorizar assinatura no cartão':paymentMethod==='pix-auto'?'Autorizar Pix Automático':'Gerar Pix'
      }
      <span>→</span>
     </button>
    </div>
+  </section>;
+ }
+
+ if(screen==='pix-auto'&&billing){
+  const validMandate=Boolean(billing.payment?.qrCode&&billing.payment?.identifier);
+  return <section className="fio-payflow fio-payflow-pix" aria-label="Autorizar Pix Automático">
+   <header className="fio-payflow-titlebar"><div><button type="button" className="fio-payflow-back" onClick={returnPlans} aria-label="Voltar"><ArrowLeft size={18}/></button><div><h1>Autorizar Pix Automático</h1><span>{displayName(billing.plan)} · {cycleLabel(billing.cycle)}</span></div></div></header>
+   <div className="fio-payflow-pix-center"><span>Autorize as próximas cobranças no aplicativo do seu banco</span><strong>{amount(billing.amountCents)}</strong></div>
+   {validMandate?<><div className="fio-payflow-qr"><QRCodeSVG value={billing.payment!.qrCode!} size={220} level="M" includeMargin aria-label="QR Code de autorização do Pix Automático"/></div><ol className="fio-payflow-steps"><li>Abra o aplicativo do seu banco.</li><li>Leia o QR Code e confira as condições da autorização.</li><li>Confirme no banco. O plano será ativado após a confirmação real do pagamento.</li></ol><p role="status">Status da autorização: {billing.payment?.mandateStatus??'Aguardando confirmação'}</p></>:<div className="fio-payflow-note">Não foi possível obter um mandato válido. Consulte novamente ou procure o suporte antes de tentar contratar outra vez.</div>}
+   <div className="fio-legal-inline"><a className="fio-legal-text-link" href="/pix-automatico" target="_blank" rel="noopener noreferrer">Como funciona e seus direitos</a><a className="fio-legal-text-link" href="/cancelamento-e-reembolso" target="_blank" rel="noopener noreferrer">Cancelamento e reembolso</a></div>
+   <div className="fio-payflow-bottom-action"><button className="fio-payflow-primary" disabled={busy} onClick={()=>void refreshBilling()}>Verificar autorização</button>
+   {billing.providerStatus==='pending_first_payment'&&<button type="button" className="fio-payflow-link-danger" disabled={busy} onClick={()=>void manageCharge('cancel_pending')}>Cancelar a contratação</button>}
+  </div>
   </section>;
  }
 
@@ -1024,8 +1137,18 @@ export function FioPlans(p:WorkspaceProps){
     <button type="button" className="fio-payflow-close" aria-label="Fechar" onClick={()=>setScreen('manage')}><X size={20}/></button>
    </header>
    <div className="fio-legal-refund-panel" aria-live="polite">
-    {automaticRefund?<>
-     <h2>Reembolso disponível</h2>
+    {refundTrackingLoading&&<p role="status">Consultando a solicitação na SyncPay...</p>}
+    {refundTrackingError&&<p role="alert">{refundTrackingError}</p>}
+    {refundTracking?.requested&&<>
+     <h2>Acompanhar reembolso</h2>
+     <p>{refundTracking.status?refundStatusDisplay(refundTracking.status).label:'Status em verificação.'}</p>
+     <p>Protocolo: <code>{refundTracking.code}</code></p>
+     {refundTracking.requestedAt&&<p>Pedido registrado em {date(refundTracking.requestedAt)}.</p>}
+     {refundTracking.subscriptionCancelled===true&&<p>Assinatura marcada como cancelada na SyncPay. No Pix Automático, confira também a autorização no seu banco.</p>}
+     {refundTracking.subscriptionCancelled===false&&<p>ATENÇÃO: a SyncPay ainda não marcou esta assinatura como cancelada. Consulte o suporte; no Pix Automático, confira também a autorização no banco.</p>}
+    </>}
+    {!refundTrackingLoading&&!refundTrackingError&&!refundTracking?.requested&&(automaticRefund?<>
+      <h2>Reembolso disponível</h2>
      <p className="fio-legal-refund-status">Sua contratação está dentro do período inicial de sete dias verificado pelo FIO.</p>
      <p className="fio-legal-inline"><a className="fio-legal-text-link" href="/direitos-do-cliente" target="_blank" rel="noopener noreferrer">Ver seus direitos e condições de reembolso</a></p>
      <p>O sistema consultou automaticamente os registros confirmados da cobrança. A elegibilidade será verificada novamente pelo servidor antes de processar o pedido.</p>
@@ -1038,16 +1161,20 @@ export function FioPlans(p:WorkspaceProps){
       :billing.provider==='stripe'
        ?'Para esta modalidade, o FIO direciona o pedido ao atendimento especializado. Não há reembolso automático disponível nesta tela.'
        :'Não encontramos uma cobrança elegível para reembolso automático. Se houve pagamento, erro, cobrança indevida ou outra situação protegida por lei, solicite uma análise ao suporte.'}</p>
-    </>}
+    </>)}
     <div className="fio-legal-inline">
-     <a className="fio-legal-text-link" href="/direitos-do-cliente" target="_blank" rel="noopener noreferrer">Ver seus direitos</a>
+      <a className="fio-legal-text-link" href="/direitos-do-cliente" target="_blank" rel="noopener noreferrer">Ver seus direitos</a>
      <a className="fio-legal-text-link" href="/cancelamento-e-reembolso" target="_blank" rel="noopener noreferrer">Ler termos do reembolso</a>
      <a className="fio-legal-text-link" href="/condicoes-de-pagamento" target="_blank" rel="noopener noreferrer">Condições de pagamento</a>
     </div>
     {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
-    {automaticRefund
-     ?<button className="fio-payflow-primary" disabled={busy} onClick={()=>void requestRefund()}>{busy?'Processando solicitação...':'Solicitar reembolso'}</button>
-     :<button className="fio-payflow-primary" onClick={()=>navigate(p.base+'/suporte')}>Solicitar análise ao suporte</button>
+    {refundTracking?.requested
+     ?<button className="fio-payflow-primary" type="button" disabled={refundTrackingLoading} onClick={()=>void refreshRefundTracking()}>{refundTrackingLoading?'Atualizando...':'Atualizar andamento'}</button>
+     :refundTrackingLoading||refundTrackingError
+      ?<button className="fio-payflow-secondary" type="button" disabled={refundTrackingLoading} onClick={()=>void refreshRefundTracking()}>Tentar consultar novamente</button>
+      :automaticRefund
+       ?<button className="fio-payflow-primary" disabled={busy} onClick={()=>void requestRefund()}>{busy?'Processando solicitação...':'Solicitar reembolso'}</button>
+       :<button className="fio-payflow-primary" onClick={()=>navigate(p.base+'/suporte')}>Solicitar análise ao suporte</button>
     }
     <p style={{fontSize:12,opacity:.72}}>Cancelar a renovação e devolver uma cobrança são operações diferentes. Confira as condições antes de confirmar.</p>
    </div>
@@ -1140,7 +1267,7 @@ export function FioPlans(p:WorkspaceProps){
       Reembolso e suporte FIO
      </button>
     </>:<>
-     {billing.providerStatus==='pending_first_payment'&&!billing.change&&
+     {billing.providerStatus==='pending_first_payment'&&!billing.change&&billing.billingMethod==='qr_code'&&
       <button className="fio-payflow-secondary" disabled={busy} onClick={()=>void manageCharge('resend')}>
        {t('fp.newPix')}
       </button>

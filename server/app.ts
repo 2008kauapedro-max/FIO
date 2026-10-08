@@ -9,7 +9,7 @@ import { authenticate, tenant, requireOwner, requireFioFeature, bootstrap, type 
 import { ApiError,dbError } from './errors.js';
 import { askAssistant } from './assistant.js';
 import { bookingSchema } from '../shared/domain.js';
-import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment } from './syncpay.js';
+import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment,syncpayPixAutomaticoConfigured,sealSyncpayCard,syncpayCardConfigured,getSyncpayRefundTracking,syncpayLegacyPixCheckoutConfigured } from './syncpay.js';
 import { createStripeCheckoutSession,createStripeBillingPortal,getStripeBilling,handleStripeWebhook,stripeCheckoutConfigured,getStripeRefundPolicy,requestStripeRefund } from './stripe.js';
 import { createHash,randomUUID,timingSafeEqual } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
@@ -463,6 +463,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/saas/stripe/refund',rateLimitByUser('stripe-refund',3600000,2),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.json(await requestStripeRefund(c,req.body));
  });
+ app.post('/api/saas/syncpay/card-token',rateLimitByUser('billing-card-token',900_000,4),async(req,res)=>{const c=ctx(res);requireOwner(c);res.status(201).json(await sealSyncpayCard(c,req.body));});
  app.post('/api/saas/subscribe',rateLimitByUser('billing-subscribe',600_000,8),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
  });
@@ -470,15 +471,16 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/saas/change-plan',rateLimitByUser('billing-change',600_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await changeSyncpayPlan(c,req.body));});
  app.post('/api/saas/charge',rateLimitByUser('billing-charge',600_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await manageSyncpayCharge(c,req.body));});
  app.post('/api/saas/refund',rateLimitByUser('billing-refund',3_600_000,2),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await requestSyncpayRefund(c,req.body));});
+ app.get('/api/saas/syncpay/refund-status',rateLimitByUser('billing-refund-status',60000,12),async(_req,res)=>{const c=ctx(res);requireOwner(c);res.json(await getSyncpayRefundTracking(c));});
  app.get('/api/saas/billing',async(_req,res)=>{
   const c=ctx(res);requireOwner(c);
   const stripe=await getStripeBilling(c);
   if(stripe){
-   res.json({configured:false,stripeConfigured:stripeCheckoutConfigured(),subscription:stripe});
+   res.json({configured:false,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured(),subscription:stripe});
    return;
   }
   const billing=await getSyncpayBilling(c);
-  res.json({...billing,stripeConfigured:stripeCheckoutConfigured()});
+  res.json({...billing,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured()});
  });
  app.post('/api/services',async(req,res)=>{
   const c=ctx(res);requireOwner(c);
