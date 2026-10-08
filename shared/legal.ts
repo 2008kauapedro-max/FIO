@@ -14,7 +14,7 @@ export type LegalDocument={
 
 export const PRIVACY_POLICY:LegalDocument={
  title:'Política de Privacidade do FIO',
- updated:'03 de outubro de 2026',
+ updated:'08 de outubro de 2026',
  contactEmail:'usefiooficial@gmail.com',
  intro:[
   'Esta Política explica de forma transparente como o FIO trata dados pessoais durante o uso da plataforma de gestão, agenda, página pública, aplicativos, suporte, cobrança e recursos relacionados.',
@@ -47,7 +47,7 @@ export const PRIVACY_POLICY:LegalDocument={
    bullets:[
     'Supabase — autenticação, banco de dados, armazenamento e recursos de infraestrutura relacionados ao backend.',
     'Vercel — hospedagem e execução da aplicação web e do backend publicado.',
-    'SyncPay — processamento das assinaturas e cobranças Pix dos planos pagos do FIO.',
+    'SyncPay — processamento das assinaturas e cobranças Pix dos planos pagos do FIO e, quando habilitadas, outras modalidades de pagamento expressamente apresentadas na contratação.',
     'Cloudflare Turnstile — proteção contra automação abusiva e bots em fluxos de autenticação.',
     'Google — quando o usuário escolhe Entrar com Google; também poderá ser utilizado para envio dos e-mails transacionais caso o SMTP Gmail seja habilitado.',
     'Groq — processamento das solicitações enviadas ao recurso de inteligência artificial, dentro do contexto limitado preparado pelo servidor.',
@@ -116,7 +116,7 @@ export const PRIVACY_POLICY:LegalDocument={
 
 export const TERMS_OF_USE:LegalDocument={
  title:'Termos de Uso do FIO',
- updated:'03 de outubro de 2026',
+ updated:'08 de outubro de 2026',
  contactEmail:'usefiooficial@gmail.com',
  intro:[
   'Estes Termos regulam o acesso e o uso do FIO. Ao criar uma conta, administrar uma barbearia ou contratar um plano pago, o usuário concorda com as regras aplicáveis ao recurso utilizado.',
@@ -141,7 +141,7 @@ export const TERMS_OF_USE:LegalDocument={
   {
    title:'3. Planos, teste e recursos',
    bullets:[
-    'Os recursos e limites de FREE, PRO e PREMIUM são os exibidos no produto no momento da contratação.',
+    'Os recursos e limites dos planos disponíveis, incluindo FREE, SOLO, SOLO PREMIUM, PRO e PREMIUM quando aplicáveis à modalidade da barbearia, são os exibidos no produto no momento da contratação.',
     'Quando disponível para a barbearia elegível, o teste do PRO dura 14 dias e pode ser usado uma única vez por barbearia.',
     'Recursos pagos podem ficar indisponíveis quando a assinatura expira, é cancelada, suspensa ou não possui confirmação de pagamento válida.',
     'Dados já existentes não são tratados como autorização para ultrapassar limites de criação definidos pelo plano.'
@@ -151,9 +151,9 @@ export const TERMS_OF_USE:LegalDocument={
    title:'4. Cobrança, Pix, cancelamento e reembolso',
    bullets:[
     'As novas contratações pagas são oferecidas nos ciclos mensal e anual mostrados no checkout.',
-    'A cobrança é processada pela SyncPay e o FIO somente libera o plano pago após confirmação válida do provedor.',
+    'A cobrança Pix atualmente integrada ao FIO é processada pela SyncPay. Novas modalidades, como Pix Automático e cartão, só poderão ser oferecidas após integração e liberação operacionais. O FIO somente libera planos pagos após confirmação válida da cobrança pelo provedor.',
     'O usuário deve conferir valor e recebedor no aplicativo do banco antes de pagar qualquer Pix.',
-    'O cancelamento impede novas cobranças conforme o estado confirmado da assinatura. Ele não significa exclusão automática da conta.',
+    'O cancelamento de renovações futuras deverá ser solicitado ao provedor e acompanhado até a confirmação. No Pix Automático, quando habilitado, também deve ser encerrada a autorização de recorrência; cancelar não significa apagar dados ou reembolsar automaticamente valores anteriores.',
     'Nas contratações online em que o direito de arrependimento for aplicável, o fluxo do FIO permite solicitar reembolso integral da primeira contratação dentro da janela de 7 dias. Após esse período, o cancelamento não gera automaticamente devolução do período já pago, sem prejuízo de direitos previstos em lei.'
    ]
   },

@@ -1,96 +1,116 @@
 {
-    "rewrites":  [
-                     {
-                         "source":  "/api/:path*",
-                         "destination":  "/api/handler?route=:path*"
-                     },
-                     {
-                         "source":  "/confirm-email",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/privacidade",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/termos",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/owner/:path*",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/barber/:path*",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/client/:path*",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/login",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/reset-password",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/acesso/:path*",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/b/:path*",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/barbearia/:path*",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/platform/:path*",
-                         "destination":  "/index.html"
-                     },
-                     {
-                         "source":  "/:slug([a-z0-9-]{3,60})",
-                         "destination":  "/api/handler?route=public/share/:slug"
-                     }
-                 ],
-    "headers":  [
-                    {
-                        "source":  "/(.*)",
-                        "headers":  [
-                                        {
-                                            "key":  "X-Content-Type-Options",
-                                            "value":  "nosniff"
-                                        },
-                                        {
-                                            "key":  "X-Frame-Options",
-                                            "value":  "DENY"
-                                        },
-                                        {
-                                            "key":  "Referrer-Policy",
-                                            "value":  "strict-origin-when-cross-origin"
-                                        },
-                                        {
-                                            "key":  "Permissions-Policy",
-                                            "value":  "camera=(), microphone=(), geolocation=()"
-                                        },
-                                        {
-                                            "key":  "Content-Security-Policy",
-                                            "value":  "default-src \u0027self\u0027; script-src \u0027self\u0027 https://challenges.cloudflare.com; style-src \u0027self\u0027 \u0027unsafe-inline\u0027; connect-src \u0027self\u0027 https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com; img-src \u0027self\u0027 data: blob: https://*.supabase.co; font-src \u0027self\u0027; frame-src https://challenges.cloudflare.com; object-src \u0027none\u0027; base-uri \u0027self\u0027; frame-ancestors \u0027none\u0027; form-action \u0027self\u0027; upgrade-insecure-requests"
-                                        }
-                                    ]
-                    },
-                    {
-                        "source":  "/sw.js",
-                        "headers":  [
-                                        {
-                                            "key":  "Cache-Control",
-                                            "value":  "no-cache"
-                                        }
-                                    ]
-                    }
-                ]
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/handler?route=:path*"
+    },
+    {
+      "source": "/confirm-email",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/privacidade",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/termos",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/owner/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/barber/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/client/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/login",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/reset-password",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/acesso/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/b/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/barbearia/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/platform/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cancelamento-e-reembolso",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/condicoes-de-pagamento",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/pix-automatico",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/cartao-e-parcelamento",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/direitos-do-cliente",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/:slug([a-z0-9-]{3,60})",
+      "destination": "/api/handler?route=public/share/:slug"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com; img-src 'self' data: blob: https://*.supabase.co; font-src 'self'; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
+  ]
 }

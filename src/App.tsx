@@ -116,7 +116,7 @@ function currentLoadingBrand():LoadingBrand|null{
  const pathname=window.location.pathname;
  const params=new URLSearchParams(window.location.search);
  const pathSlug=pathname.match(/^\/(?:b\/|barbearia\/)?([a-z0-9-]{3,60})\/?$/)?.[1]??'';
- const reserved=new Set(['login','owner','barber','client','platform','acesso','termos','privacidade','reset-password','confirm-email']);
+ const reserved=new Set(['login','owner','barber','client','platform','acesso','termos','privacidade','cancelamento-e-reembolso','condicoes-de-pagamento','pix-automatico','cartao-e-parcelamento','direitos-do-cliente','reset-password','confirm-email']);
  const requested=pathSlug&&!reserved.has(pathSlug)
   ?pathSlug
   :params.get('shop')||(
@@ -243,7 +243,7 @@ export default function App(){
  const {t,locale,region,setLocale,setRegion,setCurrency}=useI18n();
  const location=useLocation(),navigate=useNavigate();
  const isPlatform=location.pathname==='/acesso/plataforma'||location.pathname==='/platform'||location.pathname.startsWith('/platform/');
- const reservedPublicSlugs=new Set(['owner','barber','client','login','reset-password','confirm-email','privacidade','termos','acesso','b','barbearia','platform','api']);
+ const reservedPublicSlugs=new Set(['owner','barber','client','login','reset-password','confirm-email','privacidade','termos','cancelamento-e-reembolso','condicoes-de-pagamento','pix-automatico','cartao-e-parcelamento','direitos-do-cliente','acesso','b','barbearia','platform','api']);
  const singleSlug=location.pathname.match(/^\/([a-z0-9-]{3,60})\/?$/)?.[1]??'';
  const isCleanPublicSlug=Boolean(singleSlug&&!reservedPublicSlugs.has(singleSlug));
  const isPublicPortal=location.pathname.startsWith('/b/')||location.pathname.startsWith('/barbearia/')||isCleanPublicSlug;
@@ -425,6 +425,11 @@ export default function App(){
 
  if(location.pathname==='/privacidade')return <LegalPage kind="privacy"/>;
  if(location.pathname==='/termos')return <LegalPage kind="terms"/>;
+ if(location.pathname==='/cancelamento-e-reembolso')return <LegalPage kind="refunds"/>;
+ if(location.pathname==='/condicoes-de-pagamento')return <LegalPage kind="payments"/>;
+ if(location.pathname==='/pix-automatico')return <LegalPage kind="pix-automatico"/>;
+ if(location.pathname==='/cartao-e-parcelamento')return <LegalPage kind="cartao"/>;
+ if(location.pathname==='/direitos-do-cliente')return <LegalPage kind="rights"/>;
  if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<AppLoading/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
  if(isPlatform)return <Suspense fallback={<AppLoading/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
  if(isPublicPortal)return <PublicPortal/>;

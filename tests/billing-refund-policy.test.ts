@@ -5,7 +5,10 @@ import {describe,expect,it} from 'vitest';
 describe('billing refund and recovery UX',()=>{
  it('exposes refund and cancellation actions without hiding legal exceptions',()=>{
   const page=readFileSync(resolve('src/pages/FioPlans.tsx'),'utf8');
-  expect(page).toContain("t('fp.cancelRefundButton')");
+  expect(page).toContain("setScreen('refund')");
+  expect(page).toContain("billing.refund?.eligible===true");
+  expect(page).toContain("onClick={()=>void requestRefund()}");
+  expect(page).toContain('Solicitar análise ao suporte');
   expect(page).toContain("t('fp.noAutoRefund')");
   const dict=readFileSync(resolve('src/i18n/dictionaries.ts'),'utf8');
   expect(dict).toContain('Cancelar e solicitar reembolso');

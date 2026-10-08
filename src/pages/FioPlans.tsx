@@ -8,8 +8,9 @@ import { billingLocksNewSubscription,usablePix,type BillingState,type PaidPlan }
 import type { Plan } from '../../shared/domain';
 import type { WorkspaceProps } from './Workspace';
 import { useI18n } from '../i18n';
+import './legal-payments.css';
 
-type Screen='plans'|'review'|'pix'|'success'|'manage';
+type Screen='plans'|'review'|'pix'|'success'|'manage'|'refund';
 type PaymentMethod='card'|'pix';
 
 function documentDigits(value:string){
@@ -870,6 +871,11 @@ export function FioPlans(p:WorkspaceProps){
       <a href="/privacidade" target="_blank" rel="noreferrer">Privacidade</a>
      </span>
     </label>
+    <div className="fio-legal-inline" aria-label="Informações da contratação">
+     <a className="fio-legal-text-link" href="/condicoes-de-pagamento" target="_blank" rel="noopener noreferrer">Condições de pagamento</a>
+     <a className="fio-legal-text-link" href="/cancelamento-e-reembolso" target="_blank" rel="noopener noreferrer">Cancelamento e reembolso</a>
+     <a className="fio-legal-text-link" href={paymentMethod==='card'?'/cartao-e-parcelamento':'/pix-automatico'} target="_blank" rel="noopener noreferrer">{paymentMethod==='card'?'Entenda cartão e parcelamento':'Entenda as formas de pagamento Pix'}</a>
+    </div>
    </>}
 
    {changePlan&&<>
@@ -1004,6 +1010,50 @@ export function FioPlans(p:WorkspaceProps){
   </section>;
  }
 
+ if(screen==='refund'&&billing){
+  // A elegibilidade vem dos dados conciliados pelo servidor, não de uma opção escolhida pelo usuário.
+  const automaticRefund=billing.provider==='syncpay'&&billing.refund?.eligible===true;
+  const deadline=billing.provider==='syncpay'?billing.refund?.deadline:null;
+  const deadlineExpired=Boolean(deadline&&Date.parse(deadline)<Date.now());
+  return <section className="fio-payflow fio-payflow-manage">
+   <header className="fio-payflow-titlebar">
+    <div>
+     <button type="button" className="fio-payflow-back" aria-label="Voltar à assinatura" onClick={()=>setScreen('manage')}><ArrowLeft size={18}/></button>
+     <div><h1>Consultar reembolso</h1><span>{displayName(billing.plan)}</span></div>
+    </div>
+    <button type="button" className="fio-payflow-close" aria-label="Fechar" onClick={()=>setScreen('manage')}><X size={20}/></button>
+   </header>
+   <div className="fio-legal-refund-panel" aria-live="polite">
+    {automaticRefund?<>
+     <h2>Reembolso disponível</h2>
+     <p className="fio-legal-refund-status">Sua contratação está dentro do período inicial de sete dias verificado pelo FIO.</p>
+     <p className="fio-legal-inline"><a className="fio-legal-text-link" href="/direitos-do-cliente" target="_blank" rel="noopener noreferrer">Ver seus direitos e condições de reembolso</a></p>
+     <p>O sistema consultou automaticamente os registros confirmados da cobrança. A elegibilidade será verificada novamente pelo servidor antes de processar o pedido.</p>
+     {deadline&&<p>Prazo indicado pelo sistema: até <strong>{date(deadline)}</strong>.</p>}
+     <p>O crédito será realizado pelo fluxo da SyncPay após confirmação. Não há garantia de devolução instantânea.</p>
+    </>:<>
+     <h2>{deadlineExpired?'O prazo inicial terminou':'Consulte as condições de reembolso'}</h2>
+     <p>{deadlineExpired
+      ?'O período inicial de sete dias identificado pelo sistema terminou. Isso não impede pedidos relativos a cobranças indevidas, duplicadas ou outros direitos previstos em lei.'
+      :billing.provider==='stripe'
+       ?'Para esta modalidade, o FIO direciona o pedido ao atendimento especializado. Não há reembolso automático disponível nesta tela.'
+       :'Não encontramos uma cobrança elegível para reembolso automático. Se houve pagamento, erro, cobrança indevida ou outra situação protegida por lei, solicite uma análise ao suporte.'}</p>
+    </>}
+    <div className="fio-legal-inline">
+     <a className="fio-legal-text-link" href="/direitos-do-cliente" target="_blank" rel="noopener noreferrer">Ver seus direitos</a>
+     <a className="fio-legal-text-link" href="/cancelamento-e-reembolso" target="_blank" rel="noopener noreferrer">Ler termos do reembolso</a>
+     <a className="fio-legal-text-link" href="/condicoes-de-pagamento" target="_blank" rel="noopener noreferrer">Condições de pagamento</a>
+    </div>
+    {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
+    {automaticRefund
+     ?<button className="fio-payflow-primary" disabled={busy} onClick={()=>void requestRefund()}>{busy?'Processando solicitação...':'Solicitar reembolso'}</button>
+     :<button className="fio-payflow-primary" onClick={()=>navigate(p.base+'/suporte')}>Solicitar análise ao suporte</button>
+    }
+    <p style={{fontSize:12,opacity:.72}}>Cancelar a renovação e devolver uma cobrança são operações diferentes. Confira as condições antes de confirmar.</p>
+   </div>
+  </section>;
+ }
+
  if(screen==='success'){
   return <section className="fio-payflow fio-payflow-success">
    <header className="fio-payflow-titlebar">
@@ -1060,6 +1110,11 @@ export function FioPlans(p:WorkspaceProps){
     <div><span>{t('fp.value')}</span><strong>{amount(billing.amountCents)}</strong></div>
    </div>
 
+   <div className="fio-legal-inline" aria-label="Direitos e políticas da assinatura">
+    <a className="fio-legal-text-link" href="/direitos-do-cliente" target="_blank" rel="noopener noreferrer">Ver seus direitos</a>
+    <a className="fio-legal-text-link" href="/cancelamento-e-reembolso" target="_blank" rel="noopener noreferrer">Política de reembolso</a>
+    <a className="fio-legal-text-link" href="/condicoes-de-pagamento" target="_blank" rel="noopener noreferrer">Condições de pagamento</a>
+   </div>
    {billing.change&&<div className="fio-payflow-note">
     <RefreshCw size={18}/>
     <span>{t('fp.changePending',{plan:displayName(billing.change.plan),cycle:cycleLabel(billing.change.cycle)})}</span>
@@ -1091,13 +1146,11 @@ export function FioPlans(p:WorkspaceProps){
       </button>
      }
 
-     {billing.providerStatus==='active'&&!billing.change&&billing.refund?.eligible&&
-      <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void requestRefund()}>
-       {t('fp.cancelRefundButton')}
-      </button>
-     }
+     <button className="fio-payflow-secondary" disabled={busy} onClick={()=>setScreen('refund')}>
+      Consultar reembolso
+     </button>
 
-     {['active','overdue','suspended'].includes(billing.providerStatus)&&!billing.change&&!billing.refund?.eligible&&
+     {['active','overdue','suspended'].includes(billing.providerStatus)&&!billing.change&&
       <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void manageCharge('cancel_active')}>
        {t('fp.cancelSubscription')}
       </button>
