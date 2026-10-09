@@ -5952,3 +5952,17 @@ body:has(.workspace),
 
 /* Mantém o texto curto do período de teste legível no mobile. */
 @media(max-width:760px){.topbar .plan-badge{white-space:nowrap;line-height:1.15;flex-shrink:0;padding:6px 7px;letter-spacing:0;}}
+
+/* FIO_LOADING_WORDMARK_V2 */
+.fio-loading-screen.fio-loading-screen--brand img.fio-loading-brand-logo.is-fio {
+    width:auto!important;
+    height:clamp(70px,19vw,105px)!important;
+    max-width:min(78vw,330px)!important;
+    max-height:none!important;
+    object-fit:contain!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+}

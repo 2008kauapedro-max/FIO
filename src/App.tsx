@@ -160,13 +160,11 @@ function AppLoading(){
  >
   {brand?.logo&&!platform
    ?<img className="fio-loading-brand-logo" src={brand.logo} alt={brand.name}/>
-   :<img className="fio-loading-brand-logo is-fio" src="/FIOlogo/FIObranco.png" alt="FIO"/>
+   :<img className="fio-loading-brand-logo is-fio" src="/FIOlogo+nome/Branco.png" alt="FIO"/>
   }
 
   <div className="fio-loading-copy">
-   <strong>
-    {brand?.name&&!platform ?brand.name:'FIO'}
-   </strong>
+   {brand?.name&&!platform&&<strong>{brand.name}</strong>}
 
    <span>{t('ui.loading')}</span>
   </div>
