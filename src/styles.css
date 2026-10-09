@@ -5966,3 +5966,15 @@ body:has(.workspace),
     background:transparent!important;
     box-shadow:none!important;
 }
+/* FIO_SUCCESS_TOAST_COMPACT_20261009: sucesso e confirmacao sao feedback local, nao alerta push. */
+.fio-inapp-notice.is-success{--notice-accent:#35b577!important;max-width:min(390px,calc(100vw - 28px));padding:12px 14px!important;border:1px solid #26744b!important;border-radius:13px!important;background:#163126!important;color:#e7fff0!important;box-shadow:0 8px 22px #0006!important;gap:10px!important}
+.fio-inapp-notice.is-success .fio-inapp-notice-icon{display:grid!important;place-items:center!important;color:#42d887!important;flex:0 0 26px!important;min-width:26px!important;width:26px!important;height:26px!important;padding:0!important;background:transparent!important;border:0!important}
+.fio-inapp-notice.is-success .fio-inapp-notice-heading,.fio-inapp-notice.is-success .fio-inapp-notice-progress{display:none!important}
+.fio-inapp-notice.is-success .fio-inapp-notice-message{font-size:.85rem!important;font-weight:600!important;line-height:1.35!important;color:#e7fff0!important}
+.fio-inapp-notice.is-success .fio-inapp-notice-close{margin-left:auto!important;opacity:.65!important}
+
+/* FIO_SUBSCRIPTIONS_TABS_20261009 */
+.subscription-view-tabs{display:grid;grid-template-columns:1fr 1fr;gap:0;border-bottom:1px solid var(--border,#333);margin:18px 0 26px;width:100%}
+.subscription-view-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--muted,#aaa);padding:14px 8px;cursor:pointer;font:inherit;font-size:clamp(.73rem,2.8vw,.92rem);font-weight:600;white-space:normal;text-align:center}
+.subscription-view-tabs button.active{border-bottom-color:var(--text,#fff);color:var(--text,#fff);font-weight:750}
+.subscription-view-tabs button:focus-visible{outline:2px solid currentColor;outline-offset:-3px}

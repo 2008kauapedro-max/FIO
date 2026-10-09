@@ -128,7 +128,7 @@ export async function api<T>(path:string,shopId?:string,body?:unknown,method?:st
  if(!supabase) throw new RequestError('SETUP_REQUIRED','A conexão com a barbearia ainda não está configurada.');
 
  const requestMethod=(method??(body?'POST':'GET')).toUpperCase();
- const interactive=!['GET','HEAD'].includes(requestMethod);
+ const interactive=!['GET','HEAD'].includes(requestMethod)&&path!=='/assistant';
 
  if(interactive)beginInteractiveRequest();
 

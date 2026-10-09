@@ -57,7 +57,7 @@ export function AgendaMonthCalendar(p:{
 
   setLoading(true);
 
-  void Promise.all([
+  void Promise.allSettled([
    api<Availability[]>(
     `/slots/month?barberId=${encodeURIComponent(p.barberId)}&serviceId=${encodeURIComponent(p.serviceId)}&monthStart=${month}-01`,
     p.shopId
@@ -66,29 +66,23 @@ export function AgendaMonthCalendar(p:{
     `/appointments/period?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&barberId=${encodeURIComponent(p.barberId)}`,
     p.shopId
    )
-  ]).then(([rows,period])=>{
+  ]).then(([availabilityResult,periodResult])=>{
    if(!alive)return;
-   setAvailability(Object.fromEntries(rows.map(row=>[
-    row.day,
-    {count:Number(row.available_count),closed:Boolean(row.closed)}
-   ])));
+   if(availabilityResult.status==='fulfilled'){
+    setAvailability(Object.fromEntries(availabilityResult.value.map(row=>[
+     row.day,
+     {count:Number(row.available_count),closed:Boolean(row.closed)}
+    ])));
+   }else setAvailability({});
 
    const formatter=new Intl.DateTimeFormat('en-CA',{
     timeZone:p.zone,
-    year:'numeric',
-    month:'2-digit',
-    day:'2-digit'
+    year:'numeric',month:'2-digit',day:'2-digit'
    });
-
-   const nextBooked=new Set(
-    (period.items??[])
-     .filter(item=>item.status!=='cancelled')
-     .map(item=>formatter.format(new Date(item.starts_at)))
-   );
-
-   setBookedDays(nextBooked);
-  }).catch(()=>{
-   if(alive){setAvailability({});setBookedDays(new Set());}
+   const period=periodResult.status==='fulfilled'?periodResult.value:null;
+   setBookedDays(new Set((period?.items??[])
+    .filter(item=>item.status!=='cancelled')
+    .map(item=>formatter.format(new Date(item.starts_at)))));
   }).finally(()=>{
    if(alive)setLoading(false);
   });

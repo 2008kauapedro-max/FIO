@@ -165,6 +165,10 @@ export function GuidedTour({
   let scrolled=false;
 
   const locate=()=>{
+   // A central de ajuda atual usa estados internos, nao rotas separadas.
+   if(step.target==='support-page'||step.target==='feedback'||step.target==='feedback-message'||step.target==='feedback-send'){
+    window.dispatchEvent(new CustomEvent('fio-tour-target',{detail:{target:step.target}}));
+   }
    if(
     step.target==='support-page'
    ){

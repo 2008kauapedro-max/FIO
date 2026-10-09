@@ -5,7 +5,7 @@ import { clientContext,rememberClientShop } from './lib/client-context';
 import { explicitClientSlug } from './lib/branding-scope';
 import { useCallback,useEffect,useRef,useState,lazy,Suspense,type CSSProperties } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
-import { LayoutDashboard,CalendarDays,Bell,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,Images,Megaphone,Sun,Moon,Crown,CircleHelp,Settings,MoreHorizontal,Power,Plus,Trash2 } from 'lucide-react';
+import {LayoutDashboard,CalendarDays,Bell,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,Images,Megaphone,Sun,Moon,Crown,CircleHelp,Settings,MoreHorizontal,Power,Plus,Trash2,CheckCircle2} from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { Bootstrap,Membership,Notification,Role } from '../shared/domain';
 import { planAllows,type FioFeature } from '../shared/entitlements';
@@ -579,10 +579,7 @@ export default function App(){
     ?t('app.noticeErrorTitle')
     :t('app.noticeInfoTitle');
 
- const toastLogo=storageLogo(
-  data.shop.logo_url,
-  data.shop.logo_asset_path
- );
+ const toastLogo=toastIsBooking?'/FIOlogo/FIObranco.png':null;
 
  const toastAccent=
   data.shop.custom_accent||
@@ -660,7 +657,7 @@ export default function App(){
       ?<img src={toastLogo} alt=""/>
       :toastIsBooking
        ?<CalendarDays size={22}/>
-       :<Scissors size={21}/>
+       :<CheckCircle2 size={21}/>
      }
     </span>
 

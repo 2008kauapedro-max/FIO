@@ -45,6 +45,15 @@ function displayAmount(cents:number|null,currency:string|null){
 export function FioSupport(p:WorkspaceProps){
  const owner=p.data.membership.role==='OWNER';
  const [view,setView]=useState<View>('home');
+ useEffect(()=>{
+  const onTourTarget=(event:Event)=>{
+   const target=(event as CustomEvent<{target?:string}>).detail?.target;
+   if(target==='support-page'||target==='feedback')setView('home');
+   if(target==='feedback-message'||target==='feedback-send')setView('message');
+  };
+  window.addEventListener('fio-tour-target',onTourTarget);
+  return()=>window.removeEventListener('fio-tour-target',onTourTarget);
+ },[]);
  const [query,setQuery]=useState('');
  const [opened,setOpened]=useState<number|null>(null);
  const [topic,setTopic]=useState<Topic>('question');
@@ -146,7 +155,7 @@ export function FioSupport(p:WorkspaceProps){
 
    <section className="fio-help-actions" aria-label="Entrar em contato">
     <div><MessageSquareText size={21}/><div><h2>Não encontrou sua resposta?</h2><p>Problemas, dúvidas e sugestões em um único formulário.</p></div></div>
-    <button type="button" className="fio-help-primary" onClick={()=>go('message')}>Enviar mensagem <ArrowRight size={17}/></button>
+    <button data-tour="feedback" type="button" className="fio-help-primary" onClick={()=>go('message')}>Enviar mensagem <ArrowRight size={17}/></button>
    </section>
    {owner&&<section className="fio-help-billing"><CreditCard size={20}/><div><h2>Pagamentos e reembolso</h2><p>Veja a regra dos 7 dias, cancele renovações e consulte sua cobrança Stripe.</p></div><button type="button" onClick={()=>go('refund')}>Ver opções <ArrowRight size={16}/></button></section>}
    <div className="fio-help-links"><Link to="/termos"><FileText size={15}/> Termos de uso</Link><Link to="/privacidade"><ShieldCheck size={15}/> Privacidade</Link><button type="button" onClick={()=>window.dispatchEvent(new Event('fio-tour-restart'))}><CircleHelp size={15}/> Rever tutorial</button></div>
