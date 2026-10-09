@@ -12,6 +12,7 @@ import { ArrowUpRight,ArrowLeft,ChevronLeft,ChevronRight,Plus,Scissors,Clock3,Us
 import type { Bootstrap,Appointment,Service } from '../../shared/domain';
 import { money } from '../../shared/domain';
 import { fioPlanPublicName } from '../../shared/fio-plans';
+import { historyToCsv,type HistoryAppointment } from '../lib/appointment-history';
 import { api,supabase } from '../lib/api';
 import { optimizeImage } from '../lib/images';
 import { QRCodeSVG } from 'qrcode.react';
@@ -840,6 +841,13 @@ function StaffAgenda(p:WorkspaceProps){
  const [manualRefreshing,setManualRefreshing]=useState(false);
  const [reloadKey,setReloadKey]=useState(0);
  const [agendaView,setAgendaView]=useState<'today'|'done'|'calendar'>('today');
+ const [historyMonth,setHistoryMonth]=useState(()=>dayKey(new Date().toISOString(),zone).slice(0,7));
+ const [historyItems,setHistoryItems]=useState<HistoryAppointment[]>([]);
+ const [historyTotal,setHistoryTotal]=useState(0);
+ const [historyLoading,setHistoryLoading]=useState(false);
+ const [historyError,setHistoryError]=useState('');
+ const [historyOffset,setHistoryOffset]=useState(0);
+ const [historyRetry,setHistoryRetry]=useState(0);
  const [agendaSwipeStart,setAgendaSwipeStart]=useState<number|null>(null);
 
 
@@ -929,6 +937,34 @@ function StaffAgenda(p:WorkspaceProps){
   linkOpened,
   routeLocation.search
  ]);
+
+ useEffect(()=>{
+  if(agendaView!=='done')return;
+  let alive=true;
+  setHistoryLoading(true);
+  setHistoryError('');
+  if(historyOffset===0)setHistoryItems([]);
+  const query=`/appointments/history?month=${encodeURIComponent(historyMonth)}&offset=${historyOffset}`;
+  void (p.demo
+   ?Promise.resolve({items:data.appointments.filter(a=>dayKey(a.starts_at,zone).slice(0,7)===historyMonth).sort((a,b)=>Date.parse(b.starts_at)-Date.parse(a.starts_at)).slice(historyOffset,historyOffset+100).map(a=>({...a,customer_name:data.customers.find(c=>c.id===a.client_id)?.name??'Cliente',service_name:data.services.find(s=>s.id===a.service_id)?.name??'Serviço'})),total:data.appointments.filter(a=>dayKey(a.starts_at,zone).slice(0,7)===historyMonth).length})
+   :api<{items:HistoryAppointment[];total:number}>(query,data.shop.id))
+   .then(result=>{
+    if(!alive)return;
+    setHistoryTotal(result.total);
+    setHistoryItems(previous=>historyOffset===0?result.items:[...previous,...result.items]);
+   }).catch(error=>{if(alive)setHistoryError(error instanceof Error?error.message:'Não foi possível consultar o histórico.');})
+   .finally(()=>{if(alive)setHistoryLoading(false);});
+  return()=>{alive=false;};
+ },[agendaView,historyMonth,historyOffset,data.shop.id,p.demo,reloadKey,historyRetry]);
+
+ const exportHistoryCsv=()=>{
+  const csv=historyToCsv(historyItems,zone);
+  const blob=new Blob(['\uFEFF',csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const anchor=document.createElement('a');anchor.href=url;anchor.download=`fio-historico-${historyMonth}.csv`;
+  document.body.appendChild(anchor);anchor.click();anchor.remove();
+  window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+ };
 
  const activeAppointments=daily.filter(a=>
   ['scheduled','confirmed','in_service']
@@ -1129,7 +1165,7 @@ function StaffAgenda(p:WorkspaceProps){
 
    <nav className="simple-agenda-tabs simple-agenda-tabs-top" aria-label={t('agendaSimple.navigation')}>
     <button type="button" className={agendaView==='today'?'active':''} onClick={()=>{setAgendaView('today');setDate(dayKey(new Date().toISOString(),zone));}}>{t('agendaSimple.today')}</button>
-    <button type="button" className={agendaView==='done'?'active':''} onClick={()=>setAgendaView('done')}>{t('agendaSimple.done')}</button>
+    <button type="button" className={agendaView==='done'?'active':''} onClick={()=>{setDate(dayKey(new Date().toISOString(),zone));setAgendaView('done');}}>{t('agendaSimple.done')}</button>
     <button type="button" className={agendaView==='calendar'?'active':''} onClick={()=>setAgendaView('calendar')}>{t('agendaSimple.appointments')}</button>
    </nav>
 
@@ -1160,7 +1196,7 @@ function StaffAgenda(p:WorkspaceProps){
 
    {agendaView==='done'&&<>
     <div className="simple-agenda-list">
-     {data.appointments.filter(a=>a.status==='completed').sort((a,b)=>Date.parse(b.starts_at)-Date.parse(a.starts_at)).slice(0,30).map(a=>{
+     {daily.filter(a=>a.status==='completed').sort((a,b)=>Date.parse(b.starts_at)-Date.parse(a.starts_at)).map(a=>{
       const customer=data.customers.find(c=>c.id===a.client_id);
       const service=data.services.find(s=>s.id===a.service_id);
       const day=dayKey(a.starts_at,zone);
@@ -1182,6 +1218,34 @@ function StaffAgenda(p:WorkspaceProps){
      })}
     </div>
    </>}
+
+   {agendaView==='done'&&<section className="fio-history-panel" aria-label="Histórico mensal">
+    <header className="fio-history-heading">
+     <div><strong>Histórico salvo</strong><small>Atendimentos de outros dias continuam no banco, fora da agenda de hoje.</small></div>
+     <label>Mês <input type="month" value={historyMonth} onChange={e=>{if(/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)){setHistoryMonth(e.target.value);setHistoryOffset(0);}}}/></label>
+    </header>
+    <div className="fio-history-actions">
+     <span>{historyTotal} agendamento(s) no período</span>
+     <button type="button" disabled={!historyItems.length||historyLoading||historyItems.length<historyTotal} onClick={exportHistoryCsv}><Download size={15}/> Baixar dados</button>
+     <button type="button" disabled={!historyItems.length||historyLoading||historyItems.length<historyTotal} onClick={()=>window.print()}><FileText size={15}/> Salvar PDF</button>
+    </div>
+    {historyLoading&&<p role="status">Carregando histórico…</p>}
+    {historyError&&<p role="alert">{historyError} <button type="button" onClick={()=>setHistoryRetry(v=>v+1)}>Tentar novamente</button></p>}
+    {!historyLoading&&!historyError&&!historyItems.length&&<p>Nenhum agendamento registrado neste mês.</p>}
+    <div className="fio-history-list">{historyItems.map(item=><article key={item.id}>
+     <strong>{formatDate(item.starts_at,{timeZone:zone,day:'2-digit',month:'2-digit'})} · {formatTime(item.starts_at,{timeZone:zone})}</strong>
+     <span>{item.customer_name} · {item.service_name}</span>
+     <small>{statusLabels[item.status]} · {formatCurrency(item.price_cents/100,'BRL')}</small>
+    </article>)}</div>
+    {historyItems.length<historyTotal&&<button className="fio-history-more" type="button" disabled={historyLoading} onClick={()=>setHistoryOffset(v=>v+100)}>Carregar mais registros ({historyItems.length}/{historyTotal})</button>}
+    {historyItems.length<historyTotal&&<p className="fio-history-tip">Carregue todos os registros deste mês antes de exportar.</p>}
+    <section className="fio-history-print-area" aria-hidden="true">
+     <h1>FIO · Histórico de agendamentos</h1><p>{data.shop.name} — {historyMonth}</p>
+     <table><thead><tr><th>Data e hora</th><th>Cliente</th><th>Serviço</th><th>Situação</th><th>Valor</th></tr></thead><tbody>
+      {historyItems.map(item=><tr key={item.id}><td>{formatDate(item.starts_at,{timeZone:zone})} {formatTime(item.starts_at,{timeZone:zone})}</td><td>{item.customer_name}</td><td>{item.service_name}</td><td>{statusLabels[item.status]}</td><td>{formatCurrency(item.price_cents/100,'BRL')}</td></tr>)}
+     </tbody></table>
+    </section>
+   </section>}
 
    {agendaView==='calendar'&&<>
     <AgendaMonthCalendar

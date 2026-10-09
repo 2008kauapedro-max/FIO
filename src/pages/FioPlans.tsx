@@ -276,6 +276,14 @@ export function FioPlans(p:WorkspaceProps){
 
  const compactFeatures=useMemo(()=>{
   if(planDefinition.code==='FREE'){
+   if(soloMode)return [
+    'Um barbeiro: você, sem funcionários',
+    translatedItem(0,0),
+    translatedItem(0,2),
+    translatedItem(1,0),
+    translatedItem(1,1),
+    translatedItem(2,0)
+   ];
    return [
     translatedItem(0,0),
     translatedItem(0,1),
@@ -318,29 +326,6 @@ export function FioPlans(p:WorkspaceProps){
   if(busy)return;
   resetCheckout();
   setScreen('plans');
- }
-
- async function startTrial(){
-  if(busy)return;
-
-  setBusy(true);
-  setCheckoutError('');
-
-  try{
-   await api(
-    '/saas/trial',
-    p.data.shop.id,
-    {confirmed:true}
-   );
-
-   await p.refresh();
-   p.notify(t('fp.trialStarted'));
-   setSelectedPlan(primaryPaid);
-  }catch(error){
-   p.notify(checkoutMessage(error));
-  }finally{
-   setBusy(false);
-  }
  }
 
  function choosePaid(code:PaidPlan){
@@ -1356,7 +1341,7 @@ export function FioPlans(p:WorkspaceProps){
 
    <div className="fio-payflow-badges">
     {annualSaving>0&&<span>Economia de {amount(annualSaving)}/ano</span>}
-    {selectedPlan===primaryPaid&&!trialUsed&&<span className="trial"><Gift size={13}/>14 dias grátis</span>}
+    {selectedPlan===primaryPaid&&!trialUsed&&<span className="trial"><Gift size={13}/>Teste de 14 dias · aguardando autorização de cobrança</span>}
    </div>
 
    <div className="fio-payflow-features">
@@ -1401,9 +1386,10 @@ export function FioPlans(p:WorkspaceProps){
    }
 
    {selectedPlan===primaryPaid&&!trialUsed&&p.data.plan==='FREE'&&!billingLocked&&
-    <button className="fio-payflow-trial" disabled={busy} onClick={()=>void startTrial()}>
-     {t('fp.trialCta',{plan:displayName(selectedPlan)})}
-    </button>
+    <p className="fio-trial-provider-note" role="status">
+     O teste de 14 dias com renovação automática requer autorização prévia de cartão ou Pix Automático.
+     Estamos aguardando a habilitação da SyncPay; não será ativado um teste com cobrança futura sem seu consentimento.
+    </p>
    }
   </div>
  </section>;

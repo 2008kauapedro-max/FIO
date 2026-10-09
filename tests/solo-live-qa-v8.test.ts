@@ -106,7 +106,8 @@ describe('SOLO live QA V8',()=>{
   expect(plans).not.toContain('Pix · ativa assim que o pagamento for confirmado');
   expect(plans).toContain('fio-payflow-plan-controls');
   expect(plans).toContain('fio-payflow-plan-scroll');
-  expect(plans).toContain("t('fp.trialCta'");
+  expect(plans).toContain('fio-trial-provider-note');
+  expect(plans).not.toContain("t('fp.trialCta'");
   expect(css).toContain('grid-template-rows:auto minmax(0,1fr) auto');
  });
 

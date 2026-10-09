@@ -449,7 +449,9 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.get('/api/bootstrap',async(_req,res)=>res.json(await bootstrap(ctx(res))));
  app.post('/api/saas/trial',rateLimitByUser('trial',3_600_000,3),async(req,res)=>{
   const c=ctx(res);requireOwner(c);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
-  const r=await c.db.rpc('start_saas_pro_trial',{p_shop:c.shopId});dbError(r.error);res.status(201).json({trialEndsAt:r.data});
+  // A SyncPay ainda nao confirmou um checkout com autorizacao de cobranca apos 14 dias.
+  // Nao habilitar renovacao silenciosa nem iniciar trial sem o mandato aceito.
+  throw new ApiError(503,'TRIAL_PAYMENT_AUTH_REQUIRED','O teste com renovação automática depende da habilitação de cartão recorrente ou Pix Automático. Nenhuma cobrança será realizada sem sua autorização.');
  });
  app.post('/api/saas/stripe/checkout',rateLimitByUser('stripe-checkout',600_000,6),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await createStripeCheckoutSession(c,req.body));
@@ -602,6 +604,48 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.get('/api/appointments/period',async(req,res)=>{
   const c=ctx(res),v=z.object({from:z.iso.date(),to:z.iso.date(),barberId:z.uuid().optional()}).parse(req.query);
   const r=await c.db.rpc('appointment_period',{p_shop:c.shopId,p_from:v.from,p_to:v.to,p_barber:v.barberId??null});dbError(r.error);res.json(r.data);
+ });
+ // Histórico paginado: apenas proprietário e profissionais da própria barbearia.
+ // Nunca excluir registros antigos só para deixar a agenda leve.
+ app.get('/api/appointments/history',rateLimitByUser('appointment-history',60_000,30),async(req,res)=>{
+  const c=ctx(res);
+  if(!['OWNER','BARBER'].includes(c.member.role))throw new ApiError(403,'FORBIDDEN','Histórico disponível apenas para o profissional.');
+  const input=z.object({month:z.string().regex(/^(20\d{2})-(0[1-9]|1[0-2])$/),offset:z.coerce.number().int().min(0).max(50000).default(0)}).strict().parse(req.query);
+  const shop=await c.db.from('barbershops').select('timezone').eq('id',c.shopId).single();dbError(shop.error);
+  const zone=shop.data?.timezone||'America/Sao_Paulo';
+  const [year,month]=input.month.split('-').map(Number);
+  // A meia-noite da barbearia, inclusive em fusos diferentes de UTC.
+  const localMidnight=(y:number,m:number)=>{
+   const naive=Date.UTC(y,m-1,1);
+   let value=naive;
+   for(let i=0;i<3;i++){
+    const parts=new Intl.DateTimeFormat('en-US',{timeZone:zone,timeZoneName:'shortOffset'}).formatToParts(new Date(value));
+    const raw=parts.find(part=>part.type==='timeZoneName')?.value||'GMT';
+    const match=raw.match(/^GMT([+-])(\d{1,2})(?::(\d{2}))?$/);
+    const mins=match?(match[1]==='-'?-1:1)*(Number(match[2])*60+Number(match[3]||0)):0;
+    value=naive-mins*60000;
+   }
+   return new Date(value).toISOString();
+  };
+  let query=c.db.from('appointments')
+   .select('id,client_id,barber_id,service_id,starts_at,ends_at,status,price_cents,subscription_id',{count:'exact'})
+   .eq('barbershop_id',c.shopId)
+   .gte('starts_at',localMidnight(year,month))
+   .lt('starts_at',localMidnight(year,month+1));
+  if(c.member.role==='BARBER')query=query.eq('barber_id',c.userId);
+  const page=await query.order('starts_at',{ascending:false}).order('id',{ascending:false}).range(input.offset,input.offset+99);
+  dbError(page.error);
+  const appointments=page.data??[];
+  const clientIds=[...new Set(appointments.map(a=>a.client_id).filter(Boolean))];
+  const serviceIds=[...new Set(appointments.map(a=>a.service_id).filter(Boolean))];
+  const [clients,services]=await Promise.all([
+   clientIds.length?c.db.from('customers').select('id,name').eq('barbershop_id',c.shopId).in('id',clientIds):Promise.resolve({data:[],error:null}),
+   serviceIds.length?c.db.from('services').select('id,name').eq('barbershop_id',c.shopId).in('id',serviceIds):Promise.resolve({data:[],error:null})
+  ]);
+  dbError(clients.error);dbError(services.error);
+  const clientNames=new Map((clients.data??[]).map(item=>[item.id,item.name]));
+  const serviceNames=new Map((services.data??[]).map(item=>[item.id,item.name]));
+  res.json({total:page.count??0,items:appointments.map(a=>({...a,customer_name:clientNames.get(a.client_id)??'Cliente',service_name:serviceNames.get(a.service_id)??'Serviço'}))});
  });
  app.post('/api/appointments/:id/reschedule',rateLimitByUser('appointment-reschedule',60_000,20),async(req,res)=>{
   const c=ctx(res),id=z.uuid().parse(req.params.id),v=z.object({startsAt:z.iso.datetime({offset:true}),confirmed:z.literal(true)}).strict().parse(req.body);

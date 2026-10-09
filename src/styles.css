@@ -5928,3 +5928,24 @@ body:has(.workspace),
 :root[data-theme='light'] .auth-page .auth-footer {color:#54544f}
 :root[data-theme='light'] .auth-page .auth-card :is(input,select,textarea):focus-visible {outline:2px solid #363632!important;outline-offset:2px!important}
 .fio-sidebar-official-logo {object-fit:contain!important;padding:3px;}
+
+/* Histórico desacoplado da lista de agenda diária — SOLO e equipe. */
+.fio-history-panel{margin:22px 0 4px;padding:16px;border:1px solid var(--border,#333);border-radius:14px;background:var(--surface,#151515);color:inherit}
+.fio-history-heading{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.fio-history-heading>div{display:grid;gap:5px}.fio-history-heading small,.fio-history-tip{font-size:.73rem;opacity:.75}
+.fio-history-heading label{display:flex;gap:8px;align-items:center;font-size:.78rem}
+.fio-history-heading input{background:var(--input-bg,#232323);color:inherit;border:1px solid #7776;border-radius:8px;padding:8px;max-width:165px}
+.fio-history-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0}.fio-history-actions span{font-size:.73rem;opacity:.78;margin-right:auto}
+.fio-history-actions button,.fio-history-more{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid #7776;border-radius:9px;padding:9px 12px;background:transparent;color:inherit;font-size:.75rem}
+.fio-history-actions button:disabled,.fio-history-more:disabled{opacity:.38;cursor:not-allowed}
+.fio-history-list{display:grid;gap:7px;max-height:340px;overflow:auto}.fio-history-list article{display:grid;gap:4px;background:#8881;border-radius:9px;padding:11px 12px;font-size:.78rem}.fio-history-list article small{opacity:.7}
+.fio-history-more{width:100%;margin-top:11px}.fio-history-print-area{display:none}
+.fio-trial-provider-note{font-size:.76rem;line-height:1.5;padding:12px;border-radius:9px;border:1px solid #9995;color:inherit;opacity:.9}
+@media print{
+  @page{size:A4 portrait;margin:14mm}
+  body *{visibility:hidden!important}
+  .fio-history-print-area,.fio-history-print-area *{visibility:visible!important}
+  .fio-history-print-area{display:block!important;position:absolute;top:0;left:0;width:100%;color:#111!important;background:#fff!important;font:10pt Arial,sans-serif}
+  .fio-history-print-area h1{font-size:16pt;margin-bottom:4px}.fio-history-print-area table{width:100%;border-collapse:collapse}
+  .fio-history-print-area td,.fio-history-print-area th{padding:7px 5px;border-bottom:1px solid #bbb;text-align:left;word-break:break-word}
+}
