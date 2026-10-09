@@ -142,7 +142,11 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    query.set('audience',audience||'owner');
    if(shop)query.set('shop',shop);
    const redirectTo=`${window.location.origin}/login${query.toString()?`?${query.toString()}`:''}`;
-   try{localStorage.setItem('fio-tour:google-signup-started',String(Date.now()));}catch{}
+   try{
+    localStorage.setItem('fio-tour:google-signup-started',String(Date.now()));
+    sessionStorage.setItem('fio-google-audience',audience||'owner');
+    if(shop)sessionStorage.setItem('fio-google-shop',shop);
+   }catch{}
    const result=await supabase.auth.signInWithOAuth({provider:'google',options:{redirectTo,queryParams:{prompt:'select_account'}}});
    if(result.error)throw result.error;
   }catch{setMessage(t('auth.googleOpenFailed'));setBusy(false);}

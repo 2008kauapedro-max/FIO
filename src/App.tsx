@@ -13,6 +13,7 @@ import { planBadgeLabel } from './lib/plan-presentation';
 import { roleHome } from '../shared/domain';
 import { api,supabase } from './lib/api';
 import { AuthPage,EmailConfirmationPage,Onboarding } from './pages/Auth';
+import {GoogleAccountSetup} from './components/GoogleAccountSetup';
 import { Agenda,Customers,Dashboard,Services,Settings as SettingsPage,Subscriptions,Team,type WorkspaceProps } from './pages/Workspace';
 import { FioSupport } from './pages/FioSupport';
 import { AssistantChat } from './components/AssistantChat';
@@ -499,6 +500,10 @@ export default function App(){
  }
  if(error)return <div className="full-error"><h1>{t('app.openFailed')}</h1><p role="alert">{error}</p><button className="primary" onClick={()=>{setError('');void loadMemberships().then(refresh).catch(e=>setError(e.message));}}>{t('app.tryAgain')}</button><button className="secondary" onClick={()=>void supabase?.auth.signOut({scope:'local'})}>{t('app.switchAccount')}</button><Link to="/login">{t('app.backToAccess')}</Link></div>;
  if(!demo&&memberships===null)return <AppLoading/>;
+ if(!demo&&session&&memberships?.length===0&&
+    session.user.app_metadata?.provider==='google'&&
+    session.user.user_metadata?.fio_google_setup_completed!==true)
+  return <GoogleAccountSetup session={session}/>;
  if(!demo&&(memberships?.length===0||Boolean(onboardingShopId)||clientJoinPending))return <Onboarding shopId={onboardingShopId||undefined} requireClientPassword={Boolean(clientJoinPending&&memberships?.length===0)} onDone={()=>void loadMemberships()}/>;
  if(!data)return <AppLoading/>;
  if(location.pathname==='/')return <Navigate replace to={roleHome(data.membership.role)+location.search}/>;
