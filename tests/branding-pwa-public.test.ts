@@ -12,7 +12,7 @@ describe('branding público e PWA por barbearia',()=>{
   expect(bootstrap).toContain('/api/public/manifest/');
   expect(bootstrap).toContain('audience');
   expect(bootstrap).toContain('shop');
-  expect(app).toContain('isPlatform||isPublicPortal');
+  expect(app).toContain('if(isPublicPortal)return;');
  });
 
  it('não reutiliza branding público antigo depois de salvar',()=>{

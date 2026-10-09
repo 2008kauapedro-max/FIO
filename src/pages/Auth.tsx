@@ -365,7 +365,7 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
  }
 
  return <div className="auth-page auth-page--login">
-  {shop?<ShopIdentity slug={shop}/>:<Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>}
+  {audience==='client'&&shop?<ShopIdentity slug={shop}/>:<Link className="auth-logo" to="/"><img src="/FIOlogo/FIObranco.png" alt="FIO"/></Link>}
 
   <div className="auth-card auth-card--login">
    <p className="eyebrow">{reset?t('auth.recoveryEyebrow'):audience==='client'?t('auth.clientEyebrow'):(audience==='owner'||!audience)?(mode==='signup'?t('auth.createShopEyebrow'):t('auth.shopEyebrow')):t('auth.welcomeEyebrow')}</p>

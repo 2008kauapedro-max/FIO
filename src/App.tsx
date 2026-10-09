@@ -2,6 +2,7 @@ import { useI18n } from './i18n';
 import { loadLocalePreferences,saveLocalePreferences } from './i18n/supabaseLocale';
 import {appointmentLink} from './lib/appointment-link';
 import { clientContext,rememberClientShop } from './lib/client-context';
+import { explicitClientSlug } from './lib/branding-scope';
 import { useCallback,useEffect,useRef,useState,lazy,Suspense,type CSSProperties } from 'react';
 import { Link,NavLink,Navigate,useLocation,useNavigate } from 'react-router-dom';
 import { LayoutDashboard,CalendarDays,Bell,Sparkles,Users,Scissors,UserRound,Wallet,LogOut,Menu,X,Images,Megaphone,Sun,Moon,Crown,CircleHelp,Settings,MoreHorizontal,Power,Plus,Trash2 } from 'lucide-react';
@@ -112,26 +113,10 @@ function cacheLoadingBrand(brand:LoadingBrand){
 }
 
 function currentLoadingBrand():LoadingBrand|null{
- const brands=readLoadingBrands();
- const pathname=window.location.pathname;
- const params=new URLSearchParams(window.location.search);
- const pathSlug=pathname.match(/^\/(?:b\/|barbearia\/)?([a-z0-9-]{3,60})\/?$/)?.[1]??'';
- const reserved=new Set(['login','owner','barber','client','platform','acesso','termos','privacidade','cancelamento-e-reembolso','condicoes-de-pagamento','pix-automatico','cartao-e-parcelamento','direitos-do-cliente','reset-password','confirm-email']);
- const requested=pathSlug&&!reserved.has(pathSlug)
-  ?pathSlug
-  :params.get('shop')||(
-   pathname.startsWith('/client')||
-   (pathname==='/login'&&params.get('audience')==='client')
-    ?clientContext(pathname,window.location.search):''
-  );
- if(requested)return Object.values(brands).find(b=>b.slug===requested)??null;
- const staff=pathname.startsWith('/owner')||pathname.startsWith('/barber')||
-  (pathname==='/login'&&params.get('audience')!=='client');
- if(!staff)return null;
- try{
-  const id=sessionStorage.getItem('fio-shop');
-  return id?brands[id]??null:null;
- }catch{return null;}
+ // Nunca herdar a última barbearia ao abrir o painel do FIO ou o login profissional.
+ const slug=explicitClientSlug(window.location.pathname,window.location.search);
+ if(!slug)return null;
+ return Object.values(readLoadingBrands()).find(brand=>brand.slug===slug)??null;
 }
 
 function AppLoading(){
@@ -173,39 +158,14 @@ function AppLoading(){
   role="status"
   aria-label={t('app.loadingAria')}
  >
-  {platform
-   ?<img
-     className="fio-loading-brand-logo is-fio"
-     src="/FIOlogo/FIObranco.png"
-     alt="FIO"
-    />
-   :brand?.logo
-    ?<img
-      className="fio-loading-brand-logo"
-      src={brand.logo}
-      alt={brand.name}
-     />
-    :<span
-      className="fio-loading-brand-placeholder"
-      aria-hidden="true"
-     >
-      {brand?.name
-       ?.split(' ')
-       .filter(Boolean)
-       .map(part=>part[0])
-       .slice(0,2)
-       .join('')
-       .toUpperCase()||''
-      }
-     </span>
+  {brand?.logo&&!platform
+   ?<img className="fio-loading-brand-logo" src={brand.logo} alt={brand.name}/>
+   :<img className="fio-loading-brand-logo is-fio" src="/FIOlogo/FIObranco.png" alt="FIO"/>
   }
 
   <div className="fio-loading-copy">
    <strong>
-    {brand?.name&&!platform
-     ?brand.name
-     :t('ui.loading')
-    }
+    {brand?.name&&!platform ?brand.name:'FIO'}
    </strong>
 
    <span>{t('ui.loading')}</span>
@@ -324,6 +284,7 @@ export default function App(){
 
    if(!brand)continue;
 
+   if(membership.role!=='CLIENT')continue;
    cacheLoadingBrand({
     shopId:brand.id,
     slug:brand.slug,
@@ -397,13 +358,33 @@ export default function App(){
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),6000);return()=>clearTimeout(timer);},[toast]);
  useEffect(()=>{if(data?.membership.role==='CLIENT')rememberClientShop(data.shop.slug);},[data?.membership.role,data?.shop.slug]);
  useEffect(()=>{
+  // O ícone do FIO pertence à gestão; apenas cliente com loja identificada usa a marca da barbearia.
+  if(isPublicPortal)return; // O mini site controla sua própria identidade.
   const manifest=document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-  if(!manifest||!data||isPlatform||isPublicPortal)return;
-  manifest.href=data.membership.role==='OWNER'?'/manifest-owner.webmanifest':data.membership.role==='BARBER'?'/manifest-staff.webmanifest':`/api/public/manifest/${encodeURIComponent(data.shop.slug)}?v=client-brand-v2`;
- },[data?.membership.role,data?.shop.slug,isPlatform,isPublicPortal]);
+  const params=new URLSearchParams(location.search);
+  const audience=params.get('audience');
+  const publicSlug=explicitClientSlug(location.pathname,location.search);
+  const clientAccount=data?.membership.role==='CLIENT'&&!location.pathname.startsWith('/login');
+  const clientSlug=publicSlug||(clientAccount?data?.shop.slug:null);
+  const href=clientSlug
+   ?`/api/public/manifest/${encodeURIComponent(clientSlug)}?v=client-brand-v3`
+   :isPlatform?'/manifest-platform.webmanifest'
+   :location.pathname.startsWith('/barber')||audience==='staff'?'/manifest-staff.webmanifest'
+   :location.pathname.startsWith('/owner')||audience==='owner'?'/manifest-owner.webmanifest'
+   :'/manifest.webmanifest';
+  if(manifest)manifest.href=href;
+  const icon=clientAccount&&data?storageLogo(data.shop.logo_url,data.shop.logo_asset_path):'';
+  for(const rel of ['icon','apple-touch-icon'] as const){
+   const link=document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
+   if(link&&!publicSlug)link.href=icon||'/icons/icon-192.png';
+  }
+  const appleTitle=document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]');
+  if(appleTitle&&!publicSlug)appleTitle.content=clientAccount&&data?(data.shop.public_title||data.shop.name):'FIO';
+  if(!publicSlug)document.title=clientAccount&&data?(data.shop.public_title||data.shop.name):'FIO · Sua barbearia, em sintonia';
+ },[location.pathname,location.search,data?.membership.role,data?.shop.slug,data?.shop.logo_url,data?.shop.logo_asset_path,data?.shop.name,data?.shop.public_title,isPlatform,isPublicPortal]);
 
  useEffect(()=>{
-  if(!data?.shop.id)return;
+  if(!data?.shop.id||data.membership.role!=='CLIENT')return;
 
   cacheLoadingBrand({
    shopId:data.shop.id,
@@ -615,11 +596,13 @@ export default function App(){
    <div className="sidebar-brand sidebar-shop-brand">
     <Link to={base} className="sidebar-shop-link" aria-label={t('app.openShop',{name:data.shop.name})}>
      <span className="sidebar-shop-logo">
-      {data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={18}/>}
+      {role==='CLIENT'
+       ?(data.shop.logo_url?<img src={data.shop.logo_url} alt=""/>:<Scissors size={18}/> )
+       :<img className="fio-sidebar-official-logo" src={theme==='dark'?'/FIOlogo/FIObranco.png':'/FIOlogo/FIOpreto.png'} alt="FIO"/>}
      </span>
      <span className="sidebar-shop-copy">
-      <strong>{data.shop.public_title||data.shop.name}</strong>
-      <small>{role==='OWNER'?(solo?t('role.fioSolo'):t('role.fioManagement')):role==='BARBER'?t('role.fioTeam'):t('role.clientArea')}</small>
+      <strong>{role==='CLIENT'?(data.shop.public_title||data.shop.name):'FIO'}</strong>
+      <small>{role==='CLIENT'?t('role.clientArea'):(data.shop.public_title||data.shop.name)}</small>
      </span>
     </Link>
     <button className="icon-button close-menu" aria-label={t('app.closeNavigation')} onClick={()=>setMenu(false)}><X size={20}/></button>

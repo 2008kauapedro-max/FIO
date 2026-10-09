@@ -5889,3 +5889,42 @@ body:has(.workspace),
  color:var(--text);
  filter:drop-shadow(0 0 5px color-mix(in srgb,var(--text) 45%,transparent));
 }
+
+/* FIO BRAND ISOLATION v3: light login has readable, non-white inputs and autofill. */
+:root[data-theme='light'] .auth-page {
+ color-scheme:light!important;
+ color:#171717!important;
+ background:#f5f5f2!important;
+ background-image:linear-gradient(#f5f5f2e8,#f5f5f2ef),url('/Textura/fiopretofundobranco.png')!important;
+}
+:root[data-theme='light'] .auth-page .auth-card {
+ background:#fff!important;
+ color:#151515!important;
+ border:1px solid #d9d9d3!important;
+ box-shadow:0 24px 66px #18181817!important;
+}
+:root[data-theme='light'] .auth-page .auth-card :is(input:not([type='checkbox']),select,textarea) {
+ background:#ebebe7!important;
+ color:#151515!important;
+ -webkit-text-fill-color:#151515!important;
+ caret-color:#151515!important;
+ border:1px solid #acaca6!important;
+ color-scheme:light!important;
+}
+:root[data-theme='light'] .auth-page .auth-card input::placeholder {color:#5f5f59!important;opacity:1}
+:root[data-theme='light'] .auth-page .auth-card input:-webkit-autofill,
+:root[data-theme='light'] .auth-page .auth-card input:-webkit-autofill:hover,
+:root[data-theme='light'] .auth-page .auth-card input:-webkit-autofill:focus {
+ box-shadow:0 0 0 100px #ebebe7 inset!important;
+ -webkit-box-shadow:0 0 0 100px #ebebe7 inset!important;
+ -webkit-text-fill-color:#151515!important;
+}
+:root[data-theme='light'] .auth-page .auth-card :is(.field,.eyebrow,.muted,.auth-options,.text-button,.remember-session) {color:#52524d!important}
+:root[data-theme='light'] .auth-page .auth-card h1 {color:#151515!important}
+:root[data-theme='light'] .auth-page .auth-card .primary {background:#111!important;color:#fff!important}
+:root[data-theme='light'] .auth-page .auth-card .secondary {background:#f0f0ed!important;color:#111!important}
+:root[data-theme='light'] .auth-page .auth-card .oauth-button {background:#f5f5f2!important;color:#111!important;border-color:#cfcfca!important}
+:root[data-theme='light'] .auth-page .auth-logo img {filter:brightness(0)}
+:root[data-theme='light'] .auth-page .auth-footer {color:#54544f}
+:root[data-theme='light'] .auth-page .auth-card :is(input,select,textarea):focus-visible {outline:2px solid #363632!important;outline-offset:2px!important}
+.fio-sidebar-official-logo {object-fit:contain!important;padding:3px;}

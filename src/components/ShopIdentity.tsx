@@ -68,6 +68,18 @@ export function ShopIdentity({slug}:{slug:string}){
    .catch(()=>undefined);
   return()=>{active=false;controller.abort();};
  },[slug]);
+ // O login do CLIENTE usa o ícone da loja do link atual, nunca a última loja visitada.
+ useEffect(()=>{
+  const icon=shop?.logo_url||'/icons/icon-192.png';
+  for(const rel of ['icon','apple-touch-icon'] as const){
+   const link=document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
+   if(link)link.href=icon;
+  }
+  const title=shop?.public_title||shop?.name||'FIO';
+  const appleTitle=document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]');
+  if(appleTitle)appleTitle.content=title;
+  document.title=title==='FIO'?'FIO · Sua barbearia, em sintonia':title;
+ },[shop?.logo_url,shop?.public_title,shop?.name,slug]);
  return <Link className="client-auth-brand" to={`/${encodeURIComponent(slug)}`}>
   {shop?.logo_url?<img src={shop.logo_url} alt=""/>:<Scissors aria-hidden="true"/>}
   <span><strong>{shop?.public_title||shop?.name||t('shopIdentity.default')}</strong><small>{t('shopIdentity.clientArea')}</small></span>

@@ -882,10 +882,16 @@ export function FioPlans(p:WorkspaceProps){
       {syncpayCardConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='sync-card'} disabled={cycle!=='monthly'} className={paymentMethod==='sync-card'?'active':''} onClick={()=>setPaymentMethod('sync-card')}>
        <CreditCard size={18}/><span><strong>Cartão SyncPay</strong><small>Assinatura mensal recorrente</small></span>
       </button>}
+      {!syncpayCardConfigured&&<button type="button" role="radio" aria-checked={false} disabled title="Aguardando homologação da SyncPay">
+       <CreditCard size={18}/><span><strong>Cartão de crédito</strong><small>Mensal recorrente ou anual parcelado · em preparação</small></span>
+      </button>}
       {pixAutomaticoConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='pix-auto'} className={paymentMethod==='pix-auto'?'active':''} onClick={()=>setPaymentMethod('pix-auto')}>
        <WalletCards size={18}/><span><strong>Pix Automático</strong><small>Autorize uma vez no app do banco</small></span>
       </button>}
-     <button
+      {!pixAutomaticoConfigured&&<button type="button" role="radio" aria-checked={false} disabled title="Aguardando homologação da SyncPay">
+       <WalletCards size={18}/><span><strong>Pix Automático</strong><small>Autorização bancária · em preparação</small></span>
+      </button>}
+     {stripeConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&<button
       type="button"
       role="radio"
       aria-checked={paymentMethod==='card'}
@@ -898,7 +904,7 @@ export function FioPlans(p:WorkspaceProps){
        <strong>Cartão</strong>
        <small>Crédito · pagamento seguro pela Stripe</small>
       </span>
-     </button>
+     </button>}
 
      {legacyPixCheckoutConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&<button
       type="button"

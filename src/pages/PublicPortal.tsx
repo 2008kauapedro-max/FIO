@@ -135,7 +135,10 @@ export function PublicPortal(){
   const oldFavicon=favicon?.href;
   if(!favicon){favicon=document.createElement('link');favicon.rel='icon';document.head.appendChild(favicon);}
   if(data.shop.logo_url){apple.href=data.shop.logo_url;favicon.href=data.shop.logo_url;}
-  return()=>{document.title=oldTitle;if(created)apple?.remove();else if(apple&&oldHref)apple.href=oldHref;if(faviconCreated)favicon?.remove();else if(favicon&&oldFavicon)favicon.href=oldFavicon;};
+  const appleTitle=document.querySelector<HTMLMetaElement>('meta[name="apple-mobile-web-app-title"]');
+  const previousAppleTitle=appleTitle?.content;
+  if(appleTitle)appleTitle.content=title;
+  return()=>{document.title=oldTitle;if(appleTitle&&previousAppleTitle!==undefined)appleTitle.content=previousAppleTitle;if(created)apple?.remove();else if(apple&&oldHref)apple.href=oldHref;if(faviconCreated)favicon?.remove();else if(favicon&&oldFavicon)favicon.href=oldFavicon;};
  },[data,title]);
 
  const filteredServices=useMemo(()=>{const q=query.trim().toLocaleLowerCase(locale==='en'?'en-US':locale);return !q?data?.services??[]:(data?.services??[]).filter(service=>`${service.name} ${service.description??''}`.toLocaleLowerCase(locale==='en'?'en-US':locale).includes(q));},[data?.services,query,locale]);
