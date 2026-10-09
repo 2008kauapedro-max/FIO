@@ -14,7 +14,7 @@ import './legal-payments.css';
 import {premiumInitialPlan,canStartPaidCheckout} from '../lib/plan-presentation';
 
 type Screen='plans'|'review'|'pix'|'pix-auto'|'success'|'manage'|'refund';
-type PaymentMethod='card'|'pix'|'pix-auto'|'sync-card';
+type PaymentMethod='card'|'pix'|'pix-auto'|'sync-card'|'sync-hosted';
 
 function documentDigits(value:string){
  return value.replace(/\D/g,'').slice(0,14);
@@ -93,6 +93,7 @@ export function FioPlans(p:WorkspaceProps){
  const [pixAutomaticoConfigured,setPixAutomaticoConfigured]=useState(false);
  const [legacyPixCheckoutConfigured,setLegacyPixCheckoutConfigured]=useState(false);
  const [syncpayCardConfigured,setSyncpayCardConfigured]=useState(false);
+ const [hostedCardConfigured,setHostedCardConfigured]=useState(false);
  const [cardNumber,setCardNumber]=useState('');
  const [cardHolder,setCardHolder]=useState('');
  const [cardMonth,setCardMonth]=useState('');
@@ -112,7 +113,7 @@ export function FioPlans(p:WorkspaceProps){
  const trialUsed=Boolean(sub.trial_ends_at);
  const trialActive=sub.status==='trialing'&&Boolean(sub.trial_ends_at)&&new Date(sub.trial_ends_at!)>new Date();
  const billingLocked=billingLocksNewSubscription(billing);
- const canCheckoutCycle=canStartPaidCheckout({billingConfigured,stripeConfigured,pixAutomaticoConfigured,syncpayCardConfigured,legacyPixCheckoutConfigured},cycle);
+ const canCheckoutCycle=canStartPaidCheckout({billingConfigured,stripeConfigured,pixAutomaticoConfigured,syncpayCardConfigured,legacyPixCheckoutConfigured},cycle)||(hostedCardConfigured&&cycle==='monthly');
 
  const planDefinition=visiblePlans.find(plan=>plan.code===selectedPlan)??visiblePlans[0];
  const planPrice=planDefinition.prices[cycle]??0;
@@ -131,7 +132,7 @@ export function FioPlans(p:WorkspaceProps){
  useEffect(()=>{
   let active=true;
 
-  void api<{configured:boolean;stripeConfigured:boolean;pixAutomaticoConfigured:boolean;syncpayCardConfigured:boolean;legacyPixCheckoutConfigured:boolean;subscription:BillingState|null}>(
+  void api<{configured:boolean;stripeConfigured:boolean;pixAutomaticoConfigured:boolean;syncpayCardConfigured:boolean;legacyPixCheckoutConfigured:boolean;hostedCardConfigured:boolean;subscription:BillingState|null}>(
    '/saas/billing',
    p.data.shop.id
   )
@@ -143,7 +144,8 @@ export function FioPlans(p:WorkspaceProps){
     setPixAutomaticoConfigured(Boolean(result.pixAutomaticoConfigured));
     setLegacyPixCheckoutConfigured(Boolean(result.legacyPixCheckoutConfigured));
     setSyncpayCardConfigured(Boolean(result.syncpayCardConfigured));
-    setPaymentMethod(result.pixAutomaticoConfigured?'pix-auto':result.syncpayCardConfigured?'sync-card':result.stripeConfigured?'card':'pix');
+    setHostedCardConfigured(Boolean(result.hostedCardConfigured));
+    setPaymentMethod(result.hostedCardConfigured?'sync-hosted':result.pixAutomaticoConfigured?'pix-auto':result.syncpayCardConfigured?'sync-card':result.stripeConfigured?'card':'pix');
     setBillingLoaded(true);
    })
    .catch(error=>{
@@ -391,10 +393,21 @@ export function FioPlans(p:WorkspaceProps){
   setCheckoutPlan(code);
   setDocument('');
   setAcceptedTerms(false);
-  setPaymentMethod(pixAutomaticoConfigured?'pix-auto':syncpayCardConfigured?'sync-card':stripeConfigured?'card':'pix');
+  setPaymentMethod(hostedCardConfigured?'sync-hosted':pixAutomaticoConfigured?'pix-auto':syncpayCardConfigured?'sync-card':stripeConfigured?'card':'pix');
   setScreen('review');
  }
 
+ async function checkHostedCard(){
+  setBusy(true);setCheckoutError('');
+  try{
+   const state=await api<{state:string;pending:boolean}>('/saas/syncpay/hosted-card/status',p.data.shop.id);
+   if(state.state==='linked'){
+    await refreshBilling();await p.refresh();setScreen('success');
+   }else if(state.state==='review')setCheckoutError('Há uma cobrança que precisa de conferência. Fale com o suporte antes de pagar novamente.');
+   else if(state.state==='pending')setCheckoutError('Pagamento ainda não confirmado. Confira novamente em instantes.');
+   else setCheckoutError('Nenhum pagamento hospedado recente foi encontrado.');
+  }catch(e){setCheckoutError(checkoutMessage(e));}finally{setBusy(false);}
+ }
  async function subscribe(){
   if(
    !checkoutPlan||
@@ -402,6 +415,19 @@ export function FioPlans(p:WorkspaceProps){
    busy
   )
    return;
+
+  if(paymentMethod==='sync-hosted'){
+   if(!hostedCardConfigured||cycle!=='monthly')return;
+   setBusy(true);setCheckoutError('');
+   try{
+    const result=await api<{url:string,pending:boolean}>('/saas/syncpay/hosted-card',p.data.shop.id,{plan:checkoutPlan,cycle,acceptedTerms:true});
+    const url=new URL(result.url);
+    if(url.protocol!=='https:'||url.hostname!=='app.syncpayments.com.br'||!url.pathname.startsWith('/subscription/'))throw new Error('UNSAFE_CHECKOUT_URL');
+    window.location.assign(url.toString());
+    return;
+   }catch(error){setCheckoutError(checkoutMessage(error));setBusy(false);}
+   return;
+  }
 
   if(paymentMethod==='card'){
    if(!stripeConfigured)return;
@@ -862,6 +888,9 @@ export function FioPlans(p:WorkspaceProps){
       </div>
      </div>}
     <div className="fio-payflow-methods" role="radiogroup" aria-label="Forma de pagamento">
+      {hostedCardConfigured&&cycle==='monthly'&&<button type="button" role="radio" aria-checked={paymentMethod==='sync-hosted'} className={paymentMethod==='sync-hosted'?'active':''} onClick={()=>setPaymentMethod('sync-hosted')}>
+       <CreditCard size={18}/><span><strong>Cartão pela SyncPay</strong><small>Checkout hospedado · assinatura mensal</small></span>
+      </button>}
       {syncpayCardConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='sync-card'} disabled={cycle!=='monthly'} className={paymentMethod==='sync-card'?'active':''} onClick={()=>setPaymentMethod('sync-card')}>
        <CreditCard size={18}/><span><strong>Cartão SyncPay</strong><small>Assinatura mensal recorrente</small></span>
       </button>}
@@ -904,10 +933,10 @@ export function FioPlans(p:WorkspaceProps){
       </span>
      </button>}
     </div>
-    {!legacyPixCheckoutConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&!stripeConfigured&&
+    {!hostedCardConfigured&&!legacyPixCheckoutConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&!stripeConfigured&&
      <div className="fio-payflow-note" role="status">Novos pagamentos estão temporariamente indisponíveis. O FIO está preparando Pix Automático e cartão. Os contratos existentes continuam acessíveis em Minha assinatura.</div>}
 
-    {paymentMethod==='sync-card'?<>
+    {paymentMethod==='sync-hosted'?<div className="fio-payflow-note"><ShieldCheck size={18}/><span>Você será direcionado à SyncPay para informar os dados do cartão. O FIO não receberá o número nem o CVV. Sua assinatura só será ativada após confirmação do pagamento.</span></div>:paymentMethod==='sync-card'?<>
       <div className="fio-payflow-note"><ShieldCheck size={18}/><span>O cartão é usado para autorizar uma assinatura mensal. A confirmação de acesso depende da SyncPay. Os dados não ficam salvos no FIO.</span></div>
       <label className="fio-payflow-field"><span>CPF ou CNPJ do titular</span><input value={document} inputMode="numeric" autoComplete="off" maxLength={18} onChange={event=>setDocument(formatDocument(event.target.value))}/></label>
       <label className="fio-payflow-field"><span>Nome impresso no cartão</span><input value={cardHolder} autoComplete="cc-name" onChange={event=>setCardHolder(event.target.value)} /></label>
@@ -961,7 +990,7 @@ export function FioPlans(p:WorkspaceProps){
     <div className="fio-legal-inline" aria-label="Informações da contratação">
      <a className="fio-legal-text-link" href="/condicoes-de-pagamento" target="_blank" rel="noopener noreferrer">Condições de pagamento</a>
      <a className="fio-legal-text-link" href="/cancelamento-e-reembolso" target="_blank" rel="noopener noreferrer">Cancelamento e reembolso</a>
-     <a className="fio-legal-text-link" href={paymentMethod==='card'?'/cartao-e-parcelamento':'/pix-automatico'} target="_blank" rel="noopener noreferrer">{paymentMethod==='card'?'Entenda cartão e parcelamento':'Entenda as formas de pagamento Pix'}</a>
+     <a className="fio-legal-text-link" href={['card','sync-hosted','sync-card'].includes(paymentMethod)?'/cartao-e-parcelamento':'/pix-automatico'} target="_blank" rel="noopener noreferrer">{['card','sync-hosted','sync-card'].includes(paymentMethod)?'Entenda cartão e parcelamento':'Entenda as formas de pagamento Pix'}</a>
     </div>
    </>}
 
@@ -999,7 +1028,9 @@ export function FioPlans(p:WorkspaceProps){
        changePlan
         ?!changeAccepted
         :!acceptedTerms||
-         (paymentMethod==='card'
+         (paymentMethod==='sync-hosted'
+           ?!hostedCardConfigured||cycle!=='monthly'
+           :paymentMethod==='card'
            ?!stripeConfigured
            :paymentMethod==='sync-card'
             ?!syncpayCardConfigured||cycle!=='monthly'||!([11,14].includes(documentDigits(document).length))||cardNumber.length<13||cardHolder.trim().length<5||cardMonth.length!==2||cardYear.length!==4||cardCvv.length<3
@@ -1009,12 +1040,12 @@ export function FioPlans(p:WorkspaceProps){
      onClick={()=>void (changePlan?confirmChange():subscribe())}
     >
      {busy
-      ?paymentMethod==='card'
+      ?paymentMethod==='card'||paymentMethod==='sync-hosted'
        ?'Abrindo pagamento seguro...'
        :t('fp.preparingPix')
       :changePlan
        ?t('fp.confirmChange')
-       :paymentMethod==='card'
+       :paymentMethod==='card'||paymentMethod==='sync-hosted'
         ?'Continuar com cartão'
         :paymentMethod==='sync-card'?'Autorizar assinatura no cartão':paymentMethod==='pix-auto'?'Autorizar Pix Automático':'Gerar Pix'
      }
@@ -1360,6 +1391,7 @@ export function FioPlans(p:WorkspaceProps){
   </article>
 
   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
+  {hostedCardConfigured&&<button className="fio-payflow-secondary" type="button" disabled={busy} onClick={()=>void checkHostedCard()}>{busy?'Consultando...':'Já paguei na SyncPay · verificar pagamento'}</button>}
   </div>
 
   <div className="fio-payflow-bottom-action fio-payflow-plan-action">

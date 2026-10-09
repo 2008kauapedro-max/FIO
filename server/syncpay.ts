@@ -735,6 +735,132 @@ export function verifySyncpayWebhook(rawBody:Buffer,headers:Request['headers'],n
  return Boolean(auth&&secrets.some(secret=>safeEqual(secret,auth)));
 }
 
+// Fluxo de cartão sem PAN/CVV no FIO. NUNCA confundir checkout_url de plano
+// com prova de pagamento: o vínculo só ocorre após verificação na SyncPay.
+export const syncpayHostedCardConfigured=()=>process.env.FIO_ENABLE_SYNCPAY_HOSTED_CARD==='true'&&configured();
+const hostedCardInput=z.object({plan:z.enum(PAID_PLANS),cycle:z.literal('monthly'),acceptedTerms:z.literal(true)}).strict();
+const hostedSubscriberList=z.object({data:z.array(z.object({
+ token:z.string().min(8),subscriber_email:z.string().optional().nullable(),started_at:z.string().optional().nullable(),status:z.string().optional()
+}).passthrough())}).passthrough();
+const HOSTED_PENDING=['creating','ready'] as const;
+type HostedIntent={id:string;barbershop_id:string;actor_user_id:string;customer_email:string;plan_code:PaidPlan;billing_cycle:'monthly';provider_plan_token:string|null;checkout_url:string|null;state:string;created_at:string;provider_subscription_token:string|null};
+const hostedEmail=(value:string)=>value.trim().toLowerCase();
+export function safeHostedUrl(value:string|null|undefined,token:string){
+ if(!value)return null;
+ try{
+  const url=new URL(value);
+  if(url.protocol!=='https:'||url.hostname!=='app.syncpayments.com.br'||url.username||url.password)return null;
+  if(url.pathname!==`/subscription/${encodeURIComponent(token)}`)return null;
+  if(url.search||url.hash)return null;
+  return url.toString();
+ }catch{return null;}
+}
+async function findHostedIntent(db:SupabaseClient,shopId:string,actorId:string){
+ const row=await db.from('fio_hosted_checkout_intents').select('*')
+  .eq('barbershop_id',shopId).eq('actor_user_id',actorId)
+  .in('state',['creating','ready']).order('created_at',{ascending:false}).limit(1).maybeSingle();
+ dbError(row.error);return row.data as HostedIntent|null;
+}
+async function reconcileHostedToken(db:SupabaseClient,intent:HostedIntent,fetcher:Fetcher,onlyToken?:string):Promise<'pending'|'linked'|'review'> {
+ if(intent.state!=='ready'||!intent.provider_plan_token)return 'pending';
+ const planToken=intent.provider_plan_token;
+ const query=new URLSearchParams({page:'1',per_page:'100',search:intent.customer_email});
+ const listed=providerParse(hostedSubscriberList,await providerRequest(fetcher,`/subscription-plans/${encodeURIComponent(planToken)}/subscribers?${query}`));
+ const earliest=Date.parse(intent.created_at)-10*60_000;
+ const latest=Date.parse(intent.created_at)+7*24*60*60_000;
+ const matches=listed.data.filter(item=>{
+  const started=Date.parse(item.started_at??'');
+  return hostedEmail(item.subscriber_email??'')===hostedEmail(intent.customer_email)&&
+   Number.isFinite(started)&&started>=earliest&&started<=latest&&(!onlyToken||item.token===onlyToken);
+ });
+ if(matches.length!==1)return matches.length>1?'review':'pending';
+ const candidate=matches[0];
+ const detail=await getProviderDetail(candidate.token,fetcher,{planToken,gracePeriodDays:PIX_AUTO_GRACE_DAYS});
+ if(detail.plan.token!==planToken||!detail.planReported)return 'review';
+ // Mesmo um cartão autorizado NÃO é pagamento confirmado.
+ if(detail.status!=='active')return 'pending';
+ const existing=await db.from('saas_provider_subscriptions').select('barbershop_id')
+  .eq('provider','syncpay').eq('provider_subscription_token',candidate.token).maybeSingle();
+ dbError(existing.error);
+ if(existing.data&&existing.data.barbershop_id!==intent.barbershop_id)return 'review';
+ const current=await currentLink(db,intent.barbershop_id);
+ if(current&&current.provider_subscription_token!==candidate.token&&['active','pending_first_payment','overdue','suspended'].includes(current.provider_status))return 'review';
+ if(!existing.data){
+  const bound=await db.rpc('bind_syncpay_subscription',{
+   p_shop:intent.barbershop_id,p_subscription_token:candidate.token,p_provider_plan_token:planToken,
+   p_actor:intent.actor_user_id,p_terms_version:'fio-hosted-card-v1'
+  });dbError(bound.error);
+ }
+ await applyProviderTruth(db,detail,{key:stateEventKey('hosted-card-confirmed',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(`${intent.id}:${candidate.token}`).digest('hex')});
+ const saved=await db.from('fio_hosted_checkout_intents').update({state:'linked',provider_subscription_token:candidate.token,updated_at:new Date().toISOString()}).eq('id',intent.id).eq('state','ready');dbError(saved.error);
+ return 'linked';
+}
+export async function startSyncpayHostedCard(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o dono pode contratar.');
+ if(!syncpayHostedCardConfigured())throw new ApiError(503,'SYNCPAY_HOSTED_CARD_DISABLED','Cartão hospedado ainda não foi ativado.');
+ const input=hostedCardInput.parse(raw);
+ const mode=await ctx.db.from('barbershops').select('operation_mode').eq('id',ctx.shopId).single();dbError(mode.error);
+ if(mode.data?.operation_mode==='SOLO'&&!['SOLO','SOLO_PREMIUM'].includes(input.plan))throw new ApiError(400,'INVALID_PLAN','Escolha um plano SOLO.');
+ if(mode.data?.operation_mode!=='SOLO'&&!['PRO','PREMIUM'].includes(input.plan))throw new ApiError(400,'INVALID_PLAN','Escolha um plano de equipe.');
+ const db=adminDb();
+ const link=await currentLink(db,ctx.shopId);
+ if(link&&['active','pending_first_payment','overdue','suspended'].includes(link.provider_status))throw new ApiError(409,'SYNCPAY_SUBSCRIPTION_EXISTS','Já existe assinatura ativa ou pendente para esta barbearia.');
+ const user=await db.auth.admin.getUserById(ctx.userId);
+ if(user.error||!user.data.user?.email||!user.data.user.email_confirmed_at)throw new ApiError(400,'BILLING_EMAIL_REQUIRED','Confirme seu e-mail antes de pagar.');
+ const email=hostedEmail(user.data.user.email);
+ // O checkout de plano é compartilhável. Um único intento ativo por e-mail impede
+ // conciliação ambígua entre barbearias gerenciadas pela mesma conta.
+ const ownPending=await findHostedIntent(db,ctx.shopId,ctx.userId);
+ if(ownPending){
+  const same=ownPending.plan_code===input.plan&&ownPending.billing_cycle===input.cycle;
+  if(same&&ownPending.state==='ready'&&ownPending.provider_plan_token){
+   const verified=safeHostedUrl(ownPending.checkout_url,ownPending.provider_plan_token);
+   if(verified)return {url:verified,pending:true};
+  }
+  throw new ApiError(409,'SYNCPAY_HOSTED_PENDING','Há um checkout em preparação ou aguardando pagamento. Verifique ou procure o suporte antes de tentar outro.');
+ }
+ const conflict=await db.from('fio_hosted_checkout_intents').select('id').eq('customer_email',email).in('state',['creating','ready']).limit(1).maybeSingle();dbError(conflict.error);
+ if(conflict.data)throw new ApiError(409,'SYNCPAY_HOSTED_PENDING','Há outra contratação pendente para este e-mail. Finalize antes de iniciar outra.');
+ const config=planConfig(input.plan,'monthly');
+ const started=await db.from('fio_hosted_checkout_intents').insert({barbershop_id:ctx.shopId,actor_user_id:ctx.userId,customer_email:email,plan_code:input.plan,billing_cycle:'monthly',amount_cents:config.amountCents,state:'creating',terms_version:'fio-hosted-card-v1'}).select('id').single();
+ if(started.error?.code==='23505')throw new ApiError(409,'SYNCPAY_HOSTED_PENDING','Já existe checkout pendente.');
+ dbError(started.error);
+ try{
+  const mapping=await ensureProviderPlan(db,input.plan,'monthly',fetcher,'credit_card');
+  const url=safeHostedUrl(mapping.checkout_url,mapping.provider_plan_token);
+  if(!url)throw new ApiError(503,'SYNCPAY_HOSTED_URL_INVALID','A SyncPay não retornou checkout hospedado de cartão validado. Nenhuma cobrança foi iniciada.');
+  const saved=await db.from('fio_hosted_checkout_intents').update({state:'ready',provider_plan_token:mapping.provider_plan_token,checkout_url:url,updated_at:new Date().toISOString()}).eq('id',started.data!.id).eq('state','creating');dbError(saved.error);
+  return {url,pending:true};
+ }catch(error){
+  await db.from('fio_hosted_checkout_intents').update({state:'failed',updated_at:new Date().toISOString()}).eq('id',started.data!.id).eq('state','creating');
+  throw error;
+ }
+}
+export async function getSyncpayHostedCardStatus(ctx:TenantContext,fetcher:Fetcher=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o dono pode consultar.');
+ const db=adminDb();
+ const row=await db.from('fio_hosted_checkout_intents').select('*').eq('barbershop_id',ctx.shopId).eq('actor_user_id',ctx.userId).order('created_at',{ascending:false}).limit(1).maybeSingle();dbError(row.error);
+ const intent=row.data as HostedIntent|null;
+ if(!intent)return {state:'none',pending:false};
+ if(intent.state==='linked')return {state:'linked',pending:false};
+ if(intent.state!=='ready')return {state:intent.state,pending:intent.state==='creating'};
+ try{
+  const status=await reconcileHostedToken(db,intent,fetcher);
+  return {state:status==='linked'?'linked':status==='review'?'review':'pending',pending:status==='pending'};
+ }catch{return {state:'pending',pending:true};}
+}
+export async function bindHostedFromWebhook(event:{subscription_token:string;plan_token?:string},fetcher:Fetcher=fetch,db:SupabaseClient=adminDb()){
+ if(!event.plan_token)return false;
+ const intents=await db.from('fio_hosted_checkout_intents').select('*')
+  .eq('provider_plan_token',event.plan_token).eq('state','ready').limit(10);
+ dbError(intents.error);
+ for(const entry of intents.data??[]){
+  const state=await reconcileHostedToken(db,entry as HostedIntent,fetcher,event.subscription_token);
+  if(state==='linked')return true;
+ }
+ return false;
+}
+
 export async function handleSyncpayWebhook(req:Request,res:ExpressResponse,fetcher:Fetcher=fetch){
  const raw=Buffer.isBuffer(req.body)?req.body:Buffer.from('');
  if(!raw.length)throw new ApiError(400,'INVALID_WEBHOOK','Webhook vazio.');
@@ -750,7 +876,11 @@ export async function handleSyncpayWebhook(req:Request,res:ExpressResponse,fetch
  const db=adminDb();
  const known=await db.from('saas_provider_subscriptions').select('id,provider_plan_token,billing_cycle').eq('provider','syncpay').eq('provider_subscription_token',event.subscription_token).maybeSingle();
  dbError(known.error);
- if(!known.data){res.status(200).json({received:true,ignored:true});return;}
+ if(!known.data){
+  const linked=await bindHostedFromWebhook(event,fetcher,db);
+  if(linked){res.status(200).json({received:true,hosted:true});return;}
+  res.status(200).json({received:true,ignored:true});return;
+ }
  const knownLink=known.data as {id:string;provider_plan_token:string;billing_cycle:BillingCycle};
  const detail=await getProviderDetail(event.subscription_token,fetcher,{planToken:event.plan_token??knownLink.provider_plan_token,gracePeriodDays:GRACE_DAYS[knownLink.billing_cycle]});
  const bodyHash=createHash('sha256').update(raw).digest('hex');
