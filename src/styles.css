@@ -5949,3 +5949,6 @@ body:has(.workspace),
   .fio-history-print-area h1{font-size:16pt;margin-bottom:4px}.fio-history-print-area table{width:100%;border-collapse:collapse}
   .fio-history-print-area td,.fio-history-print-area th{padding:7px 5px;border-bottom:1px solid #bbb;text-align:left;word-break:break-word}
 }
+
+/* Mantém o texto curto do período de teste legível no mobile. */
+@media(max-width:760px){.topbar .plan-badge{white-space:nowrap;line-height:1.15;flex-shrink:0;padding:6px 7px;letter-spacing:0;}}

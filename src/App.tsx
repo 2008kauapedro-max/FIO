@@ -9,7 +9,7 @@ import { LayoutDashboard,CalendarDays,Bell,Sparkles,Users,Scissors,UserRound,Wal
 import type { Session } from '@supabase/supabase-js';
 import type { Bootstrap,Membership,Notification,Role } from '../shared/domain';
 import { planAllows,type FioFeature } from '../shared/entitlements';
-import { fioPlanPublicName } from '../shared/fio-plans';
+import { planBadgeLabel } from './lib/plan-presentation';
 import { roleHome } from '../shared/domain';
 import { api,supabase } from './lib/api';
 import { AuthPage,EmailConfirmationPage,Onboarding } from './pages/Auth';
@@ -505,7 +505,7 @@ export default function App(){
  if(!data)return <AppLoading/>;
  if(location.pathname==='/')return <Navigate replace to={roleHome(data.membership.role)+location.search}/>;
 
- const role=data.membership.role,base=roleHome(role),page=location.pathname.slice(base.length),solo=data.shop.operation_mode==='SOLO',planLabel=fioPlanPublicName(data.plan)+(data.fioSubscription.status==='trialing'?' · teste grátis':''),items=navItems.filter(n=>n.roles.includes(role)&&(!n.feature||planAllows(data.plan,n.feature))&&!(solo&&n.path==='/equipe'));
+ const role=data.membership.role,base=roleHome(role),page=location.pathname.slice(base.length),solo=data.shop.operation_mode==='SOLO',planLabel=planBadgeLabel(data.plan,data.fioSubscription),items=navItems.filter(n=>n.roles.includes(role)&&(!n.feature||planAllows(data.plan,n.feature))&&!(solo&&n.path==='/equipe'));
  if(role==='CLIENT'&&page==='')return <Navigate replace to={`${base}/agenda${location.search}`}/>;
  if(!location.pathname.startsWith(base+'/')&&location.pathname!==base)return <Navigate replace to={base}/>;
  if(page!==''&&page!=='/configuracoes'&&!items.some(n=>n.path===page))return <Navigate replace to={base}/>;

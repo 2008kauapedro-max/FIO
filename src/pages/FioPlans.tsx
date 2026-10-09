@@ -11,6 +11,7 @@ import { useI18n } from '../i18n';
 import {annualCheckoutPreview} from '../../shared/syncpay-annual-checkout';
 import {refundStatusDisplay} from '../../shared/syncpay-refund-status';
 import './legal-payments.css';
+import {premiumInitialPlan,canStartPaidCheckout} from '../lib/plan-presentation';
 
 type Screen='plans'|'review'|'pix'|'pix-auto'|'success'|'manage'|'refund';
 type PaymentMethod='card'|'pix'|'pix-auto'|'sync-card';
@@ -76,12 +77,8 @@ export function FioPlans(p:WorkspaceProps){
   [soloMode]
  );
 
- const initialPlan=visiblePlans.some(plan=>plan.code===p.data.plan)
-  ?p.data.plan
-  :'FREE';
-
  const [screen,setScreen]=useState<Screen>('plans');
- const [selectedPlan,setSelectedPlan]=useState<Plan>(initialPlan);
+ const [selectedPlan,setSelectedPlan]=useState<Plan>(premiumInitialPlan(soloMode));
  const [cycle,setCycle]=useState<BillingCycle>('annual');
  const [document,setDocument]=useState('');
  const [acceptedTerms,setAcceptedTerms]=useState(false);
@@ -115,6 +112,7 @@ export function FioPlans(p:WorkspaceProps){
  const trialUsed=Boolean(sub.trial_ends_at);
  const trialActive=sub.status==='trialing'&&Boolean(sub.trial_ends_at)&&new Date(sub.trial_ends_at!)>new Date();
  const billingLocked=billingLocksNewSubscription(billing);
+ const canCheckoutCycle=canStartPaidCheckout({billingConfigured,stripeConfigured,pixAutomaticoConfigured,syncpayCardConfigured,legacyPixCheckoutConfigured},cycle);
 
  const planDefinition=visiblePlans.find(plan=>plan.code===selectedPlan)??visiblePlans[0];
  const planPrice=planDefinition.prices[cycle]??0;
@@ -127,7 +125,7 @@ export function FioPlans(p:WorkspaceProps){
 
  useEffect(()=>{
   if(!visiblePlans.some(plan=>plan.code===selectedPlan))
-   setSelectedPlan(visiblePlans[0]?.code??'FREE');
+   setSelectedPlan(premiumInitialPlan(soloMode));
  },[visiblePlans,selectedPlan]);
 
  useEffect(()=>{
@@ -349,8 +347,8 @@ export function FioPlans(p:WorkspaceProps){
    return;
   }
 
-  if(!billingConfigured&&!stripeConfigured){
-   setCheckoutError(t('fp.billingSupport'));
+  if(!canCheckoutCycle){
+   setCheckoutError('A SyncPay ainda não habilitou uma forma de pagamento para este período. Não é possível concluir uma assinatura paga agora. Nenhuma cobrança foi iniciada.');
    return;
   }
 
@@ -1375,20 +1373,22 @@ export function FioPlans(p:WorkspaceProps){
       </button>
      :<button
        className="fio-payflow-primary"
-       disabled={busy||!billingLoaded||(!billingConfigured&&!stripeConfigured)||stripeReturn==='pending'||stripeReturn==='checking'}
+       disabled={busy||!billingLoaded||stripeReturn==='pending'||stripeReturn==='checking'}
        onClick={()=>selectedPaid&&choosePaid(selectedPaid)}
       >
-       {billing?.providerStatus==='active'
-        ?`Trocar para ${displayName(selectedPlan)}`
-        :`Assinar ${displayName(selectedPlan)}`
+       {!canCheckoutCycle
+        ?'Ver disponibilidade do pagamento'
+        :billing?.providerStatus==='active'
+         ?`Trocar para ${displayName(selectedPlan)}`
+         :`Assinar ${displayName(selectedPlan)}`
        }
       </button>
    }
 
-   {selectedPlan===primaryPaid&&!trialUsed&&p.data.plan==='FREE'&&!billingLocked&&
+   {billingLoaded&&!canCheckoutCycle&&selectedPlan!=='FREE'&&
     <p className="fio-trial-provider-note" role="status">
-     O teste de 14 dias com renovação automática requer autorização prévia de cartão ou Pix Automático.
-     Estamos aguardando a habilitação da SyncPay; não será ativado um teste com cobrança futura sem seu consentimento.
+     A contratação ainda está em preparação enquanto aguardamos a SyncPay. O teste de 14 dias com renovação automática requer autorização prévia de cartão ou Pix Automático.
+     Nenhuma cobrança será feita sem autorização. Para contratar, é necessário um método de pagamento habilitado para este período.
     </p>
    }
   </div>
