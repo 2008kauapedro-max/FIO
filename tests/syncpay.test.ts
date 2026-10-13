@@ -31,9 +31,9 @@ describe('SyncPay billing boundary',()=>{
   expect(syncpayInternals.paymentFromChargePayload({charge:{status:'pending',payment:{qr_code:'data:image/png;base64,...'}}})).toBeNull();
  });
 
- it('keeps overdue access only through the configured grace period',()=>{
+ it('does not extend FIO paid access after due date',()=>{
   const detail={status:'overdue',next_charge_at:'2026-09-18T12:00:00Z',plan:{grace_period_days:5}} as Parameters<typeof syncpayInternals.accessUntil>[0];
-  expect(syncpayInternals.accessUntil(detail)).toBe('2026-09-23T12:00:00.000Z');
+  expect(syncpayInternals.accessUntil(detail)).toBe('2026-09-18T12:00:00.000Z');
  });
 
  it('validates HMAC on the raw body and rejects replay timestamps',()=>{
@@ -98,9 +98,9 @@ describe('SyncPay billing boundary',()=>{
  it('rejects a provider response for a different subscription',()=>{
   expect(()=>syncpayInternals.normalizeProviderDetail({token:'sub_someone_else',status:'active'},{token:'sub_expected_123',planToken:'plan_12345678',gracePeriodDays:5})).toThrow();
  });
- it('uses server-controlled grace days instead of an unexpected provider override',()=>{
+ it('ignores provider grace days for FIO paid access',()=>{
   const detail=syncpayInternals.normalizeProviderDetail({status:'overdue',next_charge_at:'2026-09-30T12:00:00Z',plan:{token:'plan_12345678',grace_period_days:999}},{token:'sub_12345678',planToken:'plan_12345678',gracePeriodDays:5});
-  expect(syncpayInternals.accessUntil(detail)).toBe('2026-10-05T12:00:00.000Z');
+  expect(syncpayInternals.accessUntil(detail)).toBe('2026-09-30T12:00:00.000Z');
  });
  it('unknown provider states fail closed',()=>{
   expect(()=>syncpayInternals.normalizeProviderDetail({status:'unknown'},{token:'sub_12345678',planToken:'plan_12345678',gracePeriodDays:5})).toThrow();

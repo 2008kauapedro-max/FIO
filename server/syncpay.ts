@@ -270,7 +270,7 @@ function accessUntil(detail:ProviderDetail){
  const next=iso(detail.next_charge_at);
  if(detail.status==='active'||detail.status==='overdue'){
   if(!next)return null;
-  return new Date(new Date(next).getTime()+(detail.plan.grace_period_days??0)*86_400_000).toISOString();
+  return next; // FIO access ends at due date, not after payment grace.
  }
  return null;
 }

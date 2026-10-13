@@ -15,7 +15,7 @@ describe('FIO: teste grátis, premium e bloqueio seguro',()=>{
   expect(premiumInitialPlan(false)).toBe('PREMIUM');
   const code=readFileSync(new URL('../src/pages/FioPlans.tsx',import.meta.url),'utf8');
   expect(code).toContain('useState<Plan>(premiumInitialPlan(soloMode))');
-  expect(code).toContain("useState<BillingCycle>('annual')");
+  expect(code).toContain("useState<BillingCycle>('monthly')");
  });
  it('não habilita pagamento sem método confirmado',()=>{
   const flags={billingConfigured:true,stripeConfigured:false,pixAutomaticoConfigured:false,syncpayCardConfigured:false,legacyPixCheckoutConfigured:false};

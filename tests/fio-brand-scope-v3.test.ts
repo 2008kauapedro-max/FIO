@@ -38,8 +38,12 @@ describe('FIO: logo não vaza entre gestão e aplicativo dos clientes',()=>{
   expect(bootstrap).toContain('/api/public/manifest/');
   expect(bootstrap).toContain('direitos-do-cliente');
   const plans=readFileSync('src/pages/FioPlans.tsx','utf8');
-  expect(plans).toContain('Aguardando homologação da SyncPay');
-  expect(plans).toContain('role="radio" aria-checked={false} disabled');
+  // O checkout exibe somente metodos realmente disponiveis.
+  expect(plans).toContain("hostedCardConfigured&&cycle==='monthly'");
+  expect(plans).toContain('<strong>Cartão de crédito</strong>');
+  expect(plans).toContain('{pixAutomaticoConfigured&&<button');
+  expect(plans).not.toContain('Aguardando homologação da SyncPay');
+  expect(plans).not.toContain('role="radio" aria-checked={false} disabled');
  });
  it('tema claro mantém texto e campo legíveis, inclusive preenchimento automático',()=>{
   const css=readFileSync('src/styles.css','utf8');

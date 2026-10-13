@@ -72,7 +72,7 @@ export async function askAssistant(ctx: TenantContext, body: unknown) {
  const {data:feature,error:featureError}=await db.from('plan_features').select('ai_enabled').eq('plan',billing.plan).single();
  dbError(featureError);
  if(!feature) throw new ApiError(403,'PLAN_REQUIRED',copy(locale,'planMissing'));
- if(!feature.ai_enabled||!['active','trialing','past_due'].includes(billing.status)||(billing.expires_at&&new Date(billing.expires_at)<=new Date())) throw new ApiError(403,'PLAN_REQUIRED',copy(locale,'plan'));
+ if(!feature.ai_enabled||!['active','trialing'].includes(billing.status)||(billing.expires_at&&new Date(billing.expires_at)<=new Date())) throw new ApiError(403,'PLAN_REQUIRED',copy(locale,'plan'));
  const scopeReply=copy(locale,'scope');
  if(looksLikePromptAttack(input.message)||clearlyGenericAIRequest(input.message)) return {conversationId:input.conversationId??null,message:scopeReply,actions:[]};
  const url=process.env.AI_API_URL,key=process.env.AI_API_KEY,model=process.env.AI_MODEL,serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY;

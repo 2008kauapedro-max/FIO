@@ -6,10 +6,15 @@ import {demoData} from '../src/lib/demo';
 import {usablePix,type BillingState} from '../shared/billing-state';
 afterEach(()=>vi.unstubAllEnvs());
 describe('trial and upgrade regressions',()=>{
- it.each(['trialing','active','past_due'])('AI respects valid %s entitlement',async status=>{
+ it.each(['trialing','active'])('AI respects valid %s entitlement',async status=>{
   vi.stubEnv('AI_API_URL','');const data=demoData('OWNER');
   const db={from:(table:string)=>{const c={select:()=>c,eq:()=>c,single:async()=>({data:table==='saas_subscriptions'?{plan:'PRO',status,expires_at:'2099-01-01'}:{ai_enabled:true},error:null})};return c;}} as unknown as SupabaseClient;
   await expect(askAssistant({db,userId:data.membership.user_id,shopId:data.shop.id,member:data.membership,plan:'PRO'},{message:'Minha agenda'})).rejects.toMatchObject({code:'AI_UNAVAILABLE'});
+ });
+ it('denies paid assistant when subscription is past_due',async()=>{
+  const d=demoData('OWNER');
+  const db={from:(table:string)=>{const c={select:()=>c,eq:()=>c,single:async()=>({data:table==='saas_subscriptions'?{plan:'PRO',status:'past_due',expires_at:'2099-01-01'}:{ai_enabled:true},error:null})};return c;}} as unknown as SupabaseClient;
+  await expect(askAssistant({db,userId:d.membership.user_id,shopId:d.shop.id,member:d.membership,plan:'PRO'},{message:'Minha agenda'})).rejects.toMatchObject({code:'PLAN_REQUIRED'});
  });
  it('payment proof must identify the exact proration charge and paid timestamp',()=>{
   const change={charge_cycle:5,charge_amount_cents:4233,charge_identifier:'difference-5'};

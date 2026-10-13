@@ -11,7 +11,7 @@ export interface TenantContext extends AuthContext { shopId: string; member: Mem
 type SubscriptionState={plan:Plan;status:string;expires_at:string|null};
 function effectivePlan(subscription:SubscriptionState|null|undefined):Plan{
  if(!subscription)return 'FREE';
- const active=['active','trialing','past_due'].includes(subscription.status)&&(!subscription.expires_at||new Date(subscription.expires_at)>new Date());
+ const active=['active','trialing'].includes(subscription.status)&&(!subscription.expires_at||new Date(subscription.expires_at)>new Date());
  return active?subscription.plan:'FREE';
 }
 
