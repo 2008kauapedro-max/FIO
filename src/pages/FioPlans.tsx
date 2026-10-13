@@ -79,7 +79,7 @@ export function FioPlans(p:WorkspaceProps){
 
  const [screen,setScreen]=useState<Screen>('plans');
  const [selectedPlan,setSelectedPlan]=useState<Plan>(premiumInitialPlan(soloMode));
- const [cycle,setCycle]=useState<BillingCycle>('annual');
+ const [cycle,setCycle]=useState<BillingCycle>('monthly');
  const [document,setDocument]=useState('');
  const [acceptedTerms,setAcceptedTerms]=useState(false);
  const [changeAccepted,setChangeAccepted]=useState(false);
@@ -350,7 +350,7 @@ export function FioPlans(p:WorkspaceProps){
   }
 
   if(!canCheckoutCycle){
-   setCheckoutError('A SyncPay ainda não habilitou uma forma de pagamento para este período. Não é possível concluir uma assinatura paga agora. Nenhuma cobrança foi iniciada.');
+   setCheckoutError('O pagamento deste período ainda não está disponível. Selecione Mensal para contratar com cartão. Nenhuma cobrança foi iniciada.');
    return;
   }
 
@@ -889,21 +889,15 @@ export function FioPlans(p:WorkspaceProps){
      </div>}
     <div className="fio-payflow-methods" role="radiogroup" aria-label="Forma de pagamento">
       {hostedCardConfigured&&cycle==='monthly'&&<button type="button" role="radio" aria-checked={paymentMethod==='sync-hosted'} className={paymentMethod==='sync-hosted'?'active':''} onClick={()=>setPaymentMethod('sync-hosted')}>
-       <CreditCard size={18}/><span><strong>Cartão pela SyncPay</strong><small>Checkout hospedado · assinatura mensal</small></span>
+       <CreditCard size={18}/><span><strong>Cartão de crédito</strong><small>Assinatura mensal · pagamento seguro</small></span>
       </button>}
-      {syncpayCardConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='sync-card'} disabled={cycle!=='monthly'} className={paymentMethod==='sync-card'?'active':''} onClick={()=>setPaymentMethod('sync-card')}>
-       <CreditCard size={18}/><span><strong>Cartão SyncPay</strong><small>Assinatura mensal recorrente</small></span>
-      </button>}
-      {!syncpayCardConfigured&&<button type="button" role="radio" aria-checked={false} disabled title="Aguardando homologação da SyncPay">
-       <CreditCard size={18}/><span><strong>Cartão de crédito</strong><small>Mensal recorrente ou anual parcelado · em preparação</small></span>
+      {!hostedCardConfigured&&syncpayCardConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='sync-card'} disabled={cycle!=='monthly'} className={paymentMethod==='sync-card'?'active':''} onClick={()=>setPaymentMethod('sync-card')}>
+       <CreditCard size={18}/><span><strong>Cartão de crédito</strong><small>Assinatura mensal</small></span>
       </button>}
       {pixAutomaticoConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='pix-auto'} className={paymentMethod==='pix-auto'?'active':''} onClick={()=>setPaymentMethod('pix-auto')}>
        <WalletCards size={18}/><span><strong>Pix Automático</strong><small>Autorize uma vez no app do banco</small></span>
       </button>}
-      {!pixAutomaticoConfigured&&<button type="button" role="radio" aria-checked={false} disabled title="Aguardando homologação da SyncPay">
-       <WalletCards size={18}/><span><strong>Pix Automático</strong><small>Autorização bancária · em preparação</small></span>
-      </button>}
-     {stripeConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&<button
+      {stripeConfigured&&!hostedCardConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&<button
       type="button"
       role="radio"
       aria-checked={paymentMethod==='card'}
@@ -913,8 +907,7 @@ export function FioPlans(p:WorkspaceProps){
      >
       <CreditCard size={18}/>
       <span>
-       <strong>Cartão</strong>
-       <small>Crédito · pagamento seguro pela Stripe</small>
+       <strong>Cartão de crédito</strong><small>Pagamento seguro</small>
       </span>
      </button>}
 
@@ -936,7 +929,7 @@ export function FioPlans(p:WorkspaceProps){
     {!hostedCardConfigured&&!legacyPixCheckoutConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&!stripeConfigured&&
      <div className="fio-payflow-note" role="status">Novos pagamentos estão temporariamente indisponíveis. O FIO está preparando Pix Automático e cartão. Os contratos existentes continuam acessíveis em Minha assinatura.</div>}
 
-    {paymentMethod==='sync-hosted'?<div className="fio-payflow-note"><ShieldCheck size={18}/><span>Você será direcionado à SyncPay para informar os dados do cartão. O FIO não receberá o número nem o CVV. Sua assinatura só será ativada após confirmação do pagamento.</span></div>:paymentMethod==='sync-card'?<>
+    {paymentMethod==='sync-hosted'?<div className="fio-payflow-note"><ShieldCheck size={18}/><span>Você será direcionado a uma página segura para informar os dados do cartão. O FIO não recebe o número nem o CVV. A assinatura só é ativada após confirmação do pagamento.</span></div>:paymentMethod==='sync-card'?<>
       <div className="fio-payflow-note"><ShieldCheck size={18}/><span>O cartão é usado para autorizar uma assinatura mensal. A confirmação de acesso depende da SyncPay. Os dados não ficam salvos no FIO.</span></div>
       <label className="fio-payflow-field"><span>CPF ou CNPJ do titular</span><input value={document} inputMode="numeric" autoComplete="off" maxLength={18} onChange={event=>setDocument(formatDocument(event.target.value))}/></label>
       <label className="fio-payflow-field"><span>Nome impresso no cartão</span><input value={cardHolder} autoComplete="cc-name" onChange={event=>setCardHolder(event.target.value)} /></label>
@@ -1391,7 +1384,7 @@ export function FioPlans(p:WorkspaceProps){
   </article>
 
   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
-  {hostedCardConfigured&&<button className="fio-payflow-secondary" type="button" disabled={busy} onClick={()=>void checkHostedCard()}>{busy?'Consultando...':'Já paguei na SyncPay · verificar pagamento'}</button>}
+  {hostedCardConfigured&&<button className="fio-payflow-secondary" type="button" disabled={busy} onClick={()=>void checkHostedCard()}>{busy?'Consultando...':'Já paguei · verificar pagamento'}</button>}
   </div>
 
   <div className="fio-payflow-bottom-action fio-payflow-plan-action">
@@ -1406,10 +1399,10 @@ export function FioPlans(p:WorkspaceProps){
      :<button
        className="fio-payflow-primary"
        disabled={busy||!billingLoaded||stripeReturn==='pending'||stripeReturn==='checking'}
-       onClick={()=>selectedPaid&&choosePaid(selectedPaid)}
+       onClick={()=>{if(hostedCardConfigured&&cycle==='annual'&&!canCheckoutCycle){setCycle('monthly');setCheckoutError('');return;}if(selectedPaid)choosePaid(selectedPaid);}}
       >
        {!canCheckoutCycle
-        ?'Ver disponibilidade do pagamento'
+        ?hostedCardConfigured&&cycle==='annual'?'Continuar no mensal':'Ver disponibilidade do pagamento'
         :billing?.providerStatus==='active'
          ?`Trocar para ${displayName(selectedPlan)}`
          :`Assinar ${displayName(selectedPlan)}`

@@ -263,32 +263,9 @@ export function AuthPage({reset=false}:{reset?:boolean}) {
    const result=await supabase.auth.signInWithPassword({email,password:submittedPassword,options:{captchaToken:captchaToken||undefined}});
 
    if(result.error){
-    const authError=
-     result.error as {
-      code?:string;
-      message?:string;
-     };
-
-    const invalid=
-     authError.code==='invalid_credentials'||
-     /invalid login credentials/i.test(
-      authError.message??''
-     );
-
+    // Senha incorreta, usuario Google ou email desconhecido usam erro generico.
+    // Nao redirecionar automaticamente para cadastrar outra conta.
     setMessage(t('auth.loginFailed'));
-
-    if(
-     invalid&&
-     (
-      audience==='client'||
-      audience==='owner'||
-      !audience
-     )
-    ){
-     setPassword('');
-     setMode('signup');
-    }
-
     return;
    }
 

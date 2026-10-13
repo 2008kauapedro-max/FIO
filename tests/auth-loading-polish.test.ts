@@ -72,26 +72,20 @@ describe('acesso e loading sem flash',()=>{
    );
  });
 
- it('login por senha usa erro genérico e encaminha cadastro sem enumerar conta',()=>{
+ it('login por senha permanece no formulario se a senha estiver incorreta',()=>{
   const auth=readFileSync(
    resolve('src/pages/Auth.tsx'),
    'utf8'
   );
 
-  expect(auth)
-   .toContain(
-    "authError.code==='invalid_credentials'"
-   );
+  expect(auth).not.toContain("authError.code==='invalid_credentials'");
 
   expect(auth)
    .toContain(
     "setMessage(t('auth.loginFailed'))"
    );
 
-  expect(auth)
-   .toContain(
-    "setMode('signup')"
-   );
+  expect(auth).not.toContain("setMode('signup')");
 
   expect(auth)
    .not.toContain(
