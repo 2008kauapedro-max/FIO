@@ -21,6 +21,7 @@ import { Feed } from './pages/Feed';
 import { PublicPortal } from './pages/PublicPortal';
 import { GuidedTour } from './components/GuidedTour';
 import { FioPlans } from './pages/FioPlans';
+import { PlatformPixDiagnostic } from './pages/PlatformPixDiagnostic';
 import { LegalPage } from './pages/Legal';
 import { Modal } from './components/ui';
 import { WhatsAppIcon } from './components/WhatsAppIcon';
@@ -411,6 +412,7 @@ export default function App(){
  if(location.pathname==='/cartao-e-parcelamento')return <LegalPage kind="cartao"/>;
  if(location.pathname==='/direitos-do-cliente')return <LegalPage kind="rights"/>;
  if(location.pathname==='/acesso/plataforma')return <Suspense fallback={<AppLoading/>}><PlatformLogin session={session} ready={authReady}/></Suspense>;
+ if(location.pathname==='/platform/pix-diagnostico')return <PlatformPixDiagnostic session={session} ready={authReady}/>;
  if(isPlatform)return <Suspense fallback={<AppLoading/>}><PlatformApp session={session} ready={authReady}/></Suspense>;
  if(isPublicPortal)return <PublicPortal/>;
  if(location.pathname==='/acesso/gestao')return <Navigate replace to="/login?audience=owner"/>;

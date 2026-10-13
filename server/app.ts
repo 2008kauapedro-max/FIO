@@ -443,6 +443,11 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const r=await a.db.rpc('replace_business_hours',{p_shop:c.shopId,p_days:rows.map(({weekday,opens_at,closes_at})=>({weekday,opens_at,closes_at}))});dbError(r.error);res.json({ok:true});
  });
  app.post('/api/onboarding/activate',async(req,res)=>{const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const r=await a.db.rpc('activate_owner_onboarding',{p_shop:c.shopId});dbError(r.error);res.json({ok:true,shopId:c.shopId});});
+ app.post('/api/platform/pix-auto-probe',rateLimitByUser('pix-auto-probe-platform',86_400_000,1),async(req,res)=>{
+  await requirePlatformAdmin(res.locals.auth as AuthContext);
+  z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  res.set('Cache-Control','no-store').json(await diagnosePixAutomaticoPermission());
+ });
  app.use('/api/platform',platformRouter());
  app.use('/api',async(req,res,next)=>{res.locals.ctx=await tenant(res.locals.auth,req);next();});
  const ctx=(res:express.Response)=>res.locals.ctx as TenantContext;
@@ -475,12 +480,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.get('/api/saas/syncpay/hosted-card/status',rateLimitByUser('hosted-card-status',60000,8),async(_req,res)=>{
   const c=ctx(res);requireOwner(c);res.json(await getSyncpayHostedCardStatus(c));
  });
- app.post('/api/saas/syncpay/pix-auto-probe',rateLimitByUser('pix-auto-provider-probe',86_400_000,1),async(req,res)=>{
-  const c=ctx(res);requireOwner(c);
-  await requirePlatformAdmin(res.locals.auth as AuthContext);
-  z.object({confirmed:z.literal(true)}).strict().parse(req.body);
-  res.set('Cache-Control','no-store').json(await diagnosePixAutomaticoPermission());
- });
+
  app.post('/api/saas/subscribe',rateLimitByUser('billing-subscribe',600_000,8),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
  });
