@@ -108,6 +108,8 @@ export function FioPlans(p:WorkspaceProps){
  const [checkoutError,setCheckoutError]=useState('');
  const [checkoutCode,setCheckoutCode]=useState('');
  const [now,setNow]=useState(Date.now());
+ const [pixProbeBusy,setPixProbeBusy]=useState(false);
+ const [pixProbeResult,setPixProbeResult]=useState('');
 
  const sub=p.data.fioSubscription;
  const trialUsed=Boolean(sub.trial_ends_at);
@@ -1384,6 +1386,29 @@ export function FioPlans(p:WorkspaceProps){
   </article>
 
   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
+  {location.search.includes('fioPixDiag=1')&&!pixAutomaticoConfigured&&<div className="fio-payflow-note" role="status">
+   <div style={{width:'100%'}}>
+    <p>Diagnóstico técnico do Pix Automático (acesso administrativo). Não cria assinantes nem cobra ninguém.</p>
+    <button className="fio-payflow-secondary" type="button" disabled={pixProbeBusy} onClick={()=>{
+     if(!window.confirm('O FIO criará e arquivará um plano de teste na SyncPay, sem cliente e sem cobrança. Continuar?'))return;
+     setPixProbeBusy(true);setPixProbeResult('');
+     void api<{status:string;createHttp?:number|null;archiveHttp?:number|null}>('/saas/syncpay/pix-auto-probe',p.data.shop.id,{confirmed:true}).then(result=>{
+      const labels:Record<string,string>={
+       capability_confirmed:'SyncPay aceitou o plano Pix Automático e confirmou o arquivamento. Falta habilitar e testar o mandato.',
+       permission_not_confirmed:'SyncPay não confirmou a permissão do Pix Automático. Não habilite sem liberação.',
+       auth_unavailable:'A SyncPay recusou a autenticação do servidor. Revise com o suporte, sem compartilhar chaves.',
+       not_configured:'Credenciais SyncPay ausentes no servidor.',
+       provider_error:'O provedor não confirmou o teste. Não habilite.',
+       network_error:'Falha de rede. Nenhum acesso foi habilitado.',
+       create_response_invalid:'A resposta de criação foi inesperada. Confira planos temporários no painel da SyncPay.',
+       archive_not_confirmed:'A criação pode ter ocorrido, mas o arquivamento não foi confirmado. Confira o painel da SyncPay.'
+      };
+      setPixProbeResult((labels[result.status]||'Resultado inconclusivo.')+' (código: '+result.status+')');
+     }).catch(error=>setPixProbeResult(checkoutMessage(error))).finally(()=>setPixProbeBusy(false));
+    }}>{pixProbeBusy?'Verificando...':'Verificar permissão do Pix Automático'}</button>
+    {pixProbeResult&&<p>{pixProbeResult}</p>}
+   </div>
+  </div>}
   {hostedCardConfigured&&<button className="fio-payflow-secondary" type="button" disabled={busy} onClick={()=>void checkHostedCard()}>{busy?'Consultando...':'Já paguei · verificar pagamento'}</button>}
   </div>
 

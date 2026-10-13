@@ -1,4 +1,4 @@
-import { createHash,createHmac,timingSafeEqual } from 'node:crypto';
+import { createHash,createHmac,randomBytes,timingSafeEqual } from 'node:crypto';
 import { createClient,type SupabaseClient } from '@supabase/supabase-js';
 import type { Request,Response as ExpressResponse } from 'express';
 import { z } from 'zod';
@@ -887,6 +887,40 @@ export async function handleSyncpayWebhook(req:Request,res:ExpressResponse,fetch
  const key=createHash('sha256').update([event.event,event.subscription_token,event.occurred_at,event.plan_token??'',event.status??'',event.next_charge_at??''].join('|')).digest('hex');
  await applyProviderTruth(db,detail,{key,name:event.event,occurredAt:new Date(event.occurred_at).toISOString(),bodyHash});
  res.status(200).json({received:true});
+}
+
+
+/**
+ * Diagnostico de permissao somente no servidor. Um plano temporario nao possui
+ * assinante nem pagamento. Nao exponha tokens nem detalhes de resposta do provedor.
+ */
+export async function diagnosePixAutomaticoPermission(fetcher:Fetcher=fetch){
+ if(!configured())return {status:'not_configured'};
+ let accessToken:string;
+ try{accessToken=await getAccessToken(fetcher,true);}
+ catch{return {status:'auth_unavailable'};}
+ const name='FIO-PIX-AUTO-TECH-CHECK-'+randomBytes(8).toString('hex');
+ let planToken:string|null=null;
+ let createHttp:number|null=null;
+ const headers={Accept:'application/json',Authorization:'Bearer '+accessToken};
+ try{
+  const response=await fetcher(BASE+'/subscription-plans',{
+   method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),
+   headers:{...headers,'Content-Type':'application/json'},
+   body:JSON.stringify({name,description:'Diagnostico sem assinantes nem cobranças',amount:'50.00',periodicity_days:30,billing_method:'pix_automatico',billing_advance_days:3,grace_period_days:2,max_retry_attempts:1})
+  });
+  createHttp=response.status;
+  const payload=await parseJson(response);
+  if(response.status!==201)return {status:[403,422].includes(response.status)?'permission_not_confirmed':'provider_error',createHttp};
+  const parsed=z.object({data:z.object({token:z.string().min(8).max(200)}).passthrough()}).safeParse(payload);
+  if(!parsed.success)return {status:'create_response_invalid',createHttp};
+  planToken=parsed.data.data.token;
+ }catch{return {status:'network_error',createHttp};}
+ // E imprescindivel arquivar antes de declarar que a permissao esta pronta.
+ try{
+  const deletion=await fetcher(BASE+'/subscription-plans/'+encodeURIComponent(planToken),{method:'DELETE',redirect:'error',headers,signal:AbortSignal.timeout(15000)});
+  return {status:deletion.status===204?'capability_confirmed':'archive_not_confirmed',createHttp,archiveHttp:deletion.status};
+ }catch{return {status:'archive_not_confirmed',createHttp,archiveHttp:null};}
 }
 
 export const syncpayInternals={planConfig,validDocument,accessUntil,stateEventKey,isSyncpayDashboardTest,normalizeProviderDetail,paymentFromChargePayload,refundWindow,pickRecoverableSubscriber};

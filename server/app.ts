@@ -1,5 +1,5 @@
 import express from 'express';
-import { platformRouter } from './platform.js';
+import { platformRouter,requirePlatformAdmin } from './platform.js';
 import { createClient } from '@supabase/supabase-js';
 import helmet from 'helmet';
 import { resolve } from 'node:path';
@@ -9,7 +9,7 @@ import { authenticate, tenant, requireOwner, requireFioFeature, bootstrap, type 
 import { ApiError,dbError } from './errors.js';
 import { askAssistant } from './assistant.js';
 import { bookingSchema } from '../shared/domain.js';
-import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment,syncpayPixAutomaticoConfigured,sealSyncpayCard,syncpayCardConfigured,getSyncpayRefundTracking,syncpayLegacyPixCheckoutConfigured,startSyncpayHostedCard,getSyncpayHostedCardStatus,syncpayHostedCardConfigured } from './syncpay.js';
+import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment,syncpayPixAutomaticoConfigured,sealSyncpayCard,syncpayCardConfigured,getSyncpayRefundTracking,syncpayLegacyPixCheckoutConfigured,startSyncpayHostedCard,getSyncpayHostedCardStatus,syncpayHostedCardConfigured,diagnosePixAutomaticoPermission } from './syncpay.js';
 import { createStripeCheckoutSession,createStripeBillingPortal,getStripeBilling,handleStripeWebhook,stripeCheckoutConfigured,getStripeRefundPolicy,requestStripeRefund } from './stripe.js';
 import { createHash,randomUUID,timingSafeEqual } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
@@ -474,6 +474,12 @@ export function createApp(authenticator: Authenticator=authenticate) {
  });
  app.get('/api/saas/syncpay/hosted-card/status',rateLimitByUser('hosted-card-status',60000,8),async(_req,res)=>{
   const c=ctx(res);requireOwner(c);res.json(await getSyncpayHostedCardStatus(c));
+ });
+ app.post('/api/saas/syncpay/pix-auto-probe',rateLimitByUser('pix-auto-provider-probe',86_400_000,1),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  await requirePlatformAdmin(res.locals.auth as AuthContext);
+  z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  res.set('Cache-Control','no-store').json(await diagnosePixAutomaticoPermission());
  });
  app.post('/api/saas/subscribe',rateLimitByUser('billing-subscribe',600_000,8),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
