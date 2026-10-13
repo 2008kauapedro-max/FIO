@@ -438,6 +438,7 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
  const input=subscribeInput.parse(raw),document=digits(input.document);
  if(input.method==='qr_code'&&!syncpayLegacyPixCheckoutConfigured())throw new ApiError(503,'SYNCPAY_LEGACY_PIX_DISABLED','Novas assinaturas por Pix manual estão indisponíveis. Utilize Pix Automático ou cartão quando habilitados.');
  if(input.method==='pix_automatico'&&!syncpayPixAutomaticoConfigured())throw new ApiError(503,'SYNCPAY_PIX_AUTO_NOT_AVAILABLE','O Pix Automático ainda não está disponível nesta conta.');
+ if(input.method==='pix_automatico'&&input.cycle!=='monthly')throw new ApiError(422,'SYNCPAY_PIX_AUTO_MONTHLY_ONLY','Pix Automatico esta disponivel apenas no plano mensal.');
  if(input.method==='credit_card'){
   if(!syncpayCardConfigured())throw new ApiError(503,'SYNCPAY_CARD_NOT_AVAILABLE','Cartão SyncPay não habilitado.');
   if(input.cycle!=='monthly')throw new ApiError(422,'SYNCPAY_CARD_ANNUAL_SEPARATE','Plano anual parcelado é uma compra única; não pode ser aberto como assinatura mensal.');
@@ -456,7 +457,16 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
   throw new ApiError(409,'SYNCPAY_SUBSCRIPTION_EXISTS','Já existe uma assinatura ou cobrança recorrente em andamento. Conclua ou cancele a atual antes de escolher outro plano.');
  }
  if(recovered.blocked)throw new ApiError(409,'SYNCPAY_ENROLLMENT_IN_PROGRESS','Uma tentativa recente ainda está sendo conferida. Aguarde alguns minutos e tente novamente.');
- const db=adminDb(),mapping=await ensureProviderPlan(db,input.plan,input.cycle,fetcher,input.method);
+ const db=adminDb();
+ // Nao criar outro mandato enquanto houver checkout hospedado de cartao pendente.
+ // A reconciliacao do checkout antigo pode chegar por webhook mais tarde.
+ if(input.method==='pix_automatico'){
+  const pendingHosted=await db.from('fio_hosted_checkout_intents').select('id')
+   .eq('barbershop_id',ctx.shopId).in('state',['creating','ready']).limit(1).maybeSingle();
+  dbError(pendingHosted.error);
+  if(pendingHosted.data)throw new ApiError(409,'SYNCPAY_HOSTED_PENDING','Existe um checkout de cartao pendente. Confira o pagamento ou fale com o suporte antes de autorizar Pix Automatico.');
+ }
+ const mapping=await ensureProviderPlan(db,input.plan,input.cycle,fetcher,input.method);
  const existing=await currentLink(db,ctx.shopId);
  if(existing){
   const detail=await getProviderDetail(existing.provider_subscription_token,fetcher,{planToken:existing.provider_plan_token,gracePeriodDays:GRACE_DAYS[existing.billing_cycle]});

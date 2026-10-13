@@ -41,7 +41,7 @@ describe('FIO: logo não vaza entre gestão e aplicativo dos clientes',()=>{
   // O checkout exibe somente metodos realmente disponiveis.
   expect(plans).toContain("hostedCardConfigured&&cycle==='monthly'");
   expect(plans).toContain('<strong>Cartão de crédito</strong>');
-  expect(plans).toContain('{pixAutomaticoConfigured&&<button');
+  expect(plans).toContain("{pixAutomaticoConfigured&&cycle==='monthly'&&<button");
   expect(plans).not.toContain('Aguardando homologação da SyncPay');
   expect(plans).not.toContain('role="radio" aria-checked={false} disabled');
  });

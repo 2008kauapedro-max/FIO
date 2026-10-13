@@ -23,6 +23,7 @@ describe('FIO: teste grátis, premium e bloqueio seguro',()=>{
   expect(canStartPaidCheckout(flags,'monthly')).toBe(false);
   expect(canStartPaidCheckout({...flags,syncpayCardConfigured:true},'monthly')).toBe(true);
   expect(canStartPaidCheckout({...flags,syncpayCardConfigured:true},'annual')).toBe(false);
-  expect(canStartPaidCheckout({...flags,pixAutomaticoConfigured:true},'annual')).toBe(true);
+  expect(canStartPaidCheckout({...flags,pixAutomaticoConfigured:true},'annual')).toBe(false);
+  expect(canStartPaidCheckout({...flags,pixAutomaticoConfigured:true},'monthly')).toBe(true);
  });
 });

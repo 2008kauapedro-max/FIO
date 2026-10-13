@@ -145,7 +145,7 @@ export function FioPlans(p:WorkspaceProps){
     setLegacyPixCheckoutConfigured(Boolean(result.legacyPixCheckoutConfigured));
     setSyncpayCardConfigured(Boolean(result.syncpayCardConfigured));
     setHostedCardConfigured(Boolean(result.hostedCardConfigured));
-    setPaymentMethod(result.hostedCardConfigured?'sync-hosted':result.pixAutomaticoConfigured?'pix-auto':result.syncpayCardConfigured?'sync-card':result.stripeConfigured?'card':'pix');
+    setPaymentMethod(result.hostedCardConfigured&&cycle==='monthly'?'sync-hosted':result.pixAutomaticoConfigured&&cycle==='monthly'?'pix-auto':result.syncpayCardConfigured?'sync-card':result.stripeConfigured?'card':'pix');
     setBillingLoaded(true);
    })
    .catch(error=>{
@@ -393,7 +393,7 @@ export function FioPlans(p:WorkspaceProps){
   setCheckoutPlan(code);
   setDocument('');
   setAcceptedTerms(false);
-  setPaymentMethod(hostedCardConfigured?'sync-hosted':pixAutomaticoConfigured?'pix-auto':syncpayCardConfigured?'sync-card':stripeConfigured?'card':'pix');
+  setPaymentMethod(hostedCardConfigured&&cycle==='monthly'?'sync-hosted':pixAutomaticoConfigured&&cycle==='monthly'?'pix-auto':syncpayCardConfigured?'sync-card':stripeConfigured?'card':'pix');
   setScreen('review');
  }
 
@@ -473,7 +473,7 @@ export function FioPlans(p:WorkspaceProps){
 
   if(!billingConfigured)return;
   if(paymentMethod==='pix'&&!legacyPixCheckoutConfigured)return;
-  if(paymentMethod==='pix-auto'&&!pixAutomaticoConfigured)return;
+  if(paymentMethod==='pix-auto'&&(!pixAutomaticoConfigured||cycle!=='monthly'))return;
   if(paymentMethod==='sync-card'&&(!syncpayCardConfigured||cycle!=='monthly'))return;
 
   const digits=documentDigits(document);
@@ -894,7 +894,7 @@ export function FioPlans(p:WorkspaceProps){
       {!hostedCardConfigured&&syncpayCardConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='sync-card'} disabled={cycle!=='monthly'} className={paymentMethod==='sync-card'?'active':''} onClick={()=>setPaymentMethod('sync-card')}>
        <CreditCard size={18}/><span><strong>Cartão de crédito</strong><small>Assinatura mensal</small></span>
       </button>}
-      {pixAutomaticoConfigured&&<button type="button" role="radio" aria-checked={paymentMethod==='pix-auto'} className={paymentMethod==='pix-auto'?'active':''} onClick={()=>setPaymentMethod('pix-auto')}>
+      {pixAutomaticoConfigured&&cycle==='monthly'&&<button type="button" role="radio" aria-checked={paymentMethod==='pix-auto'} className={paymentMethod==='pix-auto'?'active':''} onClick={()=>setPaymentMethod('pix-auto')}>
        <WalletCards size={18}/><span><strong>Pix Automático</strong><small>Autorize uma vez no app do banco</small></span>
       </button>}
       {stripeConfigured&&!hostedCardConfigured&&!pixAutomaticoConfigured&&!syncpayCardConfigured&&<button

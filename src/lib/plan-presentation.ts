@@ -23,7 +23,7 @@ type PaymentAvailability={
 export function canStartPaidCheckout(flags:PaymentAvailability,cycle:BillingCycle):boolean{
  if(flags.stripeConfigured)return true;
  if(!flags.billingConfigured)return false;
- return flags.pixAutomaticoConfigured||
+ return (cycle==='monthly'&&flags.pixAutomaticoConfigured)||
   flags.legacyPixCheckoutConfigured||
   (cycle==='monthly'&&flags.syncpayCardConfigured);
 }
