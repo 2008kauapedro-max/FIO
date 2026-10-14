@@ -857,7 +857,7 @@ export async function getSyncpayHostedCardStatus(ctx:TenantContext,fetcher:Fetch
  try{
   const status=await reconcileHostedToken(db,intent,fetcher);
   return {state:status==='linked'?'linked':status==='review'?'review':'pending',pending:status==='pending'};
- }catch{return {state:'pending',pending:true};}
+ }catch{return {state:'pending',pending:true,verificationUnavailable:true};}
 }
 export async function bindHostedFromWebhook(event:{subscription_token:string;plan_token?:string},fetcher:Fetcher=fetch,db:SupabaseClient=adminDb()){
  if(!event.plan_token)return false;

@@ -398,13 +398,22 @@ export function FioPlans(p:WorkspaceProps){
  }
 
  async function checkHostedCard(){
+  if(busy)return;
   setBusy(true);setCheckoutError('');
   try{
-   const state=await api<{state:string;pending:boolean}>('/saas/syncpay/hosted-card/status',p.data.shop.id);
+   const state=await api<{state:string;pending:boolean;verificationUnavailable?:boolean}>('/saas/syncpay/hosted-card/status',p.data.shop.id);
    if(state.state==='linked'){
-    await refreshBilling();await p.refresh();setScreen('success');
-   }else if(state.state==='review')setCheckoutError('Há uma cobrança que precisa de conferência. Fale com o suporte antes de pagar novamente.');
-   else if(state.state==='pending')setCheckoutError('Pagamento ainda não confirmado. Confira novamente em instantes.');
+    // A vinculação antiga nao prova que a assinatura ainda esta ativa.
+    // Atualizar diretamente: refreshBilling() retorna cedo enquanto busy=true.
+    const result=await api<{configured:boolean;subscription:BillingState|null}>('/saas/billing',p.data.shop.id);
+    setBilling(result.subscription);setBillingConfigured(result.configured);setBillingLoaded(true);
+    if(result.subscription?.provider==='syncpay'&&result.subscription.providerStatus==='active'){
+     await p.refresh();
+     setSelectedPlan(result.subscription.plan);
+     setScreen('success');
+    }else setCheckoutError('Assinatura vinculada, mas sem pagamento ativo confirmado. Nao realize outra cobranca; consulte o suporte FIO.');
+   }else if(state.state==='review')setCheckoutError('Existe uma cobranca que precisa de conferencia. Fale com o suporte antes de pagar novamente.');
+   else if(state.state==='pending')setCheckoutError(state.verificationUnavailable?'Nao foi possivel consultar a SyncPay agora. Nao realize outro pagamento; tente verificar novamente.':'Pagamento nao confirmado. Se ja concluiu o checkout, aguarde e verifique novamente. Evite pagar duas vezes.');
    else setCheckoutError('Nenhum pagamento hospedado recente foi encontrado.');
   }catch(e){setCheckoutError(checkoutMessage(e));}finally{setBusy(false);}
  }
