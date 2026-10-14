@@ -107,6 +107,7 @@ export function FioPlans(p:WorkspaceProps){
  const [stripeReturn,setStripeReturn]=useState<'pending'|'checking'|'cancelled'|null>(null);
  const [checkoutError,setCheckoutError]=useState('');
  const [checkoutCode,setCheckoutCode]=useState('');
+ const [hostedCardStatus,setHostedCardStatus]=useState<'none'|'pending'|'review'|'unavailable'>('none');
  const [now,setNow]=useState(Date.now());
 
  const sub=p.data.fioSubscription;
@@ -157,6 +158,17 @@ export function FioPlans(p:WorkspaceProps){
   return()=>{active=false;};
  },[p.data.shop.id]);
 
+ useEffect(()=>{
+  if(!hostedCardConfigured){setHostedCardStatus('none');return;}
+  let active=true;
+  void api<{state:string;pending:boolean}>('/saas/syncpay/hosted-card/status',p.data.shop.id)
+   .then(result=>{
+    if(!active)return;
+    setHostedCardStatus(result.state==='review'?'review':(['pending','creating'].includes(result.state)?'pending':'none'));
+   })
+   .catch(()=>{if(active)setHostedCardStatus('unavailable');});
+  return()=>{active=false;};
+ },[hostedCardConfigured,p.data.shop.id]);
  useEffect(()=>{
   if(screen!=='pix'&&screen!=='pix-auto')return;
 
@@ -402,6 +414,7 @@ export function FioPlans(p:WorkspaceProps){
   setBusy(true);setCheckoutError('');
   try{
    const state=await api<{state:string;pending:boolean;verificationUnavailable?:boolean}>('/saas/syncpay/hosted-card/status',p.data.shop.id);
+   setHostedCardStatus(state.state==='review'?'review':(['pending','creating'].includes(state.state)?'pending':'none'));
    if(state.state==='linked'){
     // A vinculação antiga nao prova que a assinatura ainda esta ativa.
     // Atualizar diretamente: refreshBilling() retorna cedo enquanto busy=true.
@@ -414,7 +427,9 @@ export function FioPlans(p:WorkspaceProps){
     }else setCheckoutError('Assinatura vinculada, mas sem pagamento ativo confirmado. Nao realize outra cobranca; consulte o suporte FIO.');
    }else if(state.state==='review')setCheckoutError('Existe uma cobranca que precisa de conferencia. Fale com o suporte antes de pagar novamente.');
    else if(state.state==='pending')setCheckoutError(state.verificationUnavailable?'Nao foi possivel consultar a SyncPay agora. Nao realize outro pagamento; tente verificar novamente.':'Pagamento nao confirmado. Se ja concluiu o checkout, aguarde e verifique novamente. Evite pagar duas vezes.');
-   else setCheckoutError('Nenhum pagamento hospedado recente foi encontrado.');
+   else if(state.state==='creating')setCheckoutError('Checkout ainda em preparacao. Aguarde e verifique novamente.');
+   else if(['none','cancelled','failed'].includes(state.state))setCheckoutError('');
+   else setCheckoutError('Nao foi possivel confirmar este checkout. Fale com o suporte antes de pagar novamente.');
   }catch(e){setCheckoutError(checkoutMessage(e));}finally{setBusy(false);}
  }
  async function subscribe(){
@@ -1393,7 +1408,7 @@ export function FioPlans(p:WorkspaceProps){
   </article>
 
   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
-  {hostedCardConfigured&&<button className="fio-payflow-secondary" type="button" disabled={busy} onClick={()=>void checkHostedCard()}>{busy?'Consultando...':'Já paguei · verificar pagamento'}</button>}
+  {hostedCardConfigured&&['pending','review'].includes(hostedCardStatus)&&<button className="fio-payflow-secondary" type="button" disabled={busy} onClick={()=>void checkHostedCard()}>{busy?'Consultando...':'Conferir checkout pendente'}</button>}
   </div>
 
   <div className="fio-payflow-bottom-action fio-payflow-plan-action">
