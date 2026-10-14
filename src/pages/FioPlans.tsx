@@ -1436,8 +1436,9 @@ export function FioPlans(p:WorkspaceProps){
 
    {billingLoaded&&!canCheckoutCycle&&selectedPlan!=='FREE'&&
     <p className="fio-trial-provider-note" role="status">
-     A contratação ainda está em preparação enquanto aguardamos a SyncPay. O teste de 14 dias com renovação automática requer autorização prévia de cartão ou Pix Automático.
-     Nenhuma cobrança será feita sem autorização. Para contratar, é necessário um método de pagamento habilitado para este período.
+     {cycle==='annual'
+      ?'Compra anual ainda indisponível: o FIO precisa confirmar o total com eventuais taxas de parcelamento na SyncPay e disponibilizar um checkout seguro. Após pagamento aprovado, serão 365 dias de acesso, sem renovação automática. Nenhuma cobrança foi iniciada.'
+      :'A contratação mensal ainda está em preparação enquanto aguardamos a SyncPay. O teste de 14 dias com renovação automática requer autorização prévia de cartão ou Pix Automático. Nenhuma cobrança será feita sem autorização.'}
     </p>
    }
   </div>

@@ -145,7 +145,7 @@ export const FIO_PLAN_CATALOG:FioPlanDefinition[]=[
   name:'FIO PREMIUM',
   eyebrow:'PARA OPERAÇÕES MAIORES',
   description:'Para equipes que querem o máximo do FIO, com mais capacidade e IA sem limite diário.',
-  prices:{weekly:null,monthly:29990,annual:289000},
+  prices:{weekly:null,monthly:29990,annual:287904},
   highlights:['IA sem limite diário','Até 10 profissionais + responsável'],
   groups:[
    {title:'CAPACIDADE',items:[
