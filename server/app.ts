@@ -15,6 +15,7 @@ import { createHash,randomUUID,timingSafeEqual } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
 import { getAnnualOffer,annualCheckoutUnavailable } from './fio-annual-api.js';
 import { prepareAnnualOrder } from './fio-annual-store.js';
+import { getAnnualOrderStatus } from './fio-annual-status.js';
 import {dispatchPlatformPush,publicPushConfig,validPushEndpoint} from './platform-push.js';
 import {dispatchAppointmentPush} from './appointment-push.js';
 type Authenticator = typeof authenticate;
@@ -488,6 +489,9 @@ export function createApp(authenticator: Authenticator=authenticate) {
  });
  app.post('/api/saas/annual/prepare',rateLimitByUser('annual-prepare',600000,3),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await prepareAnnualOrder(c,req.body));
+ });
+ app.get('/api/saas/annual/status',rateLimitByUser('annual-status',60000,12),async(_req,res)=>{
+  const c=ctx(res);requireOwner(c);res.json(await getAnnualOrderStatus(c));
  });
  app.post('/api/saas/annual/checkout',rateLimitByUser('annual-checkout-disabled',600000,3),async(_req,res)=>{
   const c=ctx(res);requireOwner(c);annualCheckoutUnavailable();
