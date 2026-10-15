@@ -14,6 +14,7 @@ import { createStripeCheckoutSession,createStripeBillingPortal,getStripeBilling,
 import { createHash,randomUUID,timingSafeEqual } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
 import { getAnnualOffer,annualCheckoutUnavailable } from './fio-annual-api.js';
+import { prepareAnnualOrder } from './fio-annual-store.js';
 import {dispatchPlatformPush,publicPushConfig,validPushEndpoint} from './platform-push.js';
 import {dispatchAppointmentPush} from './appointment-push.js';
 type Authenticator = typeof authenticate;
@@ -484,6 +485,9 @@ export function createApp(authenticator: Authenticator=authenticate) {
 
  app.get('/api/saas/annual/offer',rateLimitByUser('annual-offer',60000,20),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.json(await getAnnualOffer(c,req.query.plan));
+ });
+ app.post('/api/saas/annual/prepare',rateLimitByUser('annual-prepare',600000,3),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.status(201).json(await prepareAnnualOrder(c,req.body));
  });
  app.post('/api/saas/annual/checkout',rateLimitByUser('annual-checkout-disabled',600000,3),async(_req,res)=>{
   const c=ctx(res);requireOwner(c);annualCheckoutUnavailable();
