@@ -60,7 +60,7 @@ export async function prepareAnnualOrder(
  // Recheck active monthly/other contracts; a FREE snapshot by itself is insufficient.
  const db=providedDb??adminDb();
  const [base,provider,hosted]=await Promise.all([
-  db.from('saas_subscriptions').select('status,expires_at').eq('barbershop_id',ctx.shopId).maybeSingle(),
+  db.from('saas_subscriptions').select('plan,status,expires_at').eq('barbershop_id',ctx.shopId).maybeSingle(),
   db.from('saas_provider_subscriptions').select('id').eq('barbershop_id',ctx.shopId)
    .eq('is_current',true).in('provider_status',['active','pending_first_payment','overdue','suspended'])
    .limit(1).maybeSingle(),
@@ -68,7 +68,7 @@ export async function prepareAnnualOrder(
    .in('state',['creating','ready']).limit(1).maybeSingle()
  ]);
  dbError(base.error);dbError(provider.error);dbError(hosted.error);
- const baseActive=base.data&&['active','trialing'].includes(base.data.status)&&
+ const baseActive=base.data&&base.data.plan!=='FREE'&&['active','trialing'].includes(base.data.status)&&
   (!base.data.expires_at||Date.parse(base.data.expires_at)>Date.now());
  if(baseActive||provider.data||hosted.data)throw new ApiError(409,'ANNUAL_CONTRACT_CONFLICT',
   'Existe assinatura ou checkout em andamento. Confira antes de criar um pedido anual.');

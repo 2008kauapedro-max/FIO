@@ -13,14 +13,14 @@ function ctx(mode:'SHOP'|'SOLO'='SHOP',role='OWNER'){
  const from=vi.fn(()=>chain);
  return {data:{shopId,userId,member:{role},db:{from}} as unknown as TenantContext,from};
 }
-function store(options:{baseStatus?:string;provider?:boolean;hosted?:boolean;insertConflict?:boolean}={}){
+function store(options:{baseStatus?:string;basePlan?:string;baseExpiresAt?:string;provider?:boolean;hosted?:boolean;insertConflict?:boolean}={}){
  let order:any=null;
  const inserts:any[]=[];
  const from=vi.fn((name:string)=>{
   const chain:any={};
   for(const method of ['select','eq','in','order','limit'])chain[method]=()=>chain;
   chain.maybeSingle=async()=>({data:
-   name==='saas_subscriptions'?(options.baseStatus?{status:options.baseStatus,expires_at:null}:null):
+   name==='saas_subscriptions'?(options.baseStatus?{plan:options.basePlan??'PRO',status:options.baseStatus,expires_at:options.baseExpiresAt??null}:null):
    name==='saas_provider_subscriptions'?(options.provider?{id:'subscription'}:null):
    name==='fio_hosted_checkout_intents'?(options.hosted?{id:'hosted'}:null):
    name==='fio_annual_orders'?order:null,error:null});
@@ -74,6 +74,27 @@ describe('pedido anual local - zero cobrancas externas',()=>{
  });
  it.each([{baseStatus:'active'},{baseStatus:'trialing'},{provider:true},{hosted:true}])('bloqueia contrato ativo ou pendente %j',async(options)=>{
   const c=ctx();const d=store(options);
+  await expect(prepareAnnualOrder(c.data,{plan:'PRO'},d.db)).rejects.toMatchObject({code:'ANNUAL_CONTRACT_CONFLICT',status:409});
+  expect(d.inserts).toHaveLength(0);
+ });
+ it('FREE ativo permite preparar o anual sem tratar gratuito como assinatura paga',async()=>{
+  const c=ctx();const d=store({baseStatus:'active',basePlan:'FREE'});
+  const result=await prepareAnnualOrder(c.data,{plan:'PRO'},d.db);
+  expect(result).toMatchObject({state:'preparing',plan:'PRO',checkoutEnabled:false});
+  expect(d.inserts).toHaveLength(1);
+ });
+ it('FREE trialing tambem nao e contrato financeiro',async()=>{
+  const c=ctx();const d=store({baseStatus:'trialing',basePlan:'FREE'});
+  await prepareAnnualOrder(c.data,{plan:'PRO'},d.db);
+  expect(d.inserts).toHaveLength(1);
+ });
+ it('plano pago vencido pode preparar o anual',async()=>{
+  const c=ctx();const d=store({baseStatus:'active',basePlan:'PRO',baseExpiresAt:'2020-01-01T00:00:00.000Z'});
+  await prepareAnnualOrder(c.data,{plan:'PRO'},d.db);
+  expect(d.inserts).toHaveLength(1);
+ });
+ it('plano pago ativo continua bloqueado',async()=>{
+  const c=ctx();const d=store({baseStatus:'active',basePlan:'PRO'});
   await expect(prepareAnnualOrder(c.data,{plan:'PRO'},d.db)).rejects.toMatchObject({code:'ANNUAL_CONTRACT_CONFLICT',status:409});
   expect(d.inserts).toHaveLength(0);
  });
