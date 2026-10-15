@@ -13,6 +13,7 @@ import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSync
 import { createStripeCheckoutSession,createStripeBillingPortal,getStripeBilling,handleStripeWebhook,stripeCheckoutConfigured,getStripeRefundPolicy,requestStripeRefund } from './stripe.js';
 import { createHash,randomUUID,timingSafeEqual } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
+import { getAnnualOffer,annualCheckoutUnavailable } from './fio-annual-api.js';
 import {dispatchPlatformPush,publicPushConfig,validPushEndpoint} from './platform-push.js';
 import {dispatchAppointmentPush} from './appointment-push.js';
 type Authenticator = typeof authenticate;
@@ -481,6 +482,12 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const c=ctx(res);requireOwner(c);res.json(await getSyncpayHostedCardStatus(c));
  });
 
+ app.get('/api/saas/annual/offer',rateLimitByUser('annual-offer',60000,20),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.json(await getAnnualOffer(c,req.query.plan));
+ });
+ app.post('/api/saas/annual/checkout',rateLimitByUser('annual-checkout-disabled',600000,3),async(_req,res)=>{
+  const c=ctx(res);requireOwner(c);annualCheckoutUnavailable();
+ });
  app.post('/api/saas/subscribe',rateLimitByUser('billing-subscribe',600_000,8),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
  });
