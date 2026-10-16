@@ -1,3 +1,4 @@
+import { fioEffectivePlan } from '../shared/fio-access-policy.js';
 import { createClient } from '@supabase/supabase-js';
 import { assistantSchema, allowedActions, actionSchema } from '../shared/domain.js';
 import { bootstrap, assistantContext, type TenantContext } from './context.js';
@@ -66,13 +67,13 @@ export async function askAssistant(ctx: TenantContext, body: unknown) {
  const input=assistantSchema.parse(body);
  const locale=(input.locale??'pt-BR') as AssistantLocale;
  const {db,shopId,userId}=ctx;
- const {data:billing,error:billingError}=await db.from('saas_subscriptions').select('plan,status,expires_at').eq('barbershop_id',shopId).single();
+ const {data:billing,error:billingError}=await db.from('saas_subscriptions').select('plan,status,expires_at,starts_at,retained_paid_until,verified_paid_until').eq('barbershop_id',shopId).single();
  dbError(billingError);
  if(!billing) throw new ApiError(403,'PLAN_REQUIRED',copy(locale,'planMissing'));
  const {data:feature,error:featureError}=await db.from('plan_features').select('ai_enabled').eq('plan',billing.plan).single();
  dbError(featureError);
  if(!feature) throw new ApiError(403,'PLAN_REQUIRED',copy(locale,'planMissing'));
- if(!feature.ai_enabled||!['active','trialing'].includes(billing.status)||(billing.expires_at&&new Date(billing.expires_at)<=new Date())) throw new ApiError(403,'PLAN_REQUIRED',copy(locale,'plan'));
+ if(!feature.ai_enabled||fioEffectivePlan(billing as Parameters<typeof fioEffectivePlan>[0])==='FREE') throw new ApiError(403,'PLAN_REQUIRED',copy(locale,'plan'));
  const scopeReply=copy(locale,'scope');
  if(looksLikePromptAttack(input.message)||clearlyGenericAIRequest(input.message)) return {conversationId:input.conversationId??null,message:scopeReply,actions:[]};
  const url=process.env.AI_API_URL,key=process.env.AI_API_KEY,model=process.env.AI_MODEL,serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY;

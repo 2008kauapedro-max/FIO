@@ -17,6 +17,8 @@ import { getAnnualOffer,annualCheckoutUnavailable } from './fio-annual-api.js';
 import { prepareAnnualOrder } from './fio-annual-store.js';
 import { getAnnualOrderStatus } from './fio-annual-status.js';
 import { diagnoseSyncpayAnnualReadonly } from './fio-syncpay-readonly-probe.js';
+import { fioEffectivePlan } from '../shared/fio-access-policy.js';
+import { fioVisibleClientPlans,fioClientPlanLimit } from '../shared/fio-client-plan-visibility.js';
 import {dispatchPlatformPush,publicPushConfig,validPushEndpoint} from './platform-push.js';
 import {dispatchAppointmentPush} from './appointment-push.js';
 type Authenticator = typeof authenticate;
@@ -151,16 +153,19 @@ export function createApp(authenticator: Authenticator=authenticate) {
    db.from('services').select('id,name,description,duration_minutes,price_cents').eq('barbershop_id',shop.data.id).eq('active',true).order('name'),
    db.from('memberships').select('user_id,display_name,role,avatar_url').eq('barbershop_id',shop.data.id).in('role',['OWNER','BARBER']).eq('active',true).order('display_name'),
    db.from('shop_palettes').select('*').eq('palette_key',shop.data.palette_key??'fio-black').maybeSingle(),
-   db.from('saas_subscriptions').select('plan,status,expires_at').eq('barbershop_id',shop.data.id).maybeSingle()
+   db.from('saas_subscriptions').select('plan,status,expires_at,starts_at,retained_paid_until,verified_paid_until').eq('barbershop_id',shop.data.id).maybeSingle()
   ]);dbError(services.error);dbError(team.error);dbError(palette.error);dbError(billing.error);
-  const entitlement=billing.data&&['active','trialing','past_due'].includes(billing.data.status)&&(!billing.data.expires_at||new Date(billing.data.expires_at)>new Date());
-  const publicPlans=entitlement&&['SOLO','SOLO_PREMIUM','PRO','PLUS','PREMIUM'].includes(billing.data?.plan??'')
+  const effectivePublicPlan=fioEffectivePlan(billing.data as Parameters<typeof fioEffectivePlan>[0]);
+  const publicPlans=effectivePublicPlan!=='FREE'
    ?await db.from('subscription_plans').select('id,name,description,cuts,validity_days,price_cents,active').eq('barbershop_id',shop.data.id).eq('active',true).order('name')
    :{data:[],error:null};
   dbError(publicPlans.error);
+  const priorityResult=await db.from('fio_client_plan_priority').select('ordered_plan_ids').eq('barbershop_id',shop.data.id).maybeSingle();
+  dbError(priorityResult.error);
+  const priorityIds=priorityResult.data?.ordered_plan_ids??[];
   const asset=(path:string|null)=>path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:null;
   const instagram=shop.data.instagram?`@${String(shop.data.instagram).replace(/^@+/,'').trim()}`:null;
-  res.set('Cache-Control','no-store').json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:publicPlans.data??[]});
+  res.set('Cache-Control','no-store').json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:fioVisibleClientPlans(publicPlans.data??[],effectivePublicPlan,priorityIds)});
  });
 
  app.get('/api/public/share/:slug',rateLimit('public-share',{windowMs:60_000,max:60}),async(req,res)=>{
@@ -722,15 +727,33 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const r=await c.db.rpc('create_invitation',{p_shop:c.shopId,p_role:v.role});dbError(r.error);res.status(201).json({token:r.data});
  });
  app.post('/api/subscriptions',async(req,res)=>{
-  const c=ctx(res);requireOwner(c);const v=z.object({clientId:z.uuid(),name:z.string().trim().min(2).max(100),cuts:z.number().int().min(1).max(1000),expiresAt:z.iso.datetime({offset:true}),confirmed:z.literal(true)}).strict().parse(req.body);
+  const c=ctx(res);requireOwner(c);requireFioFeature(c,'client_plans');const v=z.object({clientId:z.uuid(),name:z.string().trim().min(2).max(100),cuts:z.number().int().min(1).max(1000),expiresAt:z.iso.datetime({offset:true}),confirmed:z.literal(true)}).strict().parse(req.body);
   const r=await c.db.rpc('issue_subscription',{p_shop:c.shopId,p_client:v.clientId,p_name:v.name,p_cuts:v.cuts,p_expires:v.expiresAt});dbError(r.error);res.status(201).json({id:r.data});
  });
  app.post('/api/subscription-plans',async(req,res)=>{
   const c=ctx(res);requireOwner(c);requireFioFeature(c,'client_plans');const v=z.object({name:z.string().trim().min(2).max(100),description:z.string().trim().max(700).default(''),cuts:z.number().int().min(1).max(1000),validityDays:z.number().int().min(1).max(730),priceCents:z.number().int().min(0).max(10000000)}).strict().parse(req.body);
   const r=await c.db.from('subscription_plans').insert({barbershop_id:c.shopId,name:v.name,description:v.description||null,cuts:v.cuts,validity_days:v.validityDays,price_cents:v.priceCents}).select().single();dbError(r.error);res.status(201).json(r.data);
  });
- app.post('/api/subscriptions/from-plan',async(req,res)=>{
+  app.post('/api/subscription-plans/priority',rateLimitByUser('client-plan-priority',60_000,10),async(req,res)=>{
+   const c=ctx(res);requireOwner(c);requireFioFeature(c,'client_plans');
+   const v=z.object({planIds:z.array(z.uuid()).min(1).max(100),confirmed:z.literal(true)}).strict().parse(req.body);
+   const limit=fioClientPlanLimit(c.plan);
+   if(!Number.isFinite(limit)||v.planIds.length>limit||new Set(v.planIds).size!==v.planIds.length)
+    throw new ApiError(400,'PLAN_LIMIT','Confira os pacotes escolhidos para o seu plano.');
+   const plans=await c.db.from('subscription_plans').select('id').eq('barbershop_id',c.shopId).eq('active',true);
+   dbError(plans.error);
+   const available=new Set((plans.data??[]).map(p=>p.id));
+   if(v.planIds.some(id=>!available.has(id)))throw new ApiError(400,'INVALID_PLAN','Escolha apenas pacotes ativos desta barbearia.');
+   const saved=await serviceDb().from('fio_client_plan_priority').upsert({barbershop_id:c.shopId,ordered_plan_ids:v.planIds,updated_at:new Date().toISOString()},{onConflict:'barbershop_id'});
+   dbError(saved.error);res.json({ok:true,planIds:v.planIds});
+  });
+  app.post('/api/subscriptions/from-plan',async(req,res)=>{
   const c=ctx(res);requireOwner(c);requireFioFeature(c,'client_plans');const v=z.object({clientId:z.uuid(),planId:z.uuid(),confirmed:z.literal(true)}).strict().parse(req.body);
+  const plans=await c.db.from('subscription_plans').select('id,active').eq('barbershop_id',c.shopId).eq('active',true).order('name');
+  dbError(plans.error);
+  const chosen=await c.db.rpc('fio_client_plan_priority_for_shop',{p_shop:c.shopId});
+  dbError(chosen.error);
+  if(!fioVisibleClientPlans(plans.data??[],c.plan,Array.isArray(chosen.data)?chosen.data:[]).some(plan=>plan.id===v.planId))throw new ApiError(403,'PLAN_LIMIT','Este pacote esta guardado. Escolha um dos pacotes permitidos pelo seu plano FIO.');
   const r=await c.db.rpc('issue_subscription_from_plan',{p_shop:c.shopId,p_client:v.clientId,p_plan:v.planId});dbError(r.error);res.status(201).json({id:r.data});
  });
  app.patch('/api/subscriptions/:id/cancel',async(req,res)=>{

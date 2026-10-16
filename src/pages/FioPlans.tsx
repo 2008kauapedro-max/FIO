@@ -9,6 +9,7 @@ import type { Plan } from '../../shared/domain';
 import type { WorkspaceProps } from './Workspace';
 import { useI18n } from '../i18n';
 import {annualCheckoutPreview} from '../../shared/syncpay-annual-checkout';
+import {fioAnnualCardEstimate} from '../../shared/fio-annual-card-estimate';
 import {refundStatusDisplay} from '../../shared/syncpay-refund-status';
 import './legal-payments.css';
 import {premiumInitialPlan,canStartPaidCheckout} from '../lib/plan-presentation';
@@ -871,6 +872,7 @@ export function FioPlans(p:WorkspaceProps){
   const targetDefinition=FIO_PLAN_CATALOG.find(plan=>plan.code===target)!;
   const total=targetDefinition.prices[cycle]??0;
   const annualPreview=total>0?annualCheckoutPreview(total,annualInstallments):null;
+  const installmentEstimate=total>0&&cycle==='annual'?fioAnnualCardEstimate(total,annualInstallments):null;
 
   return <section className="fio-payflow fio-payflow-review">
    <header className="fio-payflow-titlebar">
@@ -906,6 +908,8 @@ export function FioPlans(p:WorkspaceProps){
        </select>
        <p>Preço anual do plano: <strong>{amount(total)}</strong>.</p>
        <p>{annualPreview?.totalCents!==null&&annualPreview?.totalCents!==undefined?'Total para 1x: '+amount(annualPreview.totalCents):'O total com as taxas da SyncPay ainda não foi confirmado.'}</p>
+       <p>{installmentEstimate&&annualInstallments>1?`Simulacao de ${annualInstallments}x: juros aproximados de ${amount(installmentEstimate.interestCents)}; total estimado de ${amount(installmentEstimate.totalCents)}. As parcelas variam em centavos conforme o arredondamento.`:''}</p>
+       <p><strong>Valor total final:</strong> a confirmar no checkout oficial antes de qualquer pagamento. Esta simulacao usa as taxas do painel SyncPay em 16/10/2026; nao e cotacao do provedor.</p>
        <p>{annualPreview?.explanation}</p>
        <p><a className="fio-legal-text-link" href="/cartao-e-parcelamento" target="_blank" rel="noopener noreferrer">Ver condições de cartão e parcelamento</a></p>
        <button className="fio-payflow-secondary" type="button" disabled>Compra anual em preparação</button>

@@ -289,7 +289,29 @@ async function applyProviderTruth(db:SupabaseClient,detail:ProviderDetail,event:
   p_event_key:event.key,p_event_name:event.name,p_occurred_at:event.occurredAt,p_body_sha256:event.bodyHash,
   p_subscription_token:detail.token,p_provider_status:detail.status,p_plan_token:detail.plan.token,p_started_at:iso(detail.started_at),p_access_until:until
  });
- dbError(result.error);return result.data;
+ dbError(result.error);
+ if(detail.status==='active'&&until){
+  // Provider evidence: paid charge, not merely started_at or an activated mandate.
+  const paid=[...detail.charges].filter(charge=>Boolean(iso(charge.paid_at))&&['paid','completed','approved'].includes(String(charge.status).toLowerCase()))
+   .sort((a,b)=>Date.parse(b.paid_at??'')-Date.parse(a.paid_at??''))[0];
+  if(paid?.paid_at){
+   const current=await db.from('saas_provider_subscriptions').select('barbershop_id').eq('provider','syncpay').eq('provider_subscription_token',detail.token).eq('is_current',true).maybeSingle();
+   dbError(current.error);
+   if(current.data){
+    const verified=await db.rpc('fio_mark_verified_paid_period_v1',{p_shop:current.data.barbershop_id,p_token:detail.token,p_due:until,p_paid_at:iso(paid.paid_at)});
+    dbError(verified.error);
+   }
+  }
+ }
+ if(detail.status==='cancelled'){
+  const current=await db.from('saas_provider_subscriptions').select('barbershop_id').eq('provider','syncpay').eq('provider_subscription_token',detail.token).eq('is_current',true).maybeSingle();
+  dbError(current.error);
+  if(current.data){
+   const confirmed=await db.rpc('fio_finalize_paid_cancellation_v1',{p_shop:current.data.barbershop_id,p_token:detail.token});
+   dbError(confirmed.error);
+  }
+ }
+ return result.data;
 }
 
 function firstPaidCharge(detail:ProviderDetail){
@@ -607,6 +629,10 @@ export async function manageSyncpayCharge(ctx:TenantContext,raw:unknown,fetcher:
  if(input.action==='cancel_pending'&&detail.status!=='pending_first_payment')throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','A cobrança mudou. Atualize antes de continuar.');
  if(input.action==='cancel_active'&&!['active','overdue','suspended'].includes(detail.status))throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','Esta assinatura não pode ser cancelada nesse estado. Atualize antes de continuar.');
  if(input.action==='resend'&&!['pending_first_payment','overdue'].includes(detail.status))throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','Não há cobrança pendente para reenviar.');
+ if(input.action==='cancel_active'&&detail.status==='active'){
+  const prepared=await db.rpc('fio_prepare_paid_cancellation_v1',{p_shop:ctx.shopId,p_token:link.provider_subscription_token});
+  dbError(prepared.error);
+ }
  let payload:unknown;
  try{
   if(input.action==='resend')payload=await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(link.provider_subscription_token)}/resend-charge`,{method:'PATCH'},false);
@@ -614,6 +640,14 @@ export async function manageSyncpayCharge(ctx:TenantContext,raw:unknown,fetcher:
  }catch(error){
   if(input.action==='resend'&&error instanceof ApiError&&error.code==='SYNCPAY_INVALID_REQUEST')throw new ApiError(422,'SYNCPAY_RESEND_REJECTED','A SyncPay não aceitou gerar outro Pix agora. Atualize o status e, se continuar assim, fale com o suporte antes de tentar novamente.');
   throw error;
+ }
+ if(input.action==='cancel_active'){
+  // Do not promise paid retention unless the provider itself reports cancellation.
+  const verified=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
+  if(verified.status==='cancelled'){
+   const final=await db.rpc('fio_finalize_paid_cancellation_v1',{p_shop:ctx.shopId,p_token:link.provider_subscription_token});
+   dbError(final.error);
+  }
  }
  if(input.action==='resend'){
   const resentPayment=paymentFromChargePayload(payload);
@@ -660,6 +694,8 @@ export async function requestSyncpayRefund(ctx:TenantContext,raw:unknown,fetcher
  }).select('refund_code,status,requested_at').single();
  dbError(saved.error);
  const savedRefund=saved.data!;
+ const revoked=await db.rpc('fio_revoke_paid_cancellation_v1',{p_shop:ctx.shopId,p_token:link.provider_subscription_token});
+ dbError(revoked.error);
  let cancellation:'cancelled'|'needs_attention'='cancelled';
  try{
   await providerRequest(fetcher,`/subscriptions/${encodeURIComponent(link.provider_subscription_token)}/cancel`,{method:'PATCH',body:JSON.stringify({reason:'Cliente solicitou reembolso da primeira contratação dentro do prazo de 7 dias'})},false);
@@ -692,6 +728,10 @@ export async function getSyncpayBilling(ctx:TenantContext,fetcher:Fetcher=fetch)
  if(!link)return {configured:true,subscription:null};
  const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
  await applyProviderTruth(db,detail,{key:stateEventKey('owner-reconcile',detail),name:'reconcile',occurredAt:new Date().toISOString(),bodyHash:createHash('sha256').update(JSON.stringify({status:detail.status,token:detail.token,plan:detail.plan.token,next:detail.next_charge_at})).digest('hex')});
+ if(detail.status==='cancelled'){
+  const finalized=await db.rpc('fio_finalize_paid_cancellation_v1',{p_shop:ctx.shopId,p_token:detail.token});
+  dbError(finalized.error);
+ }
  const reconciled=await currentLink(db,ctx.shopId);
  const effectiveLink=reconciled??link;
  const planMethod=await db.from('syncpay_plan_mappings').select('billing_method').eq('provider_plan_token',effectiveLink.provider_plan_token).maybeSingle();dbError(planMethod.error);

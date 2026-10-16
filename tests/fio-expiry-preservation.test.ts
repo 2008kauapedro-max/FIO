@@ -12,8 +12,8 @@ describe('FIO overdue -> Free without deleting shop data',()=>{
  it('removes paid privileges on overdue for tenant and assistant',()=>{
   const ctx=readFileSync('server/context.ts','utf8');
   const assistant=readFileSync('server/assistant.ts','utf8');
-  expect(ctx).toContain("['active','trialing'].includes(subscription.status)");
-  expect(assistant).toContain("['active','trialing'].includes(billing.status)");
+  expect(ctx).toContain('fioEffectivePlan(subscription)');
+  expect(assistant).toContain('fioEffectivePlan(billing');
  });
  it('SQL returns Free without updating or deleting shop content',()=>{
   const sql=readFileSync('supabase/migrations/20261013025234_expired_access_to_free.sql','utf8');

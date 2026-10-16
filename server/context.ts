@@ -3,16 +3,16 @@ import type { Request } from 'express';
 import { z } from 'zod';
 import type { Membership, Bootstrap, Plan } from '../shared/domain.js';
 import { planAllows,type FioFeature } from '../shared/entitlements.js';
+import { fioEffectivePlan,type FioPaymentState } from '../shared/fio-access-policy.js';
+import { fioVisibleClientPlans } from '../shared/fio-client-plan-visibility.js';
 import { ApiError, dbError } from './errors.js';
 
 export interface AuthContext { db: SupabaseClient; userId: string }
 export interface TenantContext extends AuthContext { shopId: string; member: Membership; plan:Plan }
 
-type SubscriptionState={plan:Plan;status:string;expires_at:string|null};
+type SubscriptionState=FioPaymentState;
 function effectivePlan(subscription:SubscriptionState|null|undefined):Plan{
- if(!subscription)return 'FREE';
- const active=['active','trialing'].includes(subscription.status)&&(!subscription.expires_at||new Date(subscription.expires_at)>new Date());
- return active?subscription.plan:'FREE';
+ return fioEffectivePlan(subscription);
 }
 
 export async function authenticate(req: Request): Promise<AuthContext> {
@@ -30,7 +30,7 @@ export async function tenant(auth: AuthContext, req: Request): Promise<TenantCon
  const shopId=z.uuid().parse(req.headers['x-barbershop-id']);
  const [membership,billing]=await Promise.all([
   auth.db.from('memberships').select('*').eq('barbershop_id',shopId).eq('user_id',auth.userId).eq('active',true).maybeSingle(),
-  auth.db.from('saas_subscriptions').select('plan,status,expires_at').eq('barbershop_id',shopId).maybeSingle()
+  auth.db.from('saas_subscriptions').select('plan,status,expires_at,starts_at,retained_paid_until,verified_paid_until').eq('barbershop_id',shopId).maybeSingle()
  ]);
  dbError(membership.error);dbError(billing.error);
  if(!membership.data) throw new ApiError(403,'FORBIDDEN','Você não tem acesso a esta barbearia.');
@@ -66,9 +66,13 @@ export async function bootstrap(ctx: TenantContext): Promise<Bootstrap> {
  const [shop,services,appointments,customers,team,subscriptions,billing,memberships,features,posts,subscriptionPlans,campaigns,notifications,reviews]=results.map(r=>r.data);
  const plan=ctx.plan;
  const aiEnabled=planAllows(plan,'assistant')&&(features as {plan:string;ai_enabled:boolean}[]).some(f=>f.plan===plan&&f.ai_enabled);
- const fioSubscription={plan:billing.plan,status:billing.status,starts_at:billing.starts_at,current_period_end:billing.current_period_end,trial_ends_at:billing.trial_ends_at,cancelled_at:billing.cancelled_at};
+ const fioSubscription={plan:billing.plan,status:billing.status,starts_at:billing.starts_at,current_period_end:billing.current_period_end,trial_ends_at:billing.trial_ends_at,cancelled_at:billing.cancelled_at,expires_at:billing.expires_at,retained_paid_until:billing.retained_paid_until};
  const brandingShop={...shop,logo_url:shop.logo_url||(shop.logo_asset_path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${shop.logo_asset_path}`:null)};
- return {shop:brandingShop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans,campaigns,notifications,posts,reviews,fioSubscription,plan,aiEnabled,aiLimits:features.find((f:{plan:string})=>f.plan===plan)} as Bootstrap;
+ const priorityResult=await db.rpc('fio_client_plan_priority_for_shop',{p_shop:shopId});
+ dbError(priorityResult.error);
+ const clientPlanPriority=Array.isArray(priorityResult.data)?priorityResult.data as string[]:[];
+ const visibleSubscriptionPlans=ctx.member.role==='OWNER'?subscriptionPlans:fioVisibleClientPlans(subscriptionPlans??[],plan,clientPlanPriority);
+ return {shop:brandingShop,membership:ctx.member,memberships,services,appointments,customers,team,subscriptions,subscriptionPlans:visibleSubscriptionPlans,clientPlanPriority,campaigns,notifications,posts,reviews,fioSubscription,plan,aiEnabled,aiLimits:features.find((f:{plan:string})=>f.plan===plan)} as Bootstrap;
 }
 
 // The provider receives a deliberately small, role-scoped data projection, never a frontend snapshot.

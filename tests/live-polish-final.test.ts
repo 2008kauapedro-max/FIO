@@ -183,7 +183,7 @@ describe('polimento final ao vivo',()=>{
 
   expect(server)
    .toContain(
-    "['SOLO','SOLO_PREMIUM','PRO','PLUS','PREMIUM']"
+    "const effectivePublicPlan=fioEffectivePlan("
    );
  });
 
