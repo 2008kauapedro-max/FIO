@@ -16,6 +16,7 @@ import { rateLimit,rateLimitByUser } from './rate-limit.js';
 import { getAnnualOffer,annualCheckoutUnavailable } from './fio-annual-api.js';
 import { prepareAnnualOrder } from './fio-annual-store.js';
 import { getAnnualOrderStatus } from './fio-annual-status.js';
+import { diagnoseSyncpayAnnualReadonly } from './fio-syncpay-readonly-probe.js';
 import {dispatchPlatformPush,publicPushConfig,validPushEndpoint} from './platform-push.js';
 import {dispatchAppointmentPush} from './appointment-push.js';
 type Authenticator = typeof authenticate;
@@ -450,6 +451,11 @@ export function createApp(authenticator: Authenticator=authenticate) {
   await requirePlatformAdmin(res.locals.auth as AuthContext);
   z.object({confirmed:z.literal(true)}).strict().parse(req.body);
   res.set('Cache-Control','no-store').json(await diagnosePixAutomaticoPermission());
+ });
+ app.post('/api/platform/syncpay-annual-readonly-diagnostic',rateLimitByUser('syncpay-annual-readonly-diagnostic',86_400_000,1),async(req,res)=>{
+  await requirePlatformAdmin(res.locals.auth as AuthContext);
+  z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  res.set('Cache-Control','private, no-store').json(await diagnoseSyncpayAnnualReadonly());
  });
  app.use('/api/platform',platformRouter());
  app.use('/api',async(req,res,next)=>{res.locals.ctx=await tenant(res.locals.auth,req);next();});
