@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac,timingSafeEqual } from 'node:crypto';
 import type { Request,Response as ExpressResponse } from 'express';
 import { z } from 'zod';
 import type { TenantContext } from './context.js';
@@ -158,16 +158,20 @@ export async function checkAnnualCreditCard(ctx:TenantContext,orderId:unknown,fe
  return {orderId:row.id,state:'paid',paid:true,automaticRenewal:false,settlement:settled.data};
 }
 
-/** Webhook separado do mensal. Token Bearer retornado no cadastro do webhook.
- * O body recebido NUNCA e prova de pagamento: sempre consultamos a SyncPay V2. */
-function validWebhookSecret(authorization:string|undefined,secret:string|undefined){
- if(!secret||secret.length<24||!authorization?.startsWith('Bearer '))return false;
- const provided=Buffer.from(authorization.slice(7),'utf8');
- const expected=Buffer.from(secret,'utf8');
- return provided.length===expected.length&&timingSafeEqual(provided,expected);
-}
-export function annualWebhookAuthenticated(header:string|undefined,secret:string|undefined){
- return validWebhookSecret(header,secret);
+/** Webhook "transaction" da SyncPay usa HMAC-SHA256 em X-SyncPay-Signature.
+ * Nunca libere plano com base no POST recebido: confirme pela API V2 autenticada. */
+export function annualWebhookAuthenticated(
+ header:string|undefined,secret:string|undefined,rawBody:Buffer|string,
+ nowSeconds=Math.floor(Date.now()/1000)
+):boolean{
+ if(!secret||secret.length<16||!header||header.length>240)return false;
+ const match=/^t=(\d{10,13}),\s*v1=([a-fA-F0-9]{64})$/.exec(header.trim());
+ if(!match)return false;
+ const timestamp=Number(match[1]);
+ if(!Number.isSafeInteger(timestamp)||Math.abs(nowSeconds-timestamp)>300)return false;
+ const mac=createHmac('sha256',secret).update(String(timestamp)).update('.').update(rawBody).digest();
+ const signature=Buffer.from(match[2],'hex');
+ return signature.length===mac.length&&timingSafeEqual(signature,mac);
 }
 const webhookEnvelope=z.object({
  event:z.string().min(1).max(100).optional(),
@@ -176,13 +180,14 @@ const webhookEnvelope=z.object({
 }).passthrough();
 
 export async function handleAnnualCreditCardWebhook(req:Request,res:ExpressResponse,fetcher:typeof fetch=fetch){
- if(!validWebhookSecret(req.get('authorization'),process.env.SYNCPAY_ANNUAL_WEBHOOK_SECRET)){
+ const raw=Buffer.isBuffer(req.body)?req.body:null;
+ if(!raw||raw.length===0||raw.length>65536){res.status(400).end();return;}
+ if(!annualWebhookAuthenticated(req.get('x-syncpay-signature'),process.env.SYNCPAY_ANNUAL_WEBHOOK_SECRET,raw)){
   res.status(401).end();return;
  }
  let parsed:z.infer<typeof webhookEnvelope>;
  try{
-  if(!Buffer.isBuffer(req.body)||req.body.length>65536)throw new Error('invalid_body');
-  parsed=webhookEnvelope.parse(JSON.parse(req.body.toString('utf8')));
+  parsed=webhookEnvelope.parse(JSON.parse(raw.toString('utf8')));
  }catch{res.status(400).end();return;}
  const id=parsed.transaction?.reference_id??parsed.id;
  // Eventos sem identificador de transacao nao comprovam pagamento algum.
