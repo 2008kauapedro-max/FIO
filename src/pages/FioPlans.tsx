@@ -9,12 +9,13 @@ import type { Plan } from '../../shared/domain';
 import type { WorkspaceProps } from './Workspace';
 import { useI18n } from '../i18n';
 import {annualCheckoutPreview} from '../../shared/syncpay-annual-checkout';
+import {AnnualCardCheckout} from './AnnualCardCheckout';
 import {fioAnnualCardEstimate} from '../../shared/fio-annual-card-estimate';
 import {refundStatusDisplay} from '../../shared/syncpay-refund-status';
 import './legal-payments.css';
 import {premiumInitialPlan,canStartPaidCheckout} from '../lib/plan-presentation';
 
-type Screen='plans'|'review'|'pix'|'pix-auto'|'success'|'manage'|'refund';
+type Screen='plans'|'review'|'annual'|'pix'|'pix-auto'|'success'|'manage'|'refund';
 type PaymentMethod='card'|'pix'|'pix-auto'|'sync-card'|'sync-hosted';
 
 function documentDigits(value:string){
@@ -362,8 +363,16 @@ export function FioPlans(p:WorkspaceProps){
    return;
   }
 
+  if(cycle==='annual'){
+   if(billingLocked||billing?.providerStatus==='active'||billing?.providerStatus==='pending_first_payment'){
+    setCheckoutError('Já existe assinatura ou pagamento pendente. Confira Minha assinatura antes de tentar a compra anual.');
+    return;
+   }
+   setCheckoutPlan(code);setScreen('annual');return;
+  }
+
   if(!canCheckoutCycle){
-   setCheckoutError('O pagamento deste período ainda não está disponível. Selecione Mensal para contratar com cartão. Nenhuma cobrança foi iniciada.');
+   setCheckoutError('O pagamento deste período ainda não está disponível. Nenhuma cobrança foi iniciada.');
    return;
   }
 
@@ -860,6 +869,15 @@ export function FioPlans(p:WorkspaceProps){
 
   return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
  },[billing?.payment?.expiresAt,now]);
+
+ if(screen==='annual'&&checkoutPlan){
+  const annualPrice=FIO_PLAN_CATALOG.find(item=>item.code===checkoutPlan)?.prices.annual??0;
+  return <AnnualCardCheckout
+   shopId={p.data.shop.id} plan={checkoutPlan} planName={displayName(checkoutPlan)}
+   priceCents={annualPrice} onBack={returnPlans}
+   onPaid={async()=>{await p.refresh();setScreen('success');p.notify('Pagamento anual confirmado pela SyncPay.');}}
+  />;
+ }
 
  if(screen==='review'){
   const target=changePlan??checkoutPlan;
@@ -1427,10 +1445,10 @@ export function FioPlans(p:WorkspaceProps){
      :<button
        className="fio-payflow-primary"
        disabled={busy||!billingLoaded||stripeReturn==='pending'||stripeReturn==='checking'}
-       onClick={()=>{if(hostedCardConfigured&&cycle==='annual'&&!canCheckoutCycle){setCycle('monthly');setCheckoutError('');return;}if(selectedPaid)choosePaid(selectedPaid);}}
+       onClick={()=>{if(selectedPaid)choosePaid(selectedPaid);}}
       >
        {!canCheckoutCycle
-        ?hostedCardConfigured&&cycle==='annual'?'Continuar no mensal':'Ver disponibilidade do pagamento'
+        ?cycle==='annual'?'Revisar compra anual':'Ver disponibilidade do pagamento'
         :billing?.providerStatus==='active'
          ?`Trocar para ${displayName(selectedPlan)}`
          :`Assinar ${displayName(selectedPlan)}`
@@ -1441,7 +1459,7 @@ export function FioPlans(p:WorkspaceProps){
    {billingLoaded&&!canCheckoutCycle&&selectedPlan!=='FREE'&&
     <p className="fio-trial-provider-note" role="status">
      {cycle==='annual'
-      ?'Compra anual ainda indisponível: o FIO precisa confirmar o total com eventuais taxas de parcelamento na SyncPay e disponibilizar um checkout seguro. Após pagamento aprovado, serão 365 dias de acesso, sem renovação automática. Nenhuma cobrança foi iniciada.'
+      ?'Compra anual de 1x: confira a disponibilidade na próxima tela. Parcelas de 2x a 12x aguardam cotação oficial dos juros. Nenhuma cobrança foi iniciada.'
       :'A contratação mensal ainda está em preparação enquanto aguardamos a SyncPay. O teste de 14 dias com renovação automática requer autorização prévia de cartão ou Pix Automático. Nenhuma cobrança será feita sem autorização.'}
     </p>
    }

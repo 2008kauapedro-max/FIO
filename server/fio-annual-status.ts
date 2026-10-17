@@ -3,7 +3,7 @@ import type { TenantContext } from './context.js';
 import { ApiError,dbError } from './errors.js';
 import { annualDraftStorageEnabled } from './fio-annual-store.js';
 
-const states=new Set(['preparing','checkout_ready','review','paid','failed','cancelled','refunded']);
+const states=new Set(['preparing','submitting','checkout_ready','review','paid','failed','cancelled','refunded']);
 const plans=new Set(['SOLO','SOLO_PREMIUM','PRO','PREMIUM']);
 
 export type AnnualStatusRow={

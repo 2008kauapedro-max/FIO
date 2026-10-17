@@ -6,7 +6,7 @@ import { ApiError,dbError } from './errors.js';
 import { buildAnnualDraft,type AnnualMode } from '../shared/fio-annual-orders.js';
 
 const inputSchema=z.object({plan:z.enum(['SOLO','SOLO_PREMIUM','PRO','PREMIUM'])}).strict();
-const openStates=['preparing','checkout_ready','review'] as const;
+const openStates=['preparing','submitting','checkout_ready','review'] as const;
 type AnnualRow={
  id:string;barbershop_id:string;actor_user_id:string;plan_code:string;
  base_amount_cents:number;state:string;created_at:string;

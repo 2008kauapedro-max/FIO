@@ -16,6 +16,7 @@ import { rateLimit,rateLimitByUser } from './rate-limit.js';
 import { getAnnualOffer,annualCheckoutUnavailable } from './fio-annual-api.js';
 import { prepareAnnualOrder } from './fio-annual-store.js';
 import { getAnnualOrderStatus } from './fio-annual-status.js';
+import { submitAnnualCreditCard,checkAnnualCreditCard,annualCreditCardLiveEnabled,handleAnnualCreditCardWebhook } from './fio-annual-credit-card.js';
 import { diagnoseSyncpayAnnualReadonly } from './fio-syncpay-readonly-probe.js';
 import { fioEffectivePlan } from '../shared/fio-access-policy.js';
 import { fioVisibleClientPlans,fioClientPlanLimit } from '../shared/fio-client-plan-visibility.js';
@@ -94,7 +95,7 @@ function allowedBrowserWriteOrigin(req:express.Request){
 export function createApp(authenticator: Authenticator=authenticate) {
  const app=express();
  app.disable('x-powered-by');
- app.use(helmet({referrerPolicy:{policy:'strict-origin-when-cross-origin'},strictTransportSecurity:process.env.NODE_ENV==='production'?undefined:false,contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'",'https://challenges.cloudflare.com'],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'",'https://*.supabase.co','wss://*.supabase.co'],imgSrc:["'self'",'data:','blob:','https://*.supabase.co'],frameSrc:['https://challenges.cloudflare.com'],objectSrc:["'none'"],frameAncestors:["'none'"]}}}));
+ app.use(helmet({referrerPolicy:{policy:'strict-origin-when-cross-origin'},strictTransportSecurity:process.env.NODE_ENV==='production'?undefined:false,contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'",'https://challenges.cloudflare.com'],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'",'https://*.supabase.co','wss://*.supabase.co','https://api.syncpayments.com.br'],imgSrc:["'self'",'data:','blob:','https://*.supabase.co'],frameSrc:['https://challenges.cloudflare.com'],objectSrc:["'none'"],frameAncestors:["'none'"]}}}));
  app.use((_,res,next)=>{res.setHeader('X-Request-Id',randomUUID());res.setHeader('Cache-Control','no-store');next();});
  app.use('/api',(req,res,next)=>{
   if(!allowedBrowserWriteOrigin(req)){
@@ -110,6 +111,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  // O webhook precisa do corpo bruto para validar a assinatura antes do JSON parser global.
  app.post('/api/webhooks/syncpay',express.raw({type:'*/*',limit:'64kb'}),async(req,res)=>handleSyncpayWebhook(req,res));
  app.post('/api/webhooks/stripe',express.raw({type:'application/json',limit:'256kb'}),async(req,res)=>handleStripeWebhook(req,res));
+ app.post('/api/webhooks/syncpay-annual',express.raw({type:'*/*',limit:'64kb'}),async(req,res)=>handleAnnualCreditCardWebhook(req,res));
  app.use(express.json({limit:'12kb'}));
  app.get('/api/health',rateLimit('health',{windowMs:60_000,max:30}), (_req, res) =>res.set('Cache-Control','no-store').json({status:'ok'}));
  app.post('/api/internal/push/dispatch',rateLimit('push-dispatch',{windowMs:60_000,max:12}),async(req,res)=>{
@@ -503,6 +505,15 @@ export function createApp(authenticator: Authenticator=authenticate) {
  });
  app.get('/api/saas/annual/status',rateLimitByUser('annual-status',60000,12),async(_req,res)=>{
   const c=ctx(res);requireOwner(c);res.json(await getAnnualOrderStatus(c));
+ });
+ app.get('/api/saas/annual/card-config',rateLimitByUser('annual-card-config',60000,15),async(_req,res)=>{
+  const c=ctx(res);requireOwner(c);res.json({chargeEnabled:annualCreditCardLiveEnabled(),maxInstallments:1});
+ });
+ app.post('/api/saas/annual/card',rateLimitByUser('annual-card',600000,2),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.status(202).json(await submitAnnualCreditCard(c,req,req.body));
+ });
+ app.get('/api/saas/annual/card-status',rateLimitByUser('annual-card-status',60000,6),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.json(await checkAnnualCreditCard(c,req.query.orderId));
  });
  app.post('/api/saas/annual/checkout',rateLimitByUser('annual-checkout-disabled',600000,3),async(_req,res)=>{
   const c=ctx(res);requireOwner(c);annualCheckoutUnavailable();
