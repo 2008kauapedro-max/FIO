@@ -179,9 +179,23 @@ const webhookEnvelope=z.object({
  id:transactionId.optional(),
 }).passthrough();
 
+/** Recognize ONLY the unsigned SyncPay dashboard connectivity test (no event data).
+ * This function makes no DB calls and does not authenticate financial events. */
+export function annualDashboardWebhookTest(rawBody:Buffer):boolean{
+ if(rawBody.length===0||rawBody.length>2048)return false;
+ let value:unknown;
+ try{value=JSON.parse(rawBody.toString('utf8'));}catch{return false;}
+ return z.object({
+  test:z.literal(true),
+  message:z.literal('This is a test webhook payload.'),
+  timestamp:z.iso.datetime({offset:true})
+ }).strict().safeParse(value).success;
+}
 export async function handleAnnualCreditCardWebhook(req:Request,res:ExpressResponse,fetcher:typeof fetch=fetch){
  const raw=Buffer.isBuffer(req.body)?req.body:null;
  if(!raw||raw.length===0||raw.length>65536){res.status(400).end();return;}
+ // SyncPay dashboard sends this unsigned synthetic test. It must NEVER touch orders.
+ if(annualDashboardWebhookTest(raw)){res.status(200).json({received:true,test:true});return;}
  if(!annualWebhookAuthenticated(req.get('x-syncpay-signature'),process.env.SYNCPAY_ANNUAL_WEBHOOK_SECRET,raw)){
   res.status(401).end();return;
  }

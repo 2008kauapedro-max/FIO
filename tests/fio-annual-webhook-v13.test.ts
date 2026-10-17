@@ -1,6 +1,6 @@
 import {createHmac} from 'node:crypto';
 import {describe,it,expect} from 'vitest';
-import {annualWebhookAuthenticated} from '../server/fio-annual-credit-card.js';
+import {annualWebhookAuthenticated,annualDashboardWebhookTest,handleAnnualCreditCardWebhook} from '../server/fio-annual-credit-card.js';
 
 describe('FIO V14 - webhook anual SyncPay HMAC',()=>{
  const secret='test-secret-webhook-annual-123456789';
@@ -30,5 +30,32 @@ describe('FIO V14 - webhook anual SyncPay HMAC',()=>{
   const formatted=Buffer.from('{ "event": "transaction.updated", "transaction": { "reference_id": "abc-def" } }');
   expect(annualWebhookAuthenticated(signature(formatted),secret,formatted,now)).toBe(true);
   expect(annualWebhookAuthenticated(signature(formatted),secret,body,now)).toBe(false);
+ });
+});
+
+describe('FIO V15 - ping do dashboard SyncPay',()=>{
+ const ping=()=>Buffer.from(JSON.stringify({test:true,message:'This is a test webhook payload.',timestamp:'2026-10-17T21:12:46.923786Z'}));
+ it('reconhece apenas o formato oficial do teste',()=>{
+  expect(annualDashboardWebhookTest(ping())).toBe(true);
+  expect(annualDashboardWebhookTest(Buffer.from('{}'))).toBe(false);
+  expect(annualDashboardWebhookTest(Buffer.from('This is a test webhook payload.'))).toBe(false);
+  expect(annualDashboardWebhookTest(Buffer.from(JSON.stringify({test:true,message:'This is a test webhook payload.',timestamp:'2026-10-17T21:12:46.923786Z',event:'transaction.updated'})))).toBe(false);
+  expect(annualDashboardWebhookTest(Buffer.from(JSON.stringify({test:true,message:'This is a test webhook payload.',timestamp:'2026-10-17T21:12:46.923786Z',transaction:{reference_id:'tx12345678'}})))).toBe(false);
+ });
+ it('retorna 200 no ping sem pedir segredo nem consultar pagamentos',async()=>{
+  const result:{status?:number;body?:unknown}={};
+  const res={status:(code:number)=>{result.status=code;return res;},json:(data:unknown)=>{result.body=data;return res;},end:()=>res};
+  const req={body:ping(),get:(_name:string)=>undefined};
+  const forbiddenFetch=async()=>{throw new Error('Nao deve consultar API nem cobrancas durante o ping.');};
+  await handleAnnualCreditCardWebhook(req as never,res as never,forbiddenFetch as never);
+  expect(result).toEqual({status:200,body:{received:true,test:true}});
+ });
+ it('evento falso nao assinado continua rejeitado',async()=>{
+  const result:{status?:number}={};
+  const res={status:(code:number)=>{result.status=code;return res;},end:()=>res,json:()=>res};
+  const req={body:Buffer.from(JSON.stringify({event:'transaction.updated',transaction:{reference_id:'abc-def-12345'}})),get:(_name:string)=>undefined};
+  const forbiddenFetch=async()=>{throw new Error('Nao deve chamar gateway.');};
+  await handleAnnualCreditCardWebhook(req as never,res as never,forbiddenFetch as never);
+  expect(result.status).toBe(401);
  });
 });
