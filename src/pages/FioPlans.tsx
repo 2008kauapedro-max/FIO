@@ -382,7 +382,9 @@ export function FioPlans(p:WorkspaceProps){
   ){
    setSelectedPlan(billing.plan);
 
-   if(usablePix(billing))
+   if(billing.billingMethod==='pix_automatico'&&billing.payment?.qrCode&&billing.payment?.identifier)
+    setScreen('pix-auto');
+   else if(usablePix(billing))
     setScreen('pix');
    else
     setScreen('manage');
@@ -441,6 +443,30 @@ export function FioPlans(p:WorkspaceProps){
    else if(['none','cancelled','failed'].includes(state.state))setCheckoutError('');
    else setCheckoutError('Nao foi possivel confirmar este checkout. Fale com o suporte antes de pagar novamente.');
   }catch(e){setCheckoutError(checkoutMessage(e));}finally{setBusy(false);}
+ }
+ async function saveMandateQr(){
+  const svg=window.document.querySelector<SVGSVGElement>('.fio-payflow-qr svg');
+  if(!svg)return;
+  const xml=new XMLSerializer().serializeToString(svg);
+  const blob=new Blob([xml],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  try{
+   const img=new Image();
+   img.src=url;
+   await img.decode();
+   const canvas=window.document.createElement('canvas');
+   canvas.width=440;canvas.height=440;
+   const ctx=canvas.getContext('2d');
+   if(!ctx)return;
+   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,440,440);
+   ctx.drawImage(img,0,0,440,440);
+   const a=window.document.createElement('a');
+   a.href=canvas.toDataURL('image/png');
+   a.download='fio-pix-automatico-autorizacao.png';
+   a.click();
+  }catch{
+   setCheckoutError('Não foi possível salvar o QR neste navegador. Abra o FIO em outro dispositivo para ler o código.');
+  }finally{URL.revokeObjectURL(url);}
  }
  async function subscribe(){
   if(
@@ -1098,8 +1124,8 @@ export function FioPlans(p:WorkspaceProps){
   const validMandate=Boolean(billing.payment?.qrCode&&billing.payment?.identifier);
   return <section className="fio-payflow fio-payflow-pix" aria-label="Autorizar Pix Automático">
    <header className="fio-payflow-titlebar"><div><button type="button" className="fio-payflow-back" onClick={returnPlans} aria-label="Voltar"><ArrowLeft size={18}/></button><div><h1>Autorizar Pix Automático</h1><span>{displayName(billing.plan)} · {cycleLabel(billing.cycle)}</span></div></div></header>
-   <div className="fio-payflow-pix-center"><span>Autorize as próximas cobranças no aplicativo do seu banco</span><strong>{amount(billing.amountCents)}</strong></div>
-   {validMandate?<><div className="fio-payflow-qr"><QRCodeSVG value={billing.payment!.qrCode!} size={220} level="M" includeMargin aria-label="QR Code de autorização do Pix Automático"/></div><ol className="fio-payflow-steps"><li>Abra o aplicativo do seu banco.</li><li>Leia o QR Code e confira as condições da autorização.</li><li>Confirme no banco. O plano será ativado após a confirmação real do pagamento.</li></ol><p role="status">Status da autorização: {billing.payment?.mandateStatus??'Aguardando confirmação'}</p></>:<div className="fio-payflow-note">Não foi possível obter um mandato válido. Consulte novamente ou procure o suporte antes de tentar contratar outra vez.</div>}
+   <div className="fio-payflow-pix-center"><span>Autorização de cobranças recorrentes no seu banco — confira valor, periodicidade e recebedor antes de aceitar</span><strong>{amount(billing.amountCents)}</strong></div>
+   {validMandate?<><div className="fio-payflow-qr"><QRCodeSVG value={billing.payment!.qrCode!} size={220} level="M" includeMargin aria-label="QR Code de autorização do Pix Automático"/></div><ol className="fio-payflow-steps"><li>Abra o aplicativo do seu banco.</li><li>Para usar no próprio celular, salve a imagem do QR e verifique se seu banco permite importar uma imagem da galeria. Se não permitir, abra o FIO em outro aparelho para ler o código.</li><li>Confira valor, frequência, recebedor e data da primeira cobrança antes de autorizar.</li><li>Confirme no banco. O plano será ativado após a confirmação real do pagamento.</li></ol><p role="status">Status da autorização: {billing.payment?.mandateStatus??'Aguardando confirmação'}</p><button type="button" className="fio-payflow-secondary" onClick={()=>void saveMandateQr()}>Salvar imagem do QR Code</button><p className="fio-payflow-note">Este QR é uma autorização de Pix Automático, não um Pix Copia e Cola de pagamento avulso. O FIO não pode abrir uma autorização diretamente no Nubank sem um link oficial compatível fornecido pela SyncPay.</p></>:<div className="fio-payflow-note">Não foi possível obter um mandato válido. Consulte novamente ou procure o suporte antes de tentar contratar outra vez.</div>}
    <div className="fio-legal-inline"><a className="fio-legal-text-link" href="/pix-automatico" target="_blank" rel="noopener noreferrer">Como funciona e seus direitos</a><a className="fio-legal-text-link" href="/cancelamento-e-reembolso" target="_blank" rel="noopener noreferrer">Cancelamento e reembolso</a></div>
    <div className="fio-payflow-bottom-action"><button className="fio-payflow-primary" disabled={busy} onClick={()=>void refreshBilling()}>Verificar autorização</button>
    {billing.providerStatus==='pending_first_payment'&&<button type="button" className="fio-payflow-link-danger" disabled={busy} onClick={()=>void manageCharge('cancel_pending')}>Cancelar a contratação</button>}
@@ -1340,9 +1366,15 @@ export function FioPlans(p:WorkspaceProps){
       </button>
      }
 
-     <button className="fio-payflow-secondary" disabled={busy} onClick={()=>setScreen('refund')}>
-      Consultar reembolso
-     </button>
+     {billing.providerStatus==='pending_first_payment'&&<>
+      <div className="fio-payflow-note" role="status">Ainda não há pagamento confirmado. A contratação está aguardando autorização ou primeira cobrança; nenhum reembolso está disponível enquanto não houver pagamento.</div>
+      {billing.billingMethod==='pix_automatico'&&billing.payment?.qrCode&&billing.payment?.identifier&&
+       <button type="button" className="fio-payflow-secondary" disabled={busy} onClick={()=>setScreen('pix-auto')}>Retomar autorização do Pix Automático</button>}
+      {!billing.change&&<button type="button" className="fio-payflow-link-danger" disabled={busy} onClick={()=>void manageCharge('cancel_pending')}>Cancelar contratação pendente</button>}
+     </>}
+     {billing.providerStatus!=='pending_first_payment'&&
+      <button className="fio-payflow-secondary" disabled={busy} onClick={()=>setScreen('refund')}>Consultar reembolso</button>}
+
 
      {['active','overdue','suspended'].includes(billing.providerStatus)&&!billing.change&&
       <button className="fio-payflow-link-danger" disabled={busy} onClick={()=>void manageCharge('cancel_active')}>
@@ -1438,10 +1470,12 @@ export function FioPlans(p:WorkspaceProps){
   </article>
 
   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
+  {selectedPlan!== 'FREE'&&cycle==='monthly'&&!trialUsed&&!trialActive&&<div className="fio-payflow-note" role="status"><Gift size={17}/><span><strong>Teste de 14 dias grátis</strong> — a ativação com renovação automática ainda está em preparação. Para funcionar, o banco ou cartão precisa permitir uma autorização explícita com primeira cobrança só depois dos 14 dias. Não será cobrado nada por esta opção agora.</span></div>}
   {hostedCardConfigured&&['pending','review'].includes(hostedCardStatus)&&<button className="fio-payflow-secondary" type="button" disabled={busy} onClick={()=>void checkHostedCard()}>{busy?'Consultando...':'Conferir checkout pendente'}</button>}
   </div>
 
   <div className="fio-payflow-bottom-action fio-payflow-plan-action">
+   {selectedPlan!=='FREE'&&cycle==='monthly'&&!trialUsed&&!trialActive&&<button type="button" className="fio-payflow-secondary" disabled aria-label="Teste de 14 dias indisponível até homologação da cobrança futura">Testar 14 dias grátis — em preparação</button>}
    {selectedPlan==='FREE'
     ?<button className="fio-payflow-primary" disabled>
       {currentSamePlan?t('fp.currentPlan'):t('fp.freePlan')}

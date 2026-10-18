@@ -27,9 +27,9 @@ type RefundResult={
 const articles=[
  {title:'Como funciona o agendamento?',text:'Os clientes entram pelo app ou minissite da barbearia, escolhem um serviço, profissional e horário disponível. O agendamento é confirmado no FIO.'},
  {title:'Como instalar o aplicativo da barbearia?',text:'Abra o minissite da barbearia pelo navegador do celular e use a opção de instalar ou adicionar à tela inicial, quando disponível.'},
- {title:'Como gerenciar minha assinatura FIO?',text:'Acesse Plano FIO. Se sua assinatura foi feita com cartão, a opção de gerenciar pagamento e cancelamento abre o portal seguro da Stripe.'},
+ {title:'Como gerenciar minha assinatura FIO?',text:'Acesse Plano FIO para consultar o status, as autorizações pendentes e o cancelamento disponível para seu meio de pagamento.'},
  {title:'Cancelar uma assinatura gera reembolso?',text:'Cancelar impede renovações futuras, conforme o estado da assinatura. Para pedir devolução de um pagamento inicial, use a opção Reembolso nesta central. O prazo padrão de solicitação é de sete dias após o primeiro pagamento, sem prejuízo de outros direitos legais.'},
- {title:'O pagamento do cartão é seguro?',text:'O cartão é informado na página protegida da Stripe. Não envie número do cartão, senha ou códigos de acesso ao suporte.'},
+ {title:'O pagamento do cartão é seguro?',text:'Ao contratar, utilize somente os canais oficiais apresentados pelo FIO. Nunca envie número de cartão, senha ou códigos ao suporte.'},
  {title:'Como enviar uma sugestão ou relatar um erro?',text:'Clique em Enviar mensagem nesta central, escolha o assunto e conte o que aconteceu. O pedido vai para o suporte do FIO.'},
 ];
 
@@ -45,6 +45,7 @@ function displayAmount(cents:number|null,currency:string|null){
 export function FioSupport(p:WorkspaceProps){
  const owner=p.data.membership.role==='OWNER';
  const [view,setView]=useState<View>('home');
+ const [billingProvider,setBillingProvider]=useState<string|null>(null);
  useEffect(()=>{
   const onTourTarget=(event:Event)=>{
    const target=(event as CustomEvent<{target?:string}>).detail?.target;
@@ -70,13 +71,23 @@ export function FioSupport(p:WorkspaceProps){
  ),[query]);
 
  useEffect(()=>{
-  if(view!=='refund'||!owner||p.demo)return;
+  if(view!=='refund'||!owner||p.demo||billingProvider!=='stripe')return;
   let active=true;
   setChecking(true);setError('');
   void api<RefundPolicy>('/saas/stripe/refund-policy',p.data.shop.id)
    .then(value=>{if(active)setPolicy(value);})
    .catch(()=>{if(active)setError('Não foi possível consultar sua assinatura agora. Tente novamente.');})
    .finally(()=>{if(active)setChecking(false);});
+  return()=>{active=false;};
+ },[view,owner,p.demo,p.data.shop.id,billingProvider]);
+
+ useEffect(()=>{
+  if(view!=='refund'||!owner||p.demo)return;
+  let active=true;
+  setBillingProvider(null);setPolicy(null);
+  void api<{subscription:{provider:string}|null}>('/saas/billing',p.data.shop.id)
+   .then(value=>{if(active)setBillingProvider(value.subscription?.provider??'none');})
+   .catch(()=>{if(active)setBillingProvider('unknown');});
   return()=>{active=false;};
  },[view,owner,p.demo,p.data.shop.id]);
 
@@ -102,7 +113,7 @@ export function FioSupport(p:WorkspaceProps){
   setSending(true);setError('');
   try{
    await api('/support/feedback',p.data.shop.id,{
-    category:'question',message:`[REEMBOLSO_STRIPE_REVISAO_MANUAL] ${message.trim()}`
+    category:'question',message:`[REEMBOLSO_REVISAO_MANUAL_${billingProvider??'SEM_ASSINATURA'}] ${message.trim()}`
    });
    setMessage('');setSent(true);
    setRefundNotice('Solicitação enviada ao suporte para análise. Nenhum estorno foi realizado automaticamente.');
@@ -135,7 +146,7 @@ export function FioSupport(p:WorkspaceProps){
   <header className="fio-help-header">
    <div className="fio-help-overline"><LifeBuoy size={15}/> CENTRAL DE AJUDA</div>
    <h1>{view==='home'?'Como podemos ajudar?':view==='message'?'Fale com o FIO':'Cancelamento e reembolso'}</h1>
-   <p>{view==='home'?'Encontre uma resposta ou fale com nossa equipe.':view==='message'?'Escolha um assunto e explique com suas palavras.':'Consulte o primeiro pagamento e as opções da sua assinatura Stripe.'}</p>
+   <p>{view==='home'?'Encontre uma resposta ou fale com nossa equipe.':view==='message'?'Escolha um assunto e explique com suas palavras.':'Consulte sua assinatura, cancelamento e opções de reembolso.'}</p>
   </header>
 
   {view==='home'&&<>
@@ -157,7 +168,7 @@ export function FioSupport(p:WorkspaceProps){
     <div><MessageSquareText size={21}/><div><h2>Não encontrou sua resposta?</h2><p>Problemas, dúvidas e sugestões em um único formulário.</p></div></div>
     <button data-tour="feedback" type="button" className="fio-help-primary" onClick={()=>go('message')}>Enviar mensagem <ArrowRight size={17}/></button>
    </section>
-   {owner&&<section className="fio-help-billing"><CreditCard size={20}/><div><h2>Pagamentos e reembolso</h2><p>Veja a regra dos 7 dias, cancele renovações e consulte sua cobrança Stripe.</p></div><button type="button" onClick={()=>go('refund')}>Ver opções <ArrowRight size={16}/></button></section>}
+   {owner&&<section className="fio-help-billing"><CreditCard size={20}/><div><h2>Pagamentos e reembolso</h2><p>Veja as regras de reembolso, autorizações pendentes e o cancelamento da assinatura.</p></div><button type="button" onClick={()=>go('refund')}>Ver opções <ArrowRight size={16}/></button></section>}
    <div className="fio-help-links"><Link to="/termos"><FileText size={15}/> Termos de uso</Link><Link to="/privacidade"><ShieldCheck size={15}/> Privacidade</Link><button type="button" onClick={()=>window.dispatchEvent(new Event('fio-tour-restart'))}><CircleHelp size={15}/> Rever tutorial</button></div>
   </>}
 
@@ -178,28 +189,29 @@ export function FioSupport(p:WorkspaceProps){
    {back}
    <section className="fio-help-card fio-help-refund">
     <div className="fio-help-refund-title"><CreditCard size={21}/><div><h2>Reembolso em até 7 dias</h2><p>Na primeira contratação online, o FIO permite solicitar a devolução integral do primeiro pagamento dentro da janela de 7 dias, quando aplicável. Outros direitos previstos em lei permanecem preservados.</p></div></div>
-    {checking?<p className="fio-help-muted"><RefreshCw size={15}/> Consultando sua cobrança Stripe...</p>:policy&&<>
+    {billingProvider===null?<p className="fio-help-muted"><RefreshCw size={15}/> Consultando sua assinatura...</p>:billingProvider==='stripe'&&(checking?<p className="fio-help-muted"><RefreshCw size={15}/> Consultando sua cobrança...</p>:policy&&<>)
      {policy.status==='eligible'&&<div className="fio-help-refund-state"><strong>Seu pagamento está no prazo.</strong><p>Valor: {displayAmount(policy.amountCents,policy.currency)} · Prazo até {policy.deadline?new Date(policy.deadline).toLocaleDateString('pt-BR'):''}.</p><p>Ao confirmar, o FIO solicita o estorno pela Stripe e cancela a assinatura para evitar renovação.</p><button className="fio-help-primary fio-help-danger" type="button" disabled={p.demo||refunding} onClick={()=>void refundFirstPayment()}>{refunding?'Processando...':'Solicitar reembolso e cancelar'}</button></div>}
      {policy.status==='expired'&&<p className="fio-help-muted">A janela padrão de 7 dias terminou. Você pode cancelar renovações pela Stripe ou enviar um pedido para análise. Isso não elimina outros direitos previstos em lei.</p>}
      {policy.status==='already_requested'&&<p className="fio-help-muted">A Stripe já registra um pedido de reembolso para esse pagamento. Consulte seu extrato e o status do cancelamento.</p>}
      {policy.status==='not_paid'&&<p className="fio-help-muted">Nenhum primeiro pagamento confirmado foi encontrado nessa assinatura.</p>}
      {policy.status==='no_subscription'&&<p className="fio-help-muted">Não encontramos uma assinatura Stripe vinculada a esta barbearia.</p>}
      {policy.status==='manual_review'&&<p className="fio-help-muted">Seu pagamento exige análise da equipe antes de qualquer estorno. Envie sua solicitação abaixo.</p>}
-    </>}
+    </>)}
+    {billingProvider&&billingProvider!=='stripe'&&<p className="fio-help-muted">{billingProvider==='syncpay'?'Sua assinatura usa a SyncPay.':'Não há assinatura paga confirmada para consulta nesta tela.'} Para cancelar uma autorização pendente, vá em Plano FIO. Solicitações de reembolso são tratadas após uma cobrança confirmada, sem prejuízo dos seus direitos. Você também pode solicitar uma análise ao suporte abaixo.</p>}
     {refundNotice&&<p className="fio-help-message" role="status">{refundNotice}</p>}
     {error&&<p className="fio-help-error" role="alert">{error}</p>}
-    <div className="fio-help-refund-links"><Link to={`${p.base}/plano-fio`} className="fio-help-secondary">Gerenciar assinatura e cancelamento na Stripe <ArrowRight size={16}/></Link></div>
+    <div className="fio-help-refund-links"><Link to={`${p.base}/plano-fio`} className="fio-help-secondary">Consultar ou cancelar assinatura no FIO <ArrowRight size={16}/></Link></div>
    </section>
    <section className="fio-help-card fio-help-manual">
     <h2>Precisa de uma análise?</h2>
-    <p>Se o prazo expirou, houve alguma divergência ou a cobrança não apareceu, descreva o caso. O suporte verificará a operação na Stripe.</p>
+    <p>Se o prazo expirou, houve alguma divergência ou a cobrança não apareceu, descreva o caso. O suporte verificará a cobrança e o provedor correspondente.</p>
     {sent?<p className="fio-help-message" role="status">Solicitação enviada para análise.</p>:
      <form onSubmit={event=>{event.preventDefault();void requestManualRefund();}}>
       <label>Detalhes do pedido<textarea value={message} minLength={3} maxLength={1400} required rows={4} placeholder="Informe a data da cobrança e o motivo da solicitação. Não envie dados do cartão." onChange={event=>setMessage(event.target.value)}/></label>
       <button className="fio-help-secondary" type="submit" disabled={p.demo||sending||message.trim().length<3}>{sending?'Enviando...':'Enviar para análise'}<Send size={15}/></button>
      </form>}
    </section>
-   <div className="fio-help-safety"><ShieldCheck size={17}/><p>Reembolsos são feitos pela Stripe ao meio de pagamento original. O prazo para aparecer no extrato depende da instituição financeira. Nunca compartilhe dados de cartão com o suporte.</p></div>
+   <div className="fio-help-safety"><ShieldCheck size={17}/><p>Reembolsos dependem de cobrança confirmada e de verificação pelo provedor responsável. O prazo para constar no extrato depende da instituição financeira. Nunca compartilhe dados de cartão com o suporte.</p></div>
   </>}
  </div>;
 }
