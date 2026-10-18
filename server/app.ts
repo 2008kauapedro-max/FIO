@@ -16,6 +16,7 @@ import { rateLimit,rateLimitByUser } from './rate-limit.js';
 import { getAnnualOffer,annualCheckoutUnavailable } from './fio-annual-api.js';
 import { prepareAnnualOrder } from './fio-annual-store.js';
 import { getAnnualOrderStatus } from './fio-annual-status.js';
+import { getActiveAnnualBilling } from './fio-annual-billing.js';
 import { submitAnnualCreditCard,checkAnnualCreditCard,annualCreditCardLiveEnabled,handleAnnualCreditCardWebhook } from './fio-annual-credit-card.js';
 import { diagnoseSyncpayAnnualReadonly } from './fio-syncpay-readonly-probe.js';
 import { fioEffectivePlan } from '../shared/fio-access-policy.js';
@@ -528,6 +529,11 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.get('/api/saas/syncpay/refund-status',rateLimitByUser('billing-refund-status',60000,12),async(_req,res)=>{const c=ctx(res);requireOwner(c);res.json(await getSyncpayRefundTracking(c));});
  app.get('/api/saas/billing',async(_req,res)=>{
   const c=ctx(res);requireOwner(c);
+  const annual=await getActiveAnnualBilling(c.shopId,serviceDb());
+  if(annual){
+   res.json({configured:false,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured(),hostedCardConfigured:syncpayHostedCardConfigured(),subscription:annual});
+   return;
+  }
   const stripe=await getStripeBilling(c);
   if(stripe){
    res.json({configured:false,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured(),hostedCardConfigured:syncpayHostedCardConfigured(),subscription:stripe});

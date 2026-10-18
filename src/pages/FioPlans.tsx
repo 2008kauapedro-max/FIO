@@ -357,7 +357,7 @@ export function FioPlans(p:WorkspaceProps){
    return;
   }
 
-  if(billing?.provider==='stripe'){
+  if(billing?.provider==='stripe'||billing?.provider==='annual'){
    setSelectedPlan(billing.plan);
    setScreen('manage');
    return;
@@ -1314,7 +1314,15 @@ export function FioPlans(p:WorkspaceProps){
      {busy?t('fp.updating'):t('fp.refreshStatus')}
     </button>
 
-    {billing.provider==='stripe'?<>
+    {billing.provider==='annual'?<>
+     <div className="fio-payflow-note">
+      <ShieldCheck size={18}/>
+      <span>Compra unica anual confirmada. Acesso ate {date(billing.accessEndsAt)}. Nao existe renovacao automatica nem mensalidade deste pedido.</span>
+     </div>
+     <button className="fio-payflow-secondary" disabled={busy} onClick={()=>navigate(p.base+'/suporte')}>
+      Reembolso e suporte FIO
+     </button>
+    </>:billing.provider==='stripe'?<>
      <div className="fio-payflow-note">
       <ShieldCheck size={18}/>
       <span>Gerencie seu cartão e o cancelamento na Stripe. Para solicitar reembolso do primeiro pagamento em até 7 dias, use a Central de Ajuda do FIO.</span>

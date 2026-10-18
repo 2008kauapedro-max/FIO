@@ -3,6 +3,7 @@ import { createClient,type SupabaseClient } from '@supabase/supabase-js';
 import type { Request,Response as ExpressResponse } from 'express';
 import { z } from 'zod';
 import type { TenantContext } from './context.js';
+import {getActiveAnnualBilling} from './fio-annual-billing.js';
 import { ApiError,dbError } from './errors.js';
 import { FIO_PLAN_CATALOG,type BillingCycle } from '../shared/fio-plans.js';
 
@@ -280,6 +281,11 @@ function stateEventKey(prefix:string,detail:ProviderDetail){
 }
 
 async function applyProviderTruth(db:SupabaseClient,detail:ProviderDetail,event:{key:string;name:string;occurredAt:string;bodyHash:string}){
+ // A late event from an old recurring contract must never override a paid annual purchase.
+ const owner=await db.from('saas_provider_subscriptions').select('barbershop_id')
+  .eq('provider','syncpay').eq('provider_subscription_token',detail.token).maybeSingle();
+ dbError(owner.error);
+ if(owner.data&&await getActiveAnnualBilling(owner.data.barbershop_id,db))return {ignoredAnnualContract:true};
  await reconcilePlanChange(db,detail);
  const mapped=await db.from('syncpay_plan_mappings').select('billing_cycle,billing_method').eq('provider_plan_token',detail.plan.token).maybeSingle();dbError(mapped.error);
  if(mapped.data)detail.plan.grace_period_days=['pix_automatico','credit_card'].includes(mapped.data.billing_method)?PIX_AUTO_GRACE_DAYS:GRACE_DAYS[mapped.data.billing_cycle as BillingCycle];
@@ -436,6 +442,7 @@ async function recoverOpenEnrollment(ctx:TenantContext,fetcher:Fetcher,forceRese
 
 export async function recoverSyncpayEnrollment(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode verificar a tentativa de assinatura.');
+ if(await getActiveAnnualBilling(ctx.shopId,adminDb()))throw new ApiError(409,'ANNUAL_ACTIVE_CONTRACT','Existe uma compra anual vigente. Consulte Minha assinatura antes de iniciar outra cobrança.');
  z.object({confirmed:z.literal(true)}).strict().parse(raw);
  const result=await recoverOpenEnrollment(ctx,fetcher,true);
  if(result.billing)return {configured:true,subscription:result.billing,cleared:false};
@@ -457,6 +464,7 @@ export async function sealSyncpayCard(ctx:TenantContext,raw:unknown,fetcher:Fetc
 }
 export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Esta ação é exclusiva do responsável pela barbearia.');
+ if(await getActiveAnnualBilling(ctx.shopId,adminDb()))throw new ApiError(409,'ANNUAL_ACTIVE_CONTRACT','Existe uma compra anual vigente. Consulte Minha assinatura antes de iniciar outra cobrança.');
  const input=subscribeInput.parse(raw),document=digits(input.document);
  if(input.method==='qr_code'&&!syncpayLegacyPixCheckoutConfigured())throw new ApiError(503,'SYNCPAY_LEGACY_PIX_DISABLED','Novas assinaturas por Pix manual estão indisponíveis. Utilize Pix Automático ou cartão quando habilitados.');
  if(input.method==='pix_automatico'&&!syncpayPixAutomaticoConfigured())throw new ApiError(503,'SYNCPAY_PIX_AUTO_NOT_AVAILABLE','O Pix Automático ainda não está disponível nesta conta.');
@@ -583,6 +591,7 @@ async function reconcilePlanChange(db:SupabaseClient,detail:ProviderDetail){
 }
 export async function changeSyncpayPlan(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode alterar o plano.');
+ if(await getActiveAnnualBilling(ctx.shopId,adminDb()))throw new ApiError(409,'ANNUAL_ACTIVE_CONTRACT','Existe uma compra anual vigente. Consulte Minha assinatura antes de iniciar outra cobrança.');
  const input=z.object({plan:z.enum(PAID_PLANS),cycle:z.enum(CYCLES),confirmed:z.literal(true)}).strict().parse(raw);
  const modeResult=await ctx.db.from('barbershops').select('operation_mode').eq('id',ctx.shopId).single();dbError(modeResult.error);
  if(!modeResult.data)throw new ApiError(404,'INVALID_SHOP','Barbearia não encontrada.');
@@ -621,6 +630,7 @@ export async function changeSyncpayPlan(ctx:TenantContext,raw:unknown,fetcher:Fe
 }
 export async function manageSyncpayCharge(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode gerenciar a cobrança.');
+ if(await getActiveAnnualBilling(ctx.shopId,adminDb()))throw new ApiError(409,'ANNUAL_ACTIVE_CONTRACT','Existe uma compra anual vigente. Consulte Minha assinatura antes de iniciar outra cobrança.');
  const input=z.object({action:z.enum(['cancel_pending','resend','cancel_active']),confirmed:z.literal(true)}).strict().parse(raw);
  const db=adminDb(),link=await currentLink(db,ctx.shopId);
  if(!link)throw new ApiError(409,'SYNCPAY_NO_SUBSCRIPTION','Nenhuma cobrança encontrada.');
@@ -658,6 +668,7 @@ export async function manageSyncpayCharge(ctx:TenantContext,raw:unknown,fetcher:
 
 export async function requestSyncpayRefund(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o responsável pode solicitar reembolso.');
+ if(await getActiveAnnualBilling(ctx.shopId,adminDb()))throw new ApiError(409,'ANNUAL_ACTIVE_CONTRACT','Existe uma compra anual vigente. Consulte Minha assinatura antes de iniciar outra cobrança.');
  z.object({confirmed:z.literal(true)}).strict().parse(raw);
  if(!configured())throw new ApiError(503,'SYNCPAY_NOT_CONFIGURED','O reembolso está temporariamente indisponível.');
  const db=adminDb(),link=await currentLink(db,ctx.shopId);
@@ -847,6 +858,7 @@ async function reconcileHostedToken(db:SupabaseClient,intent:HostedIntent,fetche
 }
 export async function startSyncpayHostedCard(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Somente o dono pode contratar.');
+ if(await getActiveAnnualBilling(ctx.shopId,adminDb()))throw new ApiError(409,'ANNUAL_ACTIVE_CONTRACT','Existe uma compra anual vigente. Consulte Minha assinatura antes de iniciar outra cobrança.');
  if(!syncpayHostedCardConfigured())throw new ApiError(503,'SYNCPAY_HOSTED_CARD_DISABLED','Cartão hospedado ainda não foi ativado.');
  const input=hostedCardInput.parse(raw);
  const mode=await ctx.db.from('barbershops').select('operation_mode').eq('id',ctx.shopId).single();dbError(mode.error);

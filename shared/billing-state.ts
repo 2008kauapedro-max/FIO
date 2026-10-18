@@ -3,7 +3,7 @@ import type { BillingCycle } from './fio-plans.js';
 export type PaidPlan = 'SOLO' | 'SOLO_PREMIUM' | 'PRO' | 'PREMIUM';
 export type BillingState = {
  change?:{plan:PaidPlan;cycle:BillingCycle;state:string;type:string|null;amountCents:number|null}|null;
- provider:'syncpay'|'stripe'; billingMethod?:'qr_code'|'pix_automatico'|'credit_card'; cardPaymentStatus?:string|null; providerStatus:string; plan:PaidPlan; cycle:BillingCycle;
+ provider:'syncpay'|'stripe'|'annual'; automaticRenewal?:false; accessEndsAt?:string|null; billingMethod?:'qr_code'|'pix_automatico'|'credit_card'; cardPaymentStatus?:string|null; providerStatus:string; plan:PaidPlan; cycle:BillingCycle;
  amountCents:number; nextChargeAt:string|null;
  payment:{pixCode:string|null;qrCode:string|null;identifier:string|null;expiresAt:string|null;mandateStatus?:string|null}|null;
  refund?:{eligible:boolean;deadline:string|null}|null;

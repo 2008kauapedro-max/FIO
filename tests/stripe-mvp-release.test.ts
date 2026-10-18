@@ -33,7 +33,8 @@ describe('FIO MVP - contrato Stripe/SyncPay',()=>{
   expect(app).toContain("app.post('/api/saas/stripe/portal'");
   expect(stripe).toContain("ctx.member.role!=='OWNER'");
   expect(stripe).toContain("url.hostname!=='billing.stripe.com'");
-  expect(plans).toContain("if(billing?.provider==='stripe')");
-  expect(plans).toContain("{billing.provider==='stripe'?<>");
+  expect(plans).toContain("if(billing?.provider==='stripe'||billing?.provider==='annual')");
+  expect(plans).toContain("billing.provider==='stripe'?<>");
+  expect(plans).toContain("billing.provider==='annual'?<>");
  });
 });
