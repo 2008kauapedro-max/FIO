@@ -470,10 +470,11 @@ export function createApp(authenticator: Authenticator=authenticate) {
  const ctx=(res:express.Response)=>res.locals.ctx as TenantContext;
  app.get('/api/bootstrap',async(_req,res)=>res.json(await bootstrap(ctx(res))));
  app.post('/api/saas/trial',rateLimitByUser('trial',3_600_000,3),async(req,res)=>{
-  const c=ctx(res);requireOwner(c);z.object({confirmed:z.literal(true)}).strict().parse(req.body);
-  // A SyncPay ainda nao confirmou um checkout com autorizacao de cobranca apos 14 dias.
-  // Nao habilitar renovacao silenciosa nem iniciar trial sem o mandato aceito.
-  throw new ApiError(503,'TRIAL_PAYMENT_AUTH_REQUIRED','O teste com renovação automática depende da habilitação de cartão recorrente ou Pix Automático. Nenhuma cobrança será realizada sem sua autorização.');
+  const c=ctx(res);requireOwner(c);
+  z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  const trial=await c.db.rpc('start_fio_no_card_trial',{p_shop:c.shopId,p_confirmed:true});
+  dbError(trial.error);
+  res.set('Cache-Control','no-store').status(201).json({trialEndsAt:trial.data,automaticRenewal:false,paymentRequiredNow:false});
  });
  app.post('/api/saas/stripe/checkout',rateLimitByUser('stripe-checkout',600_000,6),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(201).json(await createStripeCheckoutSession(c,req.body));

@@ -792,7 +792,6 @@ function StaffAgenda(p:WorkspaceProps){
  const {data}=p;
  const zone=data.shop.timezone;
  const routeLocation=useLocation();
- const navigate=useNavigate();
  const solo=data.shop.operation_mode==='SOLO';
 
  const owner=data.membership.role==='OWNER';
@@ -1173,13 +1172,8 @@ function StaffAgenda(p:WorkspaceProps){
    </nav>
 
    <div className="simple-agenda-view" key={agendaView}>
-   {!providers.length&&<section className="fio-agenda-team-empty" role="status" aria-label="Configuração pendente da equipe">
-    <strong>Nenhum barbeiro ativo na agenda</strong>
-    <p>{owner?'Sua barbearia está no modo com equipe, mas não há barbeiros ativos. Os serviços e horários cadastrados continuam salvos. Adicione ou ative um profissional para liberar horários reais.':'Ainda não há profissionais ativos disponíveis. Peça ao responsável para configurar a equipe.'}</p>
-    {owner&&<button type="button" className="secondary" onClick={()=>navigate(p.base+'/equipe')}>Configurar equipe</button>}
-   </section>}
-   {canCreateManual&&<button type="button" className="simple-new-booking" onClick={()=>providers.length?setBooking(true):navigate(p.base+'/equipe')}>
-    {providers.length?t('staffAgenda.new'):'Configurar equipe para agendar'}
+   {canCreateManual&&<button type="button" className="simple-new-booking" onClick={()=>setBooking(true)}>
+    {t('staffAgenda.new')}
    </button>}
 
    {agendaView==='today'&&<>
@@ -1258,7 +1252,7 @@ function StaffAgenda(p:WorkspaceProps){
    </section>}
 
    {agendaView==='calendar'&&<>
-    {providers.length>0?<AgendaMonthCalendar
+    <AgendaMonthCalendar
      shopId={data.shop.id}
      barberId={professional||'any'}
      serviceId={[...data.services].filter(s=>s.active).sort((a,b)=>a.duration_minutes-b.duration_minutes)[0]?.id??''}
@@ -1266,7 +1260,7 @@ function StaffAgenda(p:WorkspaceProps){
      date={date}
      demo={p.demo}
      onDateChange={setDate}
-    />:<p className="fio-agenda-calendar-wait">O calendário mostrará os horários assim que houver um profissional ativo. Não alteramos seus horários de funcionamento.</p>}
+    />
 
     <div className="simple-agenda-stats">
      <div><strong>{daily.filter(a=>a.status==='completed').length}</strong><span>{t('period.completed')}</span></div>

@@ -51,10 +51,16 @@ describe('release authorization regressions',()=>{
  it('client cannot activate the shop trial',async()=>{
   await user(2);await expect(db.query('select public.start_saas_pro_trial($1)',[shop])).rejects.toThrow('FORBIDDEN');
  });
- it('owner starts one trial with matching expiry and period end',async()=>{
-  await billing('FREE');await db.query('select public.start_saas_pro_trial($1)',[shop]);
-  expect(await scalar<boolean>('select trial_ends_at=expires_at and current_period_end=expires_at from public.saas_subscriptions where barbershop_id=$1',[shop])).toBe(true);
-  await expect(db.query('select public.start_saas_pro_trial($1)',[shop])).rejects.toThrow('TRIAL_ALREADY_USED');
+ it('legacy trial cannot override existing SyncPay contract, even if suspended',async()=>{
+  await billing('FREE');
+  await expect(db.query('select public.start_saas_pro_trial($1)',[shop])).rejects.toThrow('TRIAL_BILLING_CONFLICT');
+ });
+ it('new shop receives one free trial with no payment, then cannot repeat',async()=>{
+  await db.exec('reset role');await db.query('insert into auth.users(id) values($1)',[uid(7)]);await user(7);
+  const freeShop=await scalar<string>("select public.create_barbershop('New Trial Shop','new-trial-shop','Owner Seven')");
+  await db.query('select public.start_fio_no_card_trial($1,true)',[freeShop]);
+  expect(await scalar<boolean>("select trial_ends_at=expires_at and current_period_end=expires_at and status='trialing' and plan='PRO' and verified_paid_until is null from public.saas_subscriptions where barbershop_id=$1",[freeShop])).toBe(true);
+  await expect(db.query('select public.start_fio_no_card_trial($1,true)',[freeShop])).rejects.toThrow('TRIAL_NOT_AVAILABLE');
  });
  it('FREE cannot create offers through direct REST writes',async()=>{
   await billing('FREE');await expect(db.query("insert into public.subscription_plans(barbershop_id,name,cuts,validity_days,price_cents) values($1,'Plano',4,30,10000)",[shop])).rejects.toThrow('row-level security');

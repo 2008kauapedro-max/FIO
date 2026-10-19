@@ -23,10 +23,16 @@ describe('SOLO: agenda, checkout e identidade',()=>{
   expect(ui).toContain('historyMonth');
   expect(source('../src/i18n/dictionaries.ts')).toContain('"agendaSimple.done":"Finalizados"');
  });
- it('não anuncia trial com renovação automática sem mandato',()=>{
+ it('teste grátis não cria cobrança nem promete renovação automática',()=>{
   const api=source('../server/app.ts');
-  expect(api).toContain('TRIAL_PAYMENT_AUTH_REQUIRED');
+  expect(api).toContain('start_fio_no_card_trial');
+  expect(api).toContain('automaticRenewal:false');
   const ui=source('../src/pages/FioPlans.tsx');
-  expect(ui).toContain('requer autorização prévia de cartão ou Pix Automático');
+  expect(ui).toContain('Testar 14 dias grátis — sem cartão');
+  expect(ui).toContain('Ao terminar, você volta automaticamente ao plano Free');
+  const migration=source('../supabase/migrations/20261019163000_fio_no_card_trial_v22.sql');
+  expect(migration).toContain("status='trialing'");
+  expect(migration).toContain('trial_ends_at=trial_end');
+  expect(migration).toContain('TRIAL_BILLING_CONFLICT');
  });
 });

@@ -342,6 +342,18 @@ export function FioPlans(p:WorkspaceProps){
   setScreen('plans');
  }
 
+ async function beginFreeTrial(){
+  if(busy||trialUsed||trialActive||billingLocked||!billingLoaded||cycle!=='monthly'||selectedPlan!==primaryPaid)return;
+  setBusy(true);setCheckoutError('');
+  try{
+   await api('/saas/trial',p.data.shop.id,{confirmed:true},'POST');
+   await p.refresh();
+   p.notify('Teste grátis ativado por 14 dias. Sem cartão e sem cobrança automática.');
+   setScreen('plans');
+  }catch(error){setCheckoutError(checkoutMessage(error));}
+  finally{setBusy(false);}
+ }
+
  function choosePaid(code:PaidPlan){
   setCheckoutError('');
   setCheckoutCode('');
@@ -1449,7 +1461,7 @@ export function FioPlans(p:WorkspaceProps){
 
    <div className="fio-payflow-badges">
     {annualSaving>0&&<span>Economia de {amount(annualSaving)}/ano</span>}
-    {selectedPlan===primaryPaid&&!trialUsed&&<span className="trial"><Gift size={13}/>Teste de 14 dias · aguardando autorização de cobrança</span>}
+    {selectedPlan===primaryPaid&&!trialUsed&&<span className="trial"><Gift size={13}/>Teste grátis de 14 dias · sem cartão</span>}
    </div>
 
    <div className="fio-payflow-features">
@@ -1470,12 +1482,12 @@ export function FioPlans(p:WorkspaceProps){
   </article>
 
   {checkoutError&&<div className="fio-payflow-error" role="alert">{checkoutError}</div>}
-  {selectedPlan!== 'FREE'&&cycle==='monthly'&&!trialUsed&&!trialActive&&<div className="fio-payflow-note" role="status"><Gift size={17}/><span><strong>Teste de 14 dias grátis</strong> — a ativação com renovação automática ainda está em preparação. Para funcionar, o banco ou cartão precisa permitir uma autorização explícita com primeira cobrança só depois dos 14 dias. Não será cobrado nada por esta opção agora.</span></div>}
+   {selectedPlan===primaryPaid&&cycle==='monthly'&&!trialUsed&&!trialActive&&<div className="fio-payflow-note" role="status"><Gift size={17}/><span><strong>Teste grátis de 14 dias</strong> — sem cartão e sem cobrança. Ao terminar, você volta automaticamente ao plano Free. Para continuar no plano pago, será necessário contratar e autorizar o pagamento.</span></div>}
   {hostedCardConfigured&&['pending','review'].includes(hostedCardStatus)&&<button className="fio-payflow-secondary" type="button" disabled={busy} onClick={()=>void checkHostedCard()}>{busy?'Consultando...':'Conferir checkout pendente'}</button>}
   </div>
 
   <div className="fio-payflow-bottom-action fio-payflow-plan-action">
-   {selectedPlan!=='FREE'&&cycle==='monthly'&&!trialUsed&&!trialActive&&<button type="button" className="fio-payflow-secondary" disabled aria-label="Teste de 14 dias indisponível até homologação da cobrança futura">Testar 14 dias grátis — em preparação</button>}
+    {selectedPlan===primaryPaid&&cycle==='monthly'&&!trialUsed&&!trialActive&&<button type="button" className="fio-payflow-secondary" disabled={busy||!billingLoaded||billingLocked} onClick={()=>void beginFreeTrial()}>Testar 14 dias grátis — sem cartão</button>}
    {selectedPlan==='FREE'
     ?<button className="fio-payflow-primary" disabled>
       {currentSamePlan?t('fp.currentPlan'):t('fp.freePlan')}
@@ -1502,7 +1514,7 @@ export function FioPlans(p:WorkspaceProps){
     <p className="fio-trial-provider-note" role="status">
      {cycle==='annual'
       ?'Compra anual de 1x: confira a disponibilidade na próxima tela. Parcelas de 2x a 12x aguardam cotação oficial dos juros. Nenhuma cobrança foi iniciada.'
-      :'A contratação mensal ainda está em preparação enquanto aguardamos a SyncPay. O teste de 14 dias com renovação automática requer autorização prévia de cartão ou Pix Automático. Nenhuma cobrança será feita sem autorização.'}
+      :'A contratação mensal ainda está em preparação enquanto aguardamos a SyncPay. O teste grátis não realiza cobranças nem renova automaticamente. A assinatura paga precisa ser autorizada separadamente.'}
     </p>
    }
   </div>
