@@ -97,6 +97,7 @@ export function FioPlans(p:WorkspaceProps){
  const [legacyPixCheckoutConfigured,setLegacyPixCheckoutConfigured]=useState(false);
  const [syncpayCardConfigured,setSyncpayCardConfigured]=useState(false);
  const [hostedCardConfigured,setHostedCardConfigured]=useState(false);
+ const [payerPhone,setPayerPhone]=useState(p.data.membership.phone??'');
  const [cardNumber,setCardNumber]=useState('');
  const [cardHolder,setCardHolder]=useState('');
  const [cardMonth,setCardMonth]=useState('');
@@ -562,7 +563,11 @@ export function FioPlans(p:WorkspaceProps){
 // O PAN/CVV vai somente para a selagem, nunca para armazenamento local ou assinatura.
     let cardToken:string|undefined;
     if(paymentMethod==='sync-card'){
-     const sealed=await tokenizeAnnualCard(import.meta.env.VITE_SYNCPAY_PUBLIC_KEY??'',{
+     if(!/^\d{10,13}$/.test(payerPhone.replace(/\D/g,''))){
+     setCheckoutError('Informe um telefone válido com DDD para pagar com cartão.');
+     setBusy(false);return;
+   }
+   const sealed=await tokenizeAnnualCard(import.meta.env.VITE_SYNCPAY_PUBLIC_KEY??'',{
       number:cardNumber,holder_name:cardHolder.trim(),expiry_month:cardMonth,expiry_year:cardYear,cvv:cardCvv
      });
      cardToken=sealed.token;
@@ -572,7 +577,7 @@ export function FioPlans(p:WorkspaceProps){
      '/saas/subscribe',p.data.shop.id,{
       plan:checkoutPlan,cycle,document:digits,
       method:paymentMethod==='sync-card'?'credit_card':paymentMethod==='pix-auto'?'pix_automatico':'qr_code',
-      ...(cardToken?{cardToken}:{}),acceptedTerms:true
+      ...(cardToken?{cardToken,phone:payerPhone.replace(/\D/g,'')}:{}),acceptedTerms:true
      }
     );
 
@@ -1016,6 +1021,7 @@ export function FioPlans(p:WorkspaceProps){
 
     {paymentMethod==='sync-hosted'?<div className="fio-payflow-note"><ShieldCheck size={18}/><span>Você será direcionado a uma página segura para informar os dados do cartão. O FIO não recebe o número nem o CVV. A assinatura só é ativada após confirmação do pagamento.</span></div>:paymentMethod==='sync-card'?<>
       <div className="fio-payflow-note"><ShieldCheck size={18}/><span>O cartão é usado para autorizar uma assinatura mensal. A confirmação de acesso depende da SyncPay. Os dados não ficam salvos no FIO.</span></div>
+      <label className="fio-payflow-field"><span>Telefone com DDD</span><input type="tel" value={payerPhone} inputMode="tel" autoComplete="tel" maxLength={20} placeholder="(61) 99999-9999" onChange={event=>setPayerPhone(event.target.value.replace(/[^0-9()+\s-]/g,'').slice(0,20))}/><small>Obrigatório para a autorização do cartão na SyncPay.</small></label>
       <label className="fio-payflow-field"><span>CPF ou CNPJ do titular</span><input value={document} inputMode="numeric" autoComplete="off" maxLength={18} onChange={event=>setDocument(formatDocument(event.target.value))}/></label>
       <label className="fio-payflow-field"><span>Nome impresso no cartão</span><input value={cardHolder} autoComplete="cc-name" onChange={event=>setCardHolder(event.target.value)} /></label>
       <label className="fio-payflow-field"><span>Número do cartão</span><input value={cardNumber} inputMode="numeric" autoComplete="cc-number" onChange={event=>setCardNumber(event.target.value.replace(/\D/g,'').slice(0,19))}/></label>

@@ -29,7 +29,7 @@ const SUBSCRIPTION_EVENTS=new Set([
 ]);
 
 const subscribeInput=z.object({
- plan:z.enum(PAID_PLANS),cycle:z.enum(CYCLES),document:z.string().trim().min(11).max(24),method:z.enum(['qr_code','pix_automatico','credit_card']).default('qr_code'),cardToken:z.string().max(300).optional(),acceptedTerms:z.literal(true)
+ plan:z.enum(PAID_PLANS),cycle:z.enum(CYCLES),document:z.string().trim().min(11).max(24),method:z.enum(['qr_code','pix_automatico','credit_card']).default('qr_code'),cardToken:z.string().max(300).optional(),phone:z.string().regex(/^\d{10,13}$/).optional(),acceptedTerms:z.literal(true)
 }).strict();
 
 const planResource=z.object({
@@ -474,6 +474,9 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
   if(input.cycle!=='monthly')throw new ApiError(422,'SYNCPAY_CARD_ANNUAL_SEPARATE','Plano anual parcelado é uma compra única; não pode ser aberto como assinatura mensal.');
   if(!input.cardToken||!/^card_token\.[a-zA-Z0-9._-]{8,260}$/.test(input.cardToken))throw new ApiError(400,'SYNCPAY_CARD_TOKEN_INVALID','Token do cartão inválido ou ausente.');
  } else if(input.cardToken){throw new ApiError(400,'SYNCPAY_CARD_TOKEN_FORBIDDEN','Token de cartão inesperado para este pagamento.');}
+ const phone=digits(input.phone??ctx.member.phone??'');
+ if(input.method==='credit_card'&&phone.length<10)
+  throw new ApiError(400,'SYNCPAY_CARD_PHONE_REQUIRED','Informe um telefone válido com DDD antes de pagar com cartão.');
  const modeResult=await ctx.db.from('barbershops').select('operation_mode').eq('id',ctx.shopId).single();dbError(modeResult.error);
  if(!modeResult.data)throw new ApiError(404,'INVALID_SHOP','Barbearia não encontrada.');
  const operationMode=modeResult.data.operation_mode as 'SHOP'|'SOLO';
@@ -524,9 +527,8 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
    return billingResponse(link,detail,undefined,input.method);
   }catch(e){await setEnrollmentIntent(db,intent.id,'uncertain',detail.token,e instanceof ApiError?e.code:'BILLING_STATE_ERROR');throw e;}
  }
- const phone=digits(ctx.member.phone??'');
  const payload:{name:string;email:string;document:string;phone?:string;card?:{token:string}}={name:ctx.member.display_name,email:user.data.user.email,document};
-  if(input.method==='credit_card'&&phone.length<10)throw new ApiError(400,'SYNCPAY_CARD_PHONE_REQUIRED','Informe um telefone válido no seu perfil antes de pagar com cartão.');
+
  if(phone.length>=8)payload.phone=phone;
   if(input.method==='credit_card')payload.card={token:input.cardToken!};
  let subscriptionToken:string|null=null;
