@@ -34,7 +34,7 @@ describe('perfil do responsável e modo solo',()=>{
   const workspace=readFileSync(resolve('src/pages/Workspace.tsx'),'utf8');
 
   expect(app).toContain("!(solo&&n.path==='/equipe')");
-  expect(workspace).toContain("(solo&&t.role==='OWNER')");
+  expect(workspace).toContain("(t.role==='OWNER'&&data.shop.owner_accepts_bookings!==false)");
   expect(workspace).toContain("owner&&!solo");
  });
 });

@@ -798,7 +798,7 @@ function StaffAgenda(p:WorkspaceProps){
  const canCreateManual=owner&&!solo;
 
  const initialProfessional=
-  data.membership.role==='BARBER'||solo
+  data.membership.role==='BARBER'||(owner&&data.shop.owner_accepts_bookings!==false)
    ?data.membership.user_id
    :'';
 
@@ -806,7 +806,7 @@ function StaffAgenda(p:WorkspaceProps){
   t.active&&
   (
    t.role==='BARBER'||
-   (solo&&t.role==='OWNER')
+   (t.role==='OWNER'&&data.shop.owner_accepts_bookings!==false)
   )
  );
 

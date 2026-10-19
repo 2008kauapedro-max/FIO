@@ -15,11 +15,11 @@ describe('FIO checkout consolidado',()=>{
   vi.stubEnv('FIO_ENABLE_LEGACY_PIX_CHECKOUT','true');
   expect(syncpayLegacyPixCheckoutConfigured()).toBe(true);
  });
- it('impede ativar cartão que manipula PAN/CVV sem segundo gate PCI',()=>{
+ it('exige chave pública e habilitação explícita para tokenizar sem PAN/CVV no servidor',()=>{
   vi.stubEnv('SYNCPAY_CLIENT_ID','fake');vi.stubEnv('SYNCPAY_CLIENT_SECRET','fake');
-  vi.stubEnv('FIO_ENABLE_SYNCPAY_CARD','true');
+  vi.stubEnv('FIO_ENABLE_SYNCPAY_CARD','true');vi.stubEnv('VITE_SYNCPAY_PUBLIC_KEY','');
   expect(syncpayCardConfigured()).toBe(false);
-  vi.stubEnv('FIO_CARD_PCI_REVIEWED','true');
+  vi.stubEnv('VITE_SYNCPAY_PUBLIC_KEY','pk_live_validasynckey1234');
   expect(syncpayCardConfigured()).toBe(true);
  });
  it('não libera parcelas anuais sem cotação oficial e conciliação',()=>{

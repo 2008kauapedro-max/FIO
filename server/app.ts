@@ -418,7 +418,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);
   const [progress,shop,services,hours,amenities,palettes]=await Promise.all([
    a.db.from('onboarding_progress').select('*').eq('barbershop_id',c.shopId).maybeSingle(),
-   a.db.from('barbershops').select('id,name,slug,timezone,operation_mode,public_title,public_description,logo_url,cover_url,background_url,accent_color,onboarding_step,onboarding_completed,whatsapp,instagram,address,theme_mode,palette_key,custom_accent,logo_asset_path,cover_asset_path,background_asset_path').eq('id',c.shopId).single(),
+   a.db.from('barbershops').select('id,name,slug,timezone,operation_mode,owner_accepts_bookings,public_title,public_description,logo_url,cover_url,background_url,accent_color,onboarding_step,onboarding_completed,whatsapp,instagram,address,theme_mode,palette_key,custom_accent,logo_asset_path,cover_asset_path,background_asset_path').eq('id',c.shopId).single(),
    a.db.from('services').select('id,name,description,duration_minutes,price_cents,active').eq('barbershop_id',c.shopId).order('name'),
    a.db.from('business_hours').select('weekday,opens_at,closes_at').eq('barbershop_id',c.shopId).order('weekday'),
    a.db.from('shop_amenities').select('amenity_key,enabled').eq('barbershop_id',c.shopId).eq('enabled',true),
@@ -436,6 +436,13 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);const v=z.object({id:z.uuid().optional(),name:z.string().trim().min(2).max(100),description:z.string().trim().max(500).default(''),durationMinutes:z.number().int().min(10).max(240),priceCents:z.number().int().min(0).max(1000000),active:z.boolean().default(true)}).strict().parse(req.body);
   const q=v.id?a.db.from('services').update({name:v.name,description:v.description||null,duration_minutes:v.durationMinutes,price_cents:v.priceCents,active:v.active}).eq('id',v.id).eq('barbershop_id',c.shopId):a.db.from('services').insert({barbershop_id:c.shopId,name:v.name,description:v.description||null,duration_minutes:v.durationMinutes,price_cents:v.priceCents});
   const r=await q.select().single();dbError(r.error);res.status(v.id?200:201).json(r.data);
+ });
+ app.patch('/api/settings/owner-booking',async(req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  const input=z.object({enabled:z.boolean()}).strict().parse(req.body);
+  const result=await c.db.rpc('fio_set_owner_booking_availability',{p_shop:c.shopId,p_enabled:input.enabled});
+  dbError(result.error);
+  res.set('Cache-Control','no-store').json({enabled:result.data});
  });
  app.post('/api/onboarding/hours',async(req,res)=>{
   const a=res.locals.auth as AuthContext,c=await tenant(a,req);requireOwner(c);
@@ -488,7 +495,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
  app.post('/api/saas/stripe/refund',rateLimitByUser('stripe-refund',3600000,2),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.json(await requestStripeRefund(c,req.body));
  });
- app.post('/api/saas/syncpay/card-token',rateLimitByUser('billing-card-token',900_000,4),async(req,res)=>{const c=ctx(res);requireOwner(c);res.status(201).json(await sealSyncpayCard(c,req.body));});
+ app.post('/api/saas/syncpay/card-token',rateLimitByUser('billing-card-token',900_000,4),async(_req,res)=>{const c=ctx(res);requireOwner(c);throw new ApiError(410,'PUBLIC_CARD_TOKENIZATION_REQUIRED','Dados do cartão devem ser enviados diretamente à SyncPay. Atualize o aplicativo.');});
  app.post('/api/saas/syncpay/hosted-card',rateLimitByUser('hosted-card',600_000,3),async(req,res)=>{
   const c=ctx(res);requireOwner(c);
   const stripe=await getStripeBilling(c);

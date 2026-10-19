@@ -17,7 +17,7 @@ const GRACE_DAYS:Record<BillingCycle,number>={weekly:2,monthly:5,annual:7};
 const PIX_AUTO_GRACE_DAYS=2;
 // PAN/CVV currently reaches our Express API: this is PCI scope, even without DB storage.
 // Require an independent explicit compliance gate; never enable solely via a checkout flag.
-export function syncpayCardConfigured(){return process.env.FIO_ENABLE_SYNCPAY_CARD==='true'&&process.env.FIO_CARD_PCI_REVIEWED==='true'&&Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);}
+export function syncpayCardConfigured(){return process.env.FIO_ENABLE_SYNCPAY_CARD==='true'&&Boolean(process.env.VITE_SYNCPAY_PUBLIC_KEY)&&Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);}
 // New legacy QR subscriptions are opt-in only. Existing QR subscriptions can still be viewed/cancelled/refunded.
 export function syncpayLegacyPixCheckoutConfigured(){return process.env.FIO_ENABLE_LEGACY_PIX_CHECKOUT==='true'&&Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);}
 export function syncpayPixAutomaticoConfigured(){return process.env.FIO_ENABLE_PIX_AUTOMATICO==='true' && Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);}

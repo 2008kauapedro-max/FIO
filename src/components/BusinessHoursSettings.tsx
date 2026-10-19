@@ -14,6 +14,7 @@ type Day={
 
 type Snapshot={
  hours:{weekday:number;opens_at:string;closes_at:string}[];
+ shop:{owner_accepts_bookings?:boolean};
 };
 
 const defaults:Day[]=[
@@ -32,6 +33,8 @@ export function BusinessHoursSettings(p:WorkspaceProps){
  const [loading,setLoading]=useState(true);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
+ const [ownerBookable,setOwnerBookable]=useState(p.data.shop.owner_accepts_bookings!==false);
+ const [ownerBusy,setOwnerBusy]=useState(false);
 
  useEffect(()=>{
   let active=true;
@@ -44,6 +47,7 @@ export function BusinessHoursSettings(p:WorkspaceProps){
   ).then(snapshot=>{
    if(!active)return;
 
+   setOwnerBookable(snapshot.shop?.owner_accepts_bookings!==false);
    setDays(defaults.map(day=>{
     const saved=snapshot.hours.find(hour=>hour.weekday===day.weekday);
     return saved
@@ -63,6 +67,18 @@ export function BusinessHoursSettings(p:WorkspaceProps){
 
   return()=>{active=false};
  },[p.data.shop.id]);
+
+ async function changeOwnerBooking(enabled:boolean){
+  if(ownerBusy)return;
+  setOwnerBusy(true);setError('');
+  try{
+   const result=await api<{enabled:boolean}>('/settings/owner-booking',p.data.shop.id,{enabled},'PATCH');
+   setOwnerBookable(result.enabled);
+   await p.refresh();
+   p.notify(result.enabled?'Você está disponível para cortes.':'Sua disponibilidade para cortes foi desativada.');
+  }catch(e){setError((e as Error).message);}
+  finally{setOwnerBusy(false);}
+ }
 
  const valid=
   days.some(day=>day.enabled)&&
@@ -113,6 +129,13 @@ export function BusinessHoursSettings(p:WorkspaceProps){
 
   {error&&<p className="notice" role="alert">{error}</p>}
 
+  <div className="business-hours-owner-booking" style={{marginBottom:16,padding:16,border:'1px solid var(--border,#444)',borderRadius:12}}>
+   <strong>Disponível para cortes (proprietário)</strong>
+   <p className="muted" style={{margin:'8px 0 12px',fontSize:13}}>Quando ativado, você aparece como barbeiro na agenda, inclusive no modo com equipe. Desativar não remove seu acesso de dono.</p>
+   <button type="button" className="secondary" aria-pressed={ownerBookable} disabled={ownerBusy} onClick={()=>void changeOwnerBooking(!ownerBookable)}>
+    {ownerBusy?'Salvando...':ownerBookable?'Disponibilidade ativa — desativar':'Disponibilidade desativada — ativar'}
+   </button>
+  </div>
   <div className="business-hours-list">
    {days.map(day=>
     <article className={day.enabled?'business-hours-row is-open':'business-hours-row'} key={day.weekday}>

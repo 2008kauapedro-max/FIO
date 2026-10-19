@@ -21,6 +21,7 @@ beforeAll(async()=>{
  await asUser(4);await db.query('select public.join_barbershop($1,$2)',['studio-a','Client A']);
  await asUser(5);await db.query('select public.join_barbershop($1,$2)',['studio-a','Client Other']);
  await asUser(1);customer=await scalar('select id from public.customers where user_id=$1',[uid(4)]);otherCustomer=await scalar('select id from public.customers where user_id=$1',[uid(5)]);
+ await admin();await db.query('update public.barbershops set owner_accepts_bookings=false where id=$1',[shop]);await asUser(1);
  service=await scalar('insert into public.services(barbershop_id,name,duration_minutes,price_cents) values($1,$2,45,6500) returning id',[shop,'Corte']);
  const d=new Date(Date.now()+3*86400000);while(d.getUTCDay()===0)d.setUTCDate(d.getUTCDate()+1);d.setUTCHours(15,0,0,0);future=d.toISOString();
 },60000);

@@ -12,6 +12,7 @@ import {annualCheckoutPreview} from '../../shared/syncpay-annual-checkout';
 import {AnnualCardCheckout} from './AnnualCardCheckout';
 import {fioAnnualCardEstimate} from '../../shared/fio-annual-card-estimate';
 import {refundStatusDisplay} from '../../shared/syncpay-refund-status';
+import {tokenizeAnnualCard} from '../lib/syncpay-public-card';
 import './legal-payments.css';
 import {premiumInitialPlan,canStartPaidCheckout} from '../lib/plan-presentation';
 
@@ -561,9 +562,9 @@ export function FioPlans(p:WorkspaceProps){
 // O PAN/CVV vai somente para a selagem, nunca para armazenamento local ou assinatura.
     let cardToken:string|undefined;
     if(paymentMethod==='sync-card'){
-     const sealed=await api<{token:string;brand:string|null;last4:string|null}>(
-      '/saas/syncpay/card-token',p.data.shop.id,{card:{number:cardNumber.replace(/\D/g,''),holder_name:cardHolder.trim(),expiry_month:cardMonth,expiry_year:cardYear,cvv:cardCvv}}
-     );
+     const sealed=await tokenizeAnnualCard(import.meta.env.VITE_SYNCPAY_PUBLIC_KEY??'',{
+      number:cardNumber,holder_name:cardHolder.trim(),expiry_month:cardMonth,expiry_year:cardYear,cvv:cardCvv
+     });
      cardToken=sealed.token;
      setCardNumber('');setCardCvv('');
     }
