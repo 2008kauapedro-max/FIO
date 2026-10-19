@@ -1223,17 +1223,19 @@ function StaffAgenda(p:WorkspaceProps){
 
    {agendaView==='done'&&<section className="fio-history-panel" aria-label="Histórico mensal">
     <header className="fio-history-heading">
-     <div><strong>Histórico salvo</strong><small>Atendimentos de outros dias continuam no banco, fora da agenda de hoje.</small></div>
-     <label>Mês <input type="month" value={historyMonth} onChange={e=>{if(/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)){setHistoryMonth(e.target.value);setHistoryOffset(0);}}}/></label>
+     <div className="fio-history-intro"><strong>Histórico salvo</strong><small>Atendimentos de outros dias continuam no banco, fora da agenda de hoje.</small></div>
+     <label className="fio-history-month"><span>Mês</span><input type="month" aria-label="Mês do histórico" value={historyMonth} onChange={e=>{if(/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value)){setHistoryMonth(e.target.value);setHistoryOffset(0);}}}/></label>
     </header>
     <div className="fio-history-actions">
-     <span>{historyTotal} agendamento(s) no período</span>
-     <button type="button" disabled={!historyItems.length||historyLoading||historyItems.length<historyTotal} onClick={exportHistoryCsv}><Download size={15}/> Baixar dados</button>
-     <button type="button" disabled={!historyItems.length||historyLoading||historyItems.length<historyTotal} onClick={()=>window.print()}><FileText size={15}/> Salvar PDF</button>
+     <span className="fio-history-count">{historyTotal} {historyTotal===1?'agendamento':'agendamentos'} no período</span>
+     <div className="fio-history-export-actions">
+      <button type="button" disabled={!historyItems.length||historyLoading||historyItems.length<historyTotal} onClick={exportHistoryCsv}><Download size={16}/> Baixar dados</button>
+      <button type="button" disabled={!historyItems.length||historyLoading||historyItems.length<historyTotal} onClick={()=>window.print()}><FileText size={16}/> Salvar PDF</button>
+     </div>
     </div>
-    {historyLoading&&<p role="status">Carregando histórico…</p>}
-    {historyError&&<p role="alert">{historyError} <button type="button" onClick={()=>setHistoryRetry(v=>v+1)}>Tentar novamente</button></p>}
-    {!historyLoading&&!historyError&&!historyItems.length&&<p>Nenhum agendamento registrado neste mês.</p>}
+    {historyLoading&&<p className="fio-history-loading" role="status">Carregando histórico…</p>}
+    {historyError&&<div className="fio-history-error" role="alert"><div><strong>Não foi possível carregar o histórico</strong><p>{historyError}</p></div><button type="button" onClick={()=>setHistoryRetry(v=>v+1)}>Tentar novamente</button></div>}
+    {!historyLoading&&!historyError&&!historyItems.length&&<p className="fio-history-empty">Nenhum agendamento registrado neste mês.</p>}
     <div className="fio-history-list">{historyItems.map(item=><article key={item.id}>
      <strong>{formatDate(item.starts_at,{timeZone:zone,day:'2-digit',month:'2-digit'})} · {formatTime(item.starts_at,{timeZone:zone})}</strong>
      <span>{item.customer_name} · {item.service_name}</span>
