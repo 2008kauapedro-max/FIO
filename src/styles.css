@@ -6060,3 +6060,11 @@ body:has(.workspace),
 @media print{
  .app-shell:has(.simple-agenda-shell) .bottom-nav{display:none!important;}
 }
+
+/* FIO_V20_AGENDA_STAFF_EMPTY_SAFE_20261019 */
+.fio-agenda-team-empty{display:grid;gap:11px;min-width:0;margin:0 0 18px;padding:18px;border:1px solid var(--border,#323232);border-radius:14px;background:var(--surface,#151515)}
+.fio-agenda-team-empty strong{display:block;font-size:.96rem;line-height:1.35;font-weight:600}
+.fio-agenda-team-empty p{margin:0;color:var(--muted,#aaa);font-size:.83rem;line-height:1.6}
+.fio-agenda-team-empty button{width:fit-content;min-height:44px}
+.fio-agenda-calendar-wait{margin:0 0 18px;border:1px dashed var(--border,#323232);border-radius:12px;padding:20px 16px;color:var(--muted,#aaa);text-align:center;font-size:.83rem;line-height:1.6}
+@media(max-width:600px){.fio-agenda-team-empty{padding:16px}.fio-agenda-team-empty button{width:100%}}
