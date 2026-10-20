@@ -1,3 +1,4 @@
+import {isIP} from 'node:net';
 import { createHash,createHmac,randomBytes,timingSafeEqual } from 'node:crypto';
 import { createClient,type SupabaseClient } from '@supabase/supabase-js';
 import type { Request,Response as ExpressResponse } from 'express';
@@ -462,11 +463,28 @@ export async function sealSyncpayCard(ctx:TenantContext,raw:unknown,fetcher:Fetc
  const response=providerParse(cardSealResponse,await providerRequest(fetcher,'/card-tokens',{method:'POST',body:JSON.stringify({card:input.card})},false));
  return {token:response.data.token,brand:response.data.brand??null,last4:response.data.last4??null};
 }
-export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch){
+export function syncpayBuyerIp(raw:string|undefined):string|null{
+ // x-vercel-forwarded-for is supplied by our edge, never by the checkout body.
+ // Only add a syntactically valid public IPv4/IPv6. No headers = omit, do not use server IP.
+ const candidate=raw?.split(',')[0]?.trim()??'';
+ if(!candidate||candidate.length>45||isIP(candidate)===0)return null;
+ if(candidate.includes(':')){
+  const lower=candidate.toLowerCase();
+  if(lower==='::'||lower==='::1'||lower.startsWith('fe80:')||lower.startsWith('fc')||lower.startsWith('fd'))return null;
+  return candidate;
+ }
+ const octets=candidate.split('.').map(Number);
+ if(octets[0]===0||octets[0]===10||octets[0]===127||octets[0]===169&&octets[1]===254||octets[0]===192&&octets[1]===168||octets[0]===172&&octets[1]>=16&&octets[1]<=31)return null;
+ return candidate;
+}
+
+function fioNewLegacyPixSalesDisabled():boolean{return true;}
+
+export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fetcher:Fetcher=fetch,buyerIpHeader?:string){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Esta ação é exclusiva do responsável pela barbearia.');
  if(await getActiveAnnualBilling(ctx.shopId,adminDb()))throw new ApiError(409,'ANNUAL_ACTIVE_CONTRACT','Existe uma compra anual vigente. Consulte Minha assinatura antes de iniciar outra cobrança.');
  const input=subscribeInput.parse(raw),document=digits(input.document);
- if(input.method==='qr_code'&&!syncpayLegacyPixCheckoutConfigured())throw new ApiError(503,'SYNCPAY_LEGACY_PIX_DISABLED','Novas assinaturas por Pix manual estão indisponíveis. Utilize Pix Automático ou cartão quando habilitados.');
+ if(input.method==='qr_code'&&fioNewLegacyPixSalesDisabled())throw new ApiError(410,'SYNCPAY_LEGACY_PIX_DISABLED','Novas assinaturas por Pix manual foram encerradas. Use Pix Automático ou cartão.');
  if(input.method==='pix_automatico'&&!syncpayPixAutomaticoConfigured())throw new ApiError(503,'SYNCPAY_PIX_AUTO_NOT_AVAILABLE','O Pix Automático ainda não está disponível nesta conta.');
  if(input.method==='pix_automatico'&&input.cycle!=='monthly')throw new ApiError(422,'SYNCPAY_PIX_AUTO_MONTHLY_ONLY','Pix Automatico esta disponivel apenas no plano mensal.');
  if(input.method==='credit_card'){
@@ -527,10 +545,14 @@ export async function createSyncpaySubscription(ctx:TenantContext,raw:unknown,fe
    return billingResponse(link,detail,undefined,input.method);
   }catch(e){await setEnrollmentIntent(db,intent.id,'uncertain',detail.token,e instanceof ApiError?e.code:'BILLING_STATE_ERROR');throw e;}
  }
- const payload:{name:string;email:string;document:string;phone?:string;card?:{token:string}}={name:ctx.member.display_name,email:user.data.user.email,document};
+ const payload:{name:string;email:string;document:string;phone?:string;customer_ip?:string;card?:{token:string}}={name:ctx.member.display_name,email:user.data.user.email,document};
 
  if(phone.length>=8)payload.phone=phone;
-  if(input.method==='credit_card')payload.card={token:input.cardToken!};
+  if(input.method==='credit_card'){
+   payload.card={token:input.cardToken!};
+   const buyerIp=syncpayBuyerIp(buyerIpHeader);
+   if(buyerIp)payload.customer_ip=buyerIp;
+  }
  let subscriptionToken:string|null=null;
  try{
   const enrolled=providerParse(enrollResponse,await providerRequest(fetcher,`/subscription-plans/${encodeURIComponent(mapping.provider_plan_token)}/enroll`,{method:'POST',body:JSON.stringify(payload)}));

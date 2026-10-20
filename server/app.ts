@@ -485,7 +485,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   res.set('Cache-Control','no-store').status(201).json({trialEndsAt:trial.data,automaticRenewal:false,paymentRequiredNow:false});
  });
  app.post('/api/saas/stripe/checkout',rateLimitByUser('stripe-checkout',600_000,6),async(req,res)=>{
-  const c=ctx(res);requireOwner(c);res.status(201).json(await createStripeCheckoutSession(c,req.body));
+  const c=ctx(res);requireOwner(c);throw new ApiError(410,'STRIPE_NEW_CHECKOUT_DISABLED','Novas assinaturas sao feitas apenas pela SyncPay. Contratos Stripe antigos continuam gerenciaveis.');
  });
  app.post('/api/saas/stripe/portal',rateLimitByUser('stripe-portal',600_000,8),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.json(await createStripeBillingPortal(c,req.body));
@@ -533,7 +533,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const c=ctx(res);requireOwner(c);annualCheckoutUnavailable();
  });
  app.post('/api/saas/subscribe',rateLimitByUser('billing-subscribe',600_000,8),async(req,res)=>{
-  const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body));
+  const c=ctx(res);requireOwner(c);res.status(201).json(await createSyncpaySubscription(c,req.body,fetch,req.get('x-vercel-forwarded-for')));
  });
  app.post('/api/saas/recover-enrollment',rateLimitByUser('billing-recover',300_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await recoverSyncpayEnrollment(c,req.body));});
  app.post('/api/saas/change-plan',rateLimitByUser('billing-change',600_000,3),async(req,res)=>{const c=ctx(res);requireOwner(c);res.json(await changeSyncpayPlan(c,req.body));});

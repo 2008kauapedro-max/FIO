@@ -145,12 +145,12 @@ export function FioPlans(p:WorkspaceProps){
     if(!active)return;
     setBilling(result.subscription);
     setBillingConfigured(result.configured);
-    setStripeConfigured(result.stripeConfigured);
+    setStripeConfigured(false); // V26: never offer NEW Stripe sales; historical contracts still manageable.
     setPixAutomaticoConfigured(Boolean(result.pixAutomaticoConfigured));
-    setLegacyPixCheckoutConfigured(Boolean(result.legacyPixCheckoutConfigured));
+    setLegacyPixCheckoutConfigured(false); // V26: Pix manual is no longer sold; existing mandates still work.
     setSyncpayCardConfigured(Boolean(result.syncpayCardConfigured));
     setHostedCardConfigured(Boolean(result.hostedCardConfigured));
-    setPaymentMethod(result.hostedCardConfigured&&cycle==='monthly'?'sync-hosted':result.pixAutomaticoConfigured&&cycle==='monthly'?'pix-auto':result.syncpayCardConfigured?'sync-card':result.stripeConfigured?'card':'pix');
+    setPaymentMethod(result.hostedCardConfigured&&cycle==='monthly'?'sync-hosted':result.pixAutomaticoConfigured&&cycle==='monthly'?'pix-auto':result.syncpayCardConfigured?'sync-card':'pix-auto');
     setBillingLoaded(true);
    })
    .catch(error=>{
@@ -250,7 +250,7 @@ export function FioPlans(p:WorkspaceProps){
     if(!alive)return;
     setBilling(result.subscription);
     setBillingConfigured(result.configured);
-    setStripeConfigured(result.stripeConfigured);
+    setStripeConfigured(false); // V26: never offer NEW Stripe sales; historical contracts still manageable.
     if(result.subscription?.provider==='stripe'&&result.subscription.providerStatus==='active'){
      confirmed=true;
      setSelectedPlan(result.subscription.plan);

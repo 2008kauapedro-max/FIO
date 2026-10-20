@@ -37,7 +37,8 @@ let cached:{token:string;until:number}|null=null;
 export function annualCreditCardLiveEnabled(){
  return process.env.FIO_ENABLE_ANNUAL_API_CHARGES==='true' &&
   process.env.FIO_ENABLE_ANNUAL_ORDER_DRAFTS==='true' &&
-  Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);
+  Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET) &&
+  /^pk_live_[A-Za-z0-9._-]{8,}$/.test(process.env.VITE_SYNCPAY_PUBLIC_KEY??'');
 }
 function db(){
  const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
