@@ -4,6 +4,7 @@ import type { Request,Response as ExpressResponse } from 'express';
 import { z } from 'zod';
 import type { TenantContext } from './context.js';
 import { ApiError, dbError } from './errors.js';
+import {syncpayBuyerIp} from './syncpay.js';
 
 // FIO annual purchase: ONE non-renewing charge, never a subscription enrollment.
 // The environmental live gate is intentionally OFF until validated in production.
@@ -95,12 +96,14 @@ async function rowForShop(shopId:string,actorId:string,orderId:string){
  return found.data as AnnualRow;
 }
 
-function realIp(req:Request){
- const str=req.get('x-vercel-forwarded-for')??req.ip??'';
- const ip=str.split(',')[0]?.trim()??'';
- if(!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip)&&!(/^[a-fA-F0-9:]+$/.test(ip)&&ip.includes(':')))
-  throw new ApiError(503,'ANNUAL_CLIENT_IP_REQUIRED','Não foi possível verificar o IP do comprador.');
+export function annualVerifiedBuyerIp(raw:string|undefined):string{
+ const ip=syncpayBuyerIp(raw);
+ if(!ip)throw new ApiError(503,'ANNUAL_CLIENT_IP_REQUIRED','Não foi possível verificar o IP do comprador.');
  return ip;
+}
+function realIp(req:Request){
+ // The customer IP must be a syntactically valid public address, not the server's IP.
+ return annualVerifiedBuyerIp(req.get('x-vercel-forwarded-for')??req.ip??undefined);
 }
 
 export function annualBuyerPhone(raw:string){
@@ -134,6 +137,8 @@ export async function submitAnnualCreditCard(ctx:TenantContext,req:Request,raw:u
   amount:order.base_amount_cents/100,
   description:`FIO anual ${order.plan_code} - ${order.id}`,
   installments:1,
+  // Documented per-transaction callback. Confirm payment by authenticated V2 lookup.
+  webhook_url:'https://usefio.vercel.app/api/webhooks/syncpay-annual',
   card:{token:input.cardToken},
   client:{name:ctx.member.display_name,email:user.data.user.email,phone,document:{type:input.document.length===11?'cpf':'cnpj',number:input.document}},
   device:{ip:buyerIp,user_agent:(req.get('user-agent')??'').slice(0,500),page_url:'https://usefio.vercel.app',metadata:{order_id:order.id}}

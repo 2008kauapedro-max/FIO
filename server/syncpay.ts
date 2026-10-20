@@ -628,6 +628,11 @@ export async function changeSyncpayPlan(ctx:TenantContext,raw:unknown,fetcher:Fe
  if(existingChange)throw new ApiError(409,'SYNCPAY_CHANGE_PENDING','Há uma troca em andamento. Atualize a cobrança antes de tentar novamente.');
  const detail=await getProviderDetail(link.provider_subscription_token,fetcher,{planToken:link.provider_plan_token,gracePeriodDays:GRACE_DAYS[link.billing_cycle]});
  if(detail.status!=='active'||detail.charges.some(c=>['pending','created','waiting_payment'].includes(c.status)))throw new ApiError(409,'SYNCPAY_CHANGE_BLOCKED','Regularize a cobrança atual antes de trocar de plano.');
+ // Documented change-plan endpoint is limited to legacy QR subscriptions.
+ const existingMethod=await db.from('syncpay_plan_mappings').select('billing_method').eq('provider_plan_token',link.provider_plan_token).maybeSingle();
+ dbError(existingMethod.error);
+ if(existingMethod.data?.billing_method!=='qr_code')
+  throw new ApiError(422,'SYNCPAY_CHANGE_UNSUPPORTED_METHOD','A SyncPay não permite troca imediata por esta modalidade. Cancele a renovação e contrate o novo plano após o término do período já pago.');
  const target=await ensureProviderPlan(db,input.plan,input.cycle,fetcher);
  if(target.provider_plan_token===detail.plan.token)throw new ApiError(409,'SYNCPAY_SAME_PLAN','Este já é o plano e período atuais.');
  // Provider product compatibility is checked before mutation; never assume separately created plans belong to one product.
