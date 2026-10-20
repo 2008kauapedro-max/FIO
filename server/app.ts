@@ -20,6 +20,7 @@ import { getActiveAnnualBilling } from './fio-annual-billing.js';
 import { submitAnnualCreditCard,checkAnnualCreditCard,annualCreditCardLiveEnabled,handleAnnualCreditCardWebhook } from './fio-annual-credit-card.js';
 import { diagnoseSyncpayAnnualReadonly } from './fio-syncpay-readonly-probe.js';
 import { fioEffectivePlan } from '../shared/fio-access-policy.js';
+import { fioPaymentReadiness } from './fio-payment-readiness.js';
 import { fioVisibleClientPlans,fioClientPlanLimit } from '../shared/fio-client-plan-visibility.js';
 import {dispatchPlatformPush,publicPushConfig,validPushEndpoint} from './platform-push.js';
 import {dispatchAppointmentPush} from './appointment-push.js';
@@ -514,6 +515,10 @@ export function createApp(authenticator: Authenticator=authenticate) {
  });
  app.get('/api/saas/annual/status',rateLimitByUser('annual-status',60000,12),async(_req,res)=>{
   const c=ctx(res);requireOwner(c);res.json(await getAnnualOrderStatus(c));
+ });
+ app.get('/api/saas/payment-readiness',rateLimitByUser('payment-readiness',60000,6),async(_req,res)=>{
+  const c=ctx(res);requireOwner(c);
+  res.set('Cache-Control','no-store').json(fioPaymentReadiness());
  });
  app.get('/api/saas/annual/card-config',rateLimitByUser('annual-card-config',60000,15),async(_req,res)=>{
   const c=ctx(res);requireOwner(c);res.json({chargeEnabled:annualCreditCardLiveEnabled(),maxInstallments:1});

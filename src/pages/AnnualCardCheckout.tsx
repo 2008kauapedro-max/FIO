@@ -19,6 +19,7 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
  const [orderId,setOrderId]=useState<string|null>(null);
  const [orderState,setOrderState]=useState('none');
  const [document,setDocument]=useState('');
+ const [phone,setPhone]=useState('');
  const [holder,setHolder]=useState('');
  const [number,setNumber]=useState('');
  const [month,setMonth]=useState('');
@@ -66,6 +67,7 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
 
  async function purchase(){
   if(busy||!canCharge||!consent||![11,14].includes(document.replace(/\D/g,'').length)||
+   !/^\d{10,13}$/.test(phone.replace(/\D/g,''))||
    number.replace(/\D/g,'').length<13||holder.trim().length<5||month.length!==2||year.length!==4||cvv.length<3||
    (orderId!==null&&orderState!=='preparing'))return;
   setBusy(true);setError('');
@@ -82,7 +84,7 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
     orderId:prepared.id,installments:1,cardToken:sealed.token,
     ...(sealed.brand?{cardBrand:sealed.brand}:{}),
     ...(sealed.last4?{cardLast4:sealed.last4}:{}),
-    document:document.replace(/\D/g,''),acceptedTerms:true
+    document:document.replace(/\D/g,''),phone:phone.replace(/\D/g,''),acceptedTerms:true
    });
    setOrderState(result.state);
    if(result.state==='paid'){await onPaid();return;}
@@ -125,6 +127,7 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
   {blocked?<div className="fio-payflow-note" role="status">Já existe um pedido anual ({orderState}). Para evitar duplicidade, não é possível iniciar outro pagamento.</div>:
    <div>
     <label className="fio-payflow-field"><span>CPF ou CNPJ do pagador</span><input inputMode="numeric" value={document} onChange={e=>setDocument(e.target.value.replace(/\D/g,'').slice(0,14))} autoComplete="off"/></label>
+    <label className="fio-payflow-field"><span>Telefone com DDD do pagador</span><input type="tel" autoComplete="tel" inputMode="tel" placeholder="(61) 99999-9999" value={phone} maxLength={20} onChange={e=>setPhone(e.target.value.replace(/[^0-9()+\s-]/g,'').slice(0,20))}/><small>Obrigatório para a autorização da compra única na SyncPay.</small></label>
     <label className="fio-payflow-field"><span>Nome no cartão</span><input autoComplete="cc-name" value={holder} onChange={e=>setHolder(e.target.value.slice(0,80))}/></label>
     <label className="fio-payflow-field"><span>Número do cartão</span><input inputMode="numeric" autoComplete="cc-number" value={number} onChange={e=>setNumber(e.target.value.replace(/\D/g,'').slice(0,19))}/></label>
     <div className="fio-payflow-review-card">
@@ -137,7 +140,7 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
   {error&&<div className="fio-payflow-error" role="alert">{error}</div>}
   <div className="fio-payflow-bottom-action">
    {blocked?<button className="fio-payflow-primary" disabled={busy} type="button" onClick={()=>void verify()}><RefreshCw size={16}/> {busy?'Consultando...':'Verificar pagamento'}</button>
-    :<button className="fio-payflow-primary" type="button" disabled={!ready||!canCharge||busy||!consent||![11,14].includes(document.length)||number.length<13||holder.trim().length<5||month.length!==2||year.length!==4||cvv.length<3}
+    :<button className="fio-payflow-primary" type="button" disabled={!ready||!canCharge||busy||!consent||![11,14].includes(document.length)||!/^\d{10,13}$/.test(phone.replace(/\D/g,''))||number.length<13||holder.trim().length<5||month.length!==2||year.length!==4||cvv.length<3}
      onClick={()=>void purchase()}><CreditCard size={16}/> {busy?'Preparando...':'Pagar anual em 1x'} →</button>}
   </div>
  </section>;

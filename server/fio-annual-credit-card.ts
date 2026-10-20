@@ -17,6 +17,7 @@ const requestSchema=z.object({
  cardBin:z.string().regex(/^\d{6}$/).optional(),
  cardBrand:z.string().max(30).optional(),
  document:z.string().regex(/^\d{11}$|^\d{14}$/),
+ phone:z.string().regex(/^\d{10,13}$/),
  acceptedTerms:z.literal(true)
 }).strict();
 // The V2 transaction view includes payment_method and paid_at explicitly.
@@ -101,6 +102,12 @@ function realIp(req:Request){
  return ip;
 }
 
+export function annualBuyerPhone(raw:string){
+ const phone=raw.replace(/\D/g,'');
+ if(!/^\d{10,13}$/.test(phone))throw new ApiError(400,'ANNUAL_PHONE_REQUIRED','Informe um telefone válido com DDD.');
+ return phone;
+}
+
 /** No retry after the V10 RPC moves the order from preparing to submitting. */
 export async function submitAnnualCreditCard(ctx:TenantContext,req:Request,raw:unknown,fetcher:typeof fetch=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Apenas o responsável pode contratar.');
@@ -111,10 +118,12 @@ export async function submitAnnualCreditCard(ctx:TenantContext,req:Request,raw:u
  if(input.installments!==1)throw new ApiError(422,'ANNUAL_INSTALLMENT_QUOTE_REQUIRED','Parcelamento aguarda cotação oficial do valor total.');
  const order=await rowForShop(ctx.shopId,ctx.userId,input.orderId);
  if(order.state!=='preparing')throw new ApiError(409,'ANNUAL_ORDER_ALREADY_SENT','Já existe uma tentativa de pagamento. Confira o status antes de outra cobrança.');
- const phone=(ctx.member.phone??'').replace(/\D/g,'');
+ // Use the buyer's phone from this purchase, not a stale profile field.
+ // Validate before the irreversible order submission and before contacting SyncPay.
+ const phone=annualBuyerPhone(input.phone);
  const user=await db().auth.admin.getUserById(ctx.userId);
  if(user.error||!user.data.user?.email)throw new ApiError(400,'ANNUAL_EMAIL_REQUIRED','Sua conta precisa de email válido.');
- if(phone.length<10)throw new ApiError(400,'ANNUAL_PHONE_REQUIRED','Adicione um telefone válido no perfil antes de pagar.');
+ if(phone.length<10)throw new ApiError(400,'ANNUAL_PHONE_REQUIRED','Informe um telefone com DDD antes de pagar.');
  // Validate IP BEFORE irrevocably locking this order as 'submitting'.
  const buyerIp=realIp(req);
  const submitted=await db().rpc('fio_begin_annual_submission_v1',{p_shop:ctx.shopId,p_order:order.id,p_actor:ctx.userId,p_installments:input.installments});
