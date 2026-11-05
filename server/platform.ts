@@ -32,6 +32,81 @@ export function platformRouter(){
   res.json(r.data??{display_name:'Responsável',phone:null});
  });
  router.get('/me',(_req,res)=>res.json(res.locals.platform));
+ router.post('/diagnostics/syncpay-card',async(req,res)=>{
+  z.object({confirm:z.literal(true)}).strict().parse(req.body);
+  if(process.env.VERCEL_ENV!=='production')
+   throw new ApiError(503,'DIAGNOSTIC_ENV','Ambiente incorreto.');
+  const id=process.env.SYNCPAY_CLIENT_ID;
+  const secret=process.env.SYNCPAY_CLIENT_SECRET;
+  if(!id||!secret)
+   throw new ApiError(503,'DIAGNOSTIC_CONFIG','Credenciais indisponiveis.');
+
+  const base='https://api.syncpayments.com.br/api/partner/v1';
+
+  async function call(path:string,method:'POST'|'DELETE',body?:unknown,token?:string){
+   const response=await fetch(base+path,{
+    method,
+    headers:{
+     Accept:'application/json',
+     ...(body?{'Content-Type':'application/json'}:{}),
+     ...(token?{Authorization:'Bearer '+token}:{})
+    },
+    ...(body?{body:JSON.stringify(body)}:{}),
+    signal:AbortSignal.timeout(15000)
+   });
+   const raw:unknown=await response.json().catch(()=>({}));
+   const data=raw&&typeof raw==='object'?raw as Record<string,unknown>:{};
+   return {http:response.status,data};
+  }
+
+  const auth=await call('/auth-token','POST',{
+   client_id:id,client_secret:secret
+  });
+  const token=auth.data.access_token;
+
+  if(typeof token!=='string'){
+   res.json({authHttp:auth.http,planHttp:null});
+   return;
+  }
+
+  const name='FIO DIAGNOSTICO CARTAO '+Date.now();
+  const created=await call('/subscription-plans','POST',{
+   name,
+   description:'Diagnostico sem assinantes',
+   amount:'10.00',
+   periodicity_days:30,
+   billing_method:'credit_card',
+   billing_advance_days:3,
+   grace_period_days:2,
+   max_retry_attempts:1
+  },token);
+
+  const inner=created.data.data;
+  const plan=inner&&typeof inner==='object'
+   ?inner as Record<string,unknown>:created.data;
+  let archiveHttp:number|null=null;
+
+  if(created.http===201&&typeof plan.token==='string'){
+   try{
+    const result=await call(
+     '/subscription-plans/'+encodeURIComponent(plan.token),
+     'DELETE',undefined,token
+    );
+    archiveHttp=result.http;
+   }catch{}
+  }
+
+  const errors=created.data.errors;
+  res.json({
+   authHttp:auth.http,
+   planHttp:created.http,
+   method:typeof plan.billing_method==='string'?plan.billing_method:null,
+   checkoutAvailable:typeof plan.checkout_url==='string',
+   archiveHttp,
+   planName:name,
+   errorFields:errors&&typeof errors==='object'?Object.keys(errors):[]
+  });
+ });
  router.post('/ai',async(req,res)=>res.json(await askPlatformAI(auth(res),req.body)));
  router.post('/ai/decision',async(req,res)=>{
   const parsed=decisionInput.safeParse(req.body);
