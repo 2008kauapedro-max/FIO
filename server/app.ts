@@ -9,7 +9,7 @@ import { authenticate, tenant, requireOwner, requireFioFeature, bootstrap, type 
 import { ApiError,dbError } from './errors.js';
 import { askAssistant } from './assistant.js';
 import { bookingSchema } from '../shared/domain.js';
-import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment,syncpayPixAutomaticoConfigured,sealSyncpayCard,syncpayCardConfigured,getSyncpayRefundTracking,syncpayLegacyPixCheckoutConfigured,startSyncpayHostedCard,getSyncpayHostedCardStatus,syncpayHostedCardConfigured,diagnosePixAutomaticoPermission } from './syncpay.js';
+import { changeSyncpayPlan,manageSyncpayCharge,createSyncpaySubscription,getSyncpayBilling,handleSyncpayWebhook,requestSyncpayRefund,recoverSyncpayEnrollment,syncpayPixAutomaticoConfigured,sealSyncpayCard,syncpayCardConfigured,getSyncpayRefundTracking,syncpayLegacyPixCheckoutConfigured,startSyncpayHostedCard,getSyncpayHostedCardStatus,syncpayHostedCardConfigured,diagnosePixAutomaticoPermission,diagnoseCreditCardPermission } from './syncpay.js';
 import { createStripeCheckoutSession,createStripeBillingPortal,getStripeBilling,handleStripeWebhook,stripeCheckoutConfigured,getStripeRefundPolicy,requestStripeRefund } from './stripe.js';
 import { createHash,randomUUID,timingSafeEqual } from 'node:crypto';
 import { rateLimit,rateLimitByUser } from './rate-limit.js';
@@ -467,6 +467,11 @@ export function createApp(authenticator: Authenticator=authenticate) {
   await requirePlatformAdmin(res.locals.auth as AuthContext);
   z.object({confirmed:z.literal(true)}).strict().parse(req.body);
   res.set('Cache-Control','no-store').json(await diagnosePixAutomaticoPermission());
+ });
+ app.post('/api/platform/card-probe',rateLimitByUser('card-probe-platform',86_400_000,1),async(req,res)=>{
+  await requirePlatformAdmin(res.locals.auth as AuthContext);
+  z.object({confirmed:z.literal(true)}).strict().parse(req.body);
+  res.set('Cache-Control','no-store').json(await diagnoseCreditCardPermission());
  });
  app.post('/api/platform/syncpay-annual-readonly-diagnostic',rateLimitByUser('syncpay-annual-readonly-diagnostic',86_400_000,1),async(req,res)=>{
   await requirePlatformAdmin(res.locals.auth as AuthContext);

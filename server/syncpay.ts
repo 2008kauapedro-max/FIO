@@ -986,11 +986,19 @@ export async function handleSyncpayWebhook(req:Request,res:ExpressResponse,fetch
  * assinante nem pagamento. Nao exponha tokens nem detalhes de resposta do provedor.
  */
 export async function diagnosePixAutomaticoPermission(fetcher:Fetcher=fetch){
+ return diagnoseSyncpayPlanMethodPermission('pix_automatico',fetcher);
+}
+
+export async function diagnoseCreditCardPermission(fetcher:Fetcher=fetch){
+ return diagnoseSyncpayPlanMethodPermission('credit_card',fetcher);
+}
+
+async function diagnoseSyncpayPlanMethodPermission(method:'pix_automatico'|'credit_card',fetcher:Fetcher){
  if(!configured())return {status:'not_configured'};
  let accessToken:string;
  try{accessToken=await getAccessToken(fetcher,true);}
  catch{return {status:'auth_unavailable'};}
- const name='FIO-PIX-AUTO-TECH-CHECK-'+randomBytes(8).toString('hex');
+ const name=(method==='credit_card'?'FIO-CARD-TECH-CHECK-':'FIO-PIX-AUTO-TECH-CHECK-')+randomBytes(8).toString('hex');
  let planToken:string|null=null;
  let createHttp:number|null=null;
  const headers={Accept:'application/json',Authorization:'Bearer '+accessToken};
@@ -998,7 +1006,7 @@ export async function diagnosePixAutomaticoPermission(fetcher:Fetcher=fetch){
   const response=await fetcher(BASE+'/subscription-plans',{
    method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),
    headers:{...headers,'Content-Type':'application/json'},
-   body:JSON.stringify({name,description:'Diagnostico sem assinantes nem cobranças',amount:'50.00',periodicity_days:30,billing_method:'pix_automatico',billing_advance_days:3,grace_period_days:2,max_retry_attempts:1})
+   body:JSON.stringify({name,description:'Diagnostico sem assinantes nem cobranças',amount:'50.00',periodicity_days:30,billing_method:method,billing_advance_days:3,grace_period_days:2,max_retry_attempts:1})
   });
   createHttp=response.status;
   const payload=await parseJson(response);

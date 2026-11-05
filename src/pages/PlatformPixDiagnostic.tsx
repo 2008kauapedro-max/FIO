@@ -16,11 +16,19 @@ const descriptions:Record<string,string>={
  create_response_invalid:'Resposta inesperada na criacao. Confira planos temporarios no painel da SyncPay.',
  archive_not_confirmed:'O arquivamento do plano temporario nao foi confirmado. Confira o painel da SyncPay antes de continuar.'
 };
+const cardDescriptions:Record<string,string>={
+ capability_confirmed:'A SyncPay aceitou criar e arquivar um plano de cartao. A conta tem cartao em assinatura habilitado. Ainda falta um pagamento real de teste antes de liberar vendas.',
+ permission_not_confirmed:'A SyncPay recusou o plano de cartao. A conta ainda nao tem cartao habilitado (ou falta a credencial da adquirente). Fale com o suporte da SyncPay.',
+ provider_error:'A SyncPay nao confirmou a operacao. O cartao permanece desativado.'
+};
 export function PlatformPixDiagnostic({session,ready}:{session:Session|null;ready:boolean}){
  const [allowed,setAllowed]=useState<boolean|null>(null);
  const [busy,setBusy]=useState(false);
  const [tried,setTried]=useState(false);
  const [message,setMessage]=useState('');
+ const [cardBusy,setCardBusy]=useState(false);
+ const [cardTried,setCardTried]=useState(false);
+ const [cardMessage,setCardMessage]=useState('');
  const [annualBusy,setAnnualBusy]=useState(false);
  const [annualTried,setAnnualTried]=useState(false);
  const [annualMessage,setAnnualMessage]=useState('');
@@ -41,6 +49,17 @@ export function PlatformPixDiagnostic({session,ready}:{session:Session|null;read
   }catch(error){
    setMessage(error instanceof Error?error.message:'Falha ao consultar. O Pix Automatico continua desativado.');
   }finally{setBusy(false);}
+ }
+ async function runCard(){
+  if(cardBusy||cardTried||!allowed)return;
+  if(!window.confirm('A SyncPay recebera a criacao de um plano temporario de cartao, seguido de arquivamento. Nao havera assinante nem pagamento. Confirmar?'))return;
+  setCardBusy(true);setCardTried(true);setCardMessage('Aguardando a resposta da SyncPay...');
+  try{
+   const value=await api<Result>('/platform/card-probe',undefined,{confirmed:true});
+   setCardMessage((cardDescriptions[value.status]??descriptions[value.status]??'Diagnostico inconclusivo.')+' Codigo: '+value.status+'.'+(value.createHttp?' Criacao HTTP '+value.createHttp+'.':'')+(value.archiveHttp?' Arquivamento HTTP '+value.archiveHttp+'.':''));
+  }catch(error){
+   setCardMessage(error instanceof Error?error.message:'Falha ao consultar. O cartao continua desativado.');
+  }finally{setCardBusy(false);}
  }
  async function runAnnual(){
   if(annualBusy||annualTried||!allowed)return;
@@ -67,6 +86,14 @@ export function PlatformPixDiagnostic({session,ready}:{session:Session|null;read
       <button className="primary" type="button" disabled={busy||tried} onClick={()=>void run()}>{busy?'Consultando a SyncPay...':'Verificar permissao'}</button>
       {message&&<p role="status" style={{marginTop:20,overflowWrap:'anywhere'}}>{message}</p>}
     </>}
+   </section>
+   <section className="pf-panel" style={{padding:24,marginTop:24}}>
+    <h2>Diagnostico do cartao de credito</h2>
+    <p>Mesmo teste, para cartao: cria e arquiva um plano temporario de cartao na SyncPay. Nao cria assinante e nao gera cobranca. Limite de uma tentativa a cada 24 horas.</p>
+    {allowed===true
+     ?<button className="primary" type="button" disabled={cardBusy||cardTried} onClick={()=>void runCard()}>{cardBusy?'Consultando a SyncPay...':'Verificar permissao de cartao'}</button>
+     :<p>Disponivel somente para administradores da plataforma.</p>}
+    {cardMessage&&<p role="status" style={{marginTop:20,overflowWrap:'anywhere'}}>{cardMessage}</p>}
    </section>
    <section className="pf-panel" style={{padding:24,marginTop:24}}>
     <h2>Diagnostico do checkout anual SyncPay</h2>
