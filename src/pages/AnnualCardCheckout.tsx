@@ -102,7 +102,8 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
    if(result.pixCode)setPixCode(result.pixCode);
    setNotice('Pix gerado. Pague no app do banco; o plano é liberado sozinho assim que o pagamento for confirmado.');
   }catch(e){
-   if(submitted){setOrderState('submitting');setError('Não foi possível confirmar se o Pix foi gerado. NÃO gere outro; toque em Verificar pagamento ou procure o suporte.');}
+   if(e instanceof RequestError&&e.code==='ANNUAL_PROVIDER_REJECTED'){setOrderId(null);setOrderState('none');setError(e.message);}
+   else if(submitted){setOrderState('submitting');setError('Não foi possível confirmar se o Pix foi gerado. NÃO gere outro; toque em Verificar pagamento ou procure o suporte.');}
    else setError(failure(e));
   }finally{setBusy(false);}
  }
@@ -127,7 +128,8 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
    if(result.state==='paid'){await onPaid();return;}
    setNotice('Cobrança enviada. Aguardando aprovação da SyncPay. A verificação automática está ativa.');
   }catch(e){
-   if(submitted){setOrderState('submitting');setError('Não foi possível confirmar a resposta. A cobrança pode ter sido enviada. NÃO tente pagar novamente; verifique o pedido ou procure suporte.');}
+   if(e instanceof RequestError&&e.code==='ANNUAL_PROVIDER_REJECTED'){setOrderId(null);setOrderState('none');setError(e.message);}
+   else if(submitted){setOrderState('submitting');setError('Não foi possível confirmar a resposta. A cobrança pode ter sido enviada. NÃO tente pagar novamente; verifique o pedido ou procure suporte.');}
    else setError(failure(e));
   }finally{setNumber('');setCvv('');setBusy(false);}
  }

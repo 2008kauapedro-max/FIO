@@ -78,6 +78,11 @@ async function provider(fetcher:typeof fetch,path:string,init?:RequestInit){
   throw new ApiError(503,'ANNUAL_UNCERTAIN','A SyncPay pode ter recebido a operação. Não tente pagar de novo; consulte o status ou o suporte.');
  }
  if(!r.ok){
+  // Resposta 4xx recebida = recusa definitiva: a SyncPay nao criou cobranca.
+  if(init?.method==='POST'&&r.status>=400&&r.status<500&&![408,409,429].includes(r.status))
+   throw new ApiError(422,'ANNUAL_PROVIDER_REJECTED',r.status===403
+    ?(path==='/cash-in'?'Pix avulso via API ainda não autorizado na conta SyncPay. Nenhuma cobrança foi criada.':'Cartão via API ainda não autorizado na conta SyncPay. Nenhuma cobrança foi criada.')
+    :'A SyncPay recusou o pagamento. Nenhuma cobrança foi criada; confira os dados e tente novamente.');
   if(r.status===403&&path==='/cash-in')throw new ApiError(503,'ANNUAL_PIX_NOT_APPROVED','Pix avulso via API ainda não autorizado na conta SyncPay.');
   if(r.status===403)throw new ApiError(503,'ANNUAL_CARD_NOT_APPROVED','Cartão via API ainda não autorizado na conta SyncPay.');
   throw new ApiError(503,'ANNUAL_PROVIDER_ERROR','Não foi possível concluir na SyncPay. Não repita o pagamento sem conferir o pedido.');
@@ -163,7 +168,7 @@ export async function submitAnnualCreditCard(ctx:TenantContext,req:Request,raw:u
   client:{name:ctx.member.display_name,email:user.data.user.email,phone,document:{type:input.document.length===11?'cpf':'cnpj',number:input.document}},
   device:{ip:buyerIp,user_agent:(req.get('user-agent')??'').slice(0,500),page_url:'https://usefio.vercel.app',metadata:{order_id:order.id}}
  };
- const response=submissionSchema.parse(await provider(fetcher,'/credit-card',{method:'POST',body:JSON.stringify(payload)}));
+ const response=submissionSchema.parse(await provider(fetcher,'/credit-card',{method:'POST',body:JSON.stringify(payload)}).catch(e=>closeRejectedOrder(order.id,e)));
  const saved=await db().rpc('fio_bind_annual_transaction_v1',{p_shop:ctx.shopId,p_order:order.id,p_transaction:response.data.transaction_id});
  dbError(saved.error);
  if(saved.data!==true)throw new ApiError(503,'ANNUAL_BIND_UNCERTAIN','A cobrança existe, mas não pôde ser vinculada. Não tente pagar novamente.');
@@ -175,6 +180,16 @@ export async function submitAnnualCreditCard(ctx:TenantContext,req:Request,raw:u
 }
 
 const ANY_ANNUAL_METHOD=['credit_card','pix'] as const;
+
+/** Recusa definitiva (sem cobranca criada): fecha o pedido para permitir nova tentativa. */
+async function closeRejectedOrder(orderId:string,error:unknown){
+ if(error instanceof ApiError&&error.code==='ANNUAL_PROVIDER_REJECTED'){
+  const closed=await db().from('fio_annual_orders').update({state:'failed',updated_at:new Date().toISOString()})
+   .eq('id',orderId).eq('state','submitting').is('provider_transaction_id',null);
+  dbError(closed.error);
+ }
+ throw error;
+}
 
 /** Anual por Pix: UMA cobrança avulsa (cash-in), sem recorrência.
  * O acesso só é liberado após GET autenticado na API V2 confirmar o pagamento. */
@@ -196,7 +211,7 @@ export async function submitAnnualPix(ctx:TenantContext,raw:unknown,fetcher:type
   webhook_url:'https://usefio.vercel.app/api/webhooks/syncpay-annual',
   client:{name:ctx.member.display_name,cpf:input.document,email:user.data.user.email,phone}
  };
- const response=pixSubmissionSchema.parse(await provider(fetcher,'/cash-in',{method:'POST',body:JSON.stringify(payload)}));
+ const response=pixSubmissionSchema.parse(await provider(fetcher,'/cash-in',{method:'POST',body:JSON.stringify(payload)}).catch(e=>closeRejectedOrder(order.id,e)));
  const saved=await db().rpc('fio_bind_annual_transaction_v1',{p_shop:ctx.shopId,p_order:order.id,p_transaction:response.identifier});
  dbError(saved.error);
  if(saved.data!==true)throw new ApiError(503,'ANNUAL_BIND_UNCERTAIN','O Pix foi gerado, mas não pôde ser vinculado. Não pague; fale com o suporte.');

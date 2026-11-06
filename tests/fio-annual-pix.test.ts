@@ -43,3 +43,14 @@ describe('anual por Pix à vista',()=>{
   expect(fn).toContain('fio_bind_annual_transaction_v1');
  });
 });
+describe('recusa definitiva da SyncPay',()=>{
+ it('fecha o pedido sem transacao para permitir nova tentativa, nunca em falha de rede',()=>{
+  const src=readFileSync('server/fio-annual-credit-card.ts','utf8');
+  expect(src).toContain("'ANNUAL_PROVIDER_REJECTED'");
+  expect(src).toContain(".eq('state','submitting').is('provider_transaction_id',null)");
+  expect(src).toContain("![408,409,429].includes(r.status)");
+  // Falha de rede continua como incerta: nunca reabre o pedido.
+  expect(src).toContain("'ANNUAL_UNCERTAIN'");
+  expect((src.match(/\.catch\(e=>closeRejectedOrder\(order\.id,e\)\)/g)??[]).length).toBe(2);
+ });
+});
