@@ -17,7 +17,7 @@ import { getAnnualOffer,annualCheckoutUnavailable } from './fio-annual-api.js';
 import { prepareAnnualOrder } from './fio-annual-store.js';
 import { getAnnualOrderStatus } from './fio-annual-status.js';
 import { getActiveAnnualBilling } from './fio-annual-billing.js';
-import { submitAnnualCreditCard,checkAnnualCreditCard,annualCreditCardLiveEnabled,handleAnnualCreditCardWebhook } from './fio-annual-credit-card.js';
+import { submitAnnualCreditCard,checkAnnualCreditCard,annualCreditCardLiveEnabled,handleAnnualCreditCardWebhook,submitAnnualPix,annualPixLiveEnabled } from './fio-annual-credit-card.js';
 import { diagnoseSyncpayAnnualReadonly } from './fio-syncpay-readonly-probe.js';
 import { fioEffectivePlan } from '../shared/fio-access-policy.js';
 import { fioPaymentReadiness } from './fio-payment-readiness.js';
@@ -526,7 +526,10 @@ export function createApp(authenticator: Authenticator=authenticate) {
   res.set('Cache-Control','no-store').json(fioPaymentReadiness());
  });
  app.get('/api/saas/annual/card-config',rateLimitByUser('annual-card-config',60000,15),async(_req,res)=>{
-  const c=ctx(res);requireOwner(c);res.json({chargeEnabled:annualCreditCardLiveEnabled(),maxInstallments:1});
+  const c=ctx(res);requireOwner(c);res.json({chargeEnabled:annualCreditCardLiveEnabled(),pixEnabled:annualPixLiveEnabled(),maxInstallments:1});
+ });
+ app.post('/api/saas/annual/pix',rateLimitByUser('annual-pix',600000,2),async(req,res)=>{
+  const c=ctx(res);requireOwner(c);res.status(202).json(await submitAnnualPix(c,req.body));
  });
  app.post('/api/saas/annual/card',rateLimitByUser('annual-card',600000,2),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(202).json(await submitAnnualCreditCard(c,req,req.body));

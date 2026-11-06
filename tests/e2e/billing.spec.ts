@@ -59,7 +59,7 @@ test('compra anual mostra revisão mas não permite pagamento sem autorização'
  await page.getByRole('button',{name:/^Anual/}).click();
  await page.getByRole('button',{name:'Revisar compra anual'}).click();
  await expect(page.getByRole('heading',{name:'Comprar plano anual'})).toBeVisible();
- await expect(page.getByRole('button',{name:/Pagar anual em 1x/})).toBeDisabled();
+ await expect(page.getByRole('button',{name:/Gerar Pix|Pagar com cartão/})).toBeDisabled();
  await expect(page.getByText(/Nenhuma cobrança pode ser iniciada/i)).toBeVisible();
 });
 

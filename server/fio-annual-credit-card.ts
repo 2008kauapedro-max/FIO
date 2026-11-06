@@ -28,9 +28,19 @@ const lookupSchema=z.object({data:z.object({transaction:z.object({
  amount:z.union([z.number(),z.string()]),
  status:z.enum(['pending','completed','failed','refunded','med']),
  currency:z.literal('BRL'),
- payment_method:z.literal('credit_card'),
+ payment_method:z.enum(['credit_card','pix']),
  paid_at:z.string().optional().nullable(),
-}).passthrough()}).passthrough()}).passthrough();
+}).passthrough(),
+ payment:z.object({pix:z.object({code:z.string().max(1000).nullable().optional()}).passthrough().nullable().optional()}).passthrough().nullable().optional()
+}).passthrough()}).passthrough();
+type AnnualMethod='credit_card'|'pix';
+const pixSubmissionSchema=z.object({pix_code:z.string().min(20).max(1000),identifier:transactionId}).passthrough();
+const pixRequestSchema=z.object({
+ orderId:z.uuid(),
+ document:z.string().regex(/^\d{11}$|^\d{14}$/),
+ phone:z.string().regex(/^\d{10,13}$/),
+ acceptedTerms:z.literal(true)
+}).strict();
 const submissionSchema=z.object({data:z.object({transaction_id:transactionId}).passthrough()}).passthrough();
 type AnnualRow={id:string;barbershop_id:string;actor_user_id:string;external_id:string;plan_code:string;base_amount_cents:number;state:string;provider_transaction_id:string|null;installments_selected:number|null};
 let cached:{token:string;until:number}|null=null;
@@ -68,22 +78,32 @@ async function provider(fetcher:typeof fetch,path:string,init?:RequestInit){
   throw new ApiError(503,'ANNUAL_UNCERTAIN','A SyncPay pode ter recebido a operação. Não tente pagar de novo; consulte o status ou o suporte.');
  }
  if(!r.ok){
+  if(r.status===403&&path==='/cash-in')throw new ApiError(503,'ANNUAL_PIX_NOT_APPROVED','Pix avulso via API ainda não autorizado na conta SyncPay.');
   if(r.status===403)throw new ApiError(503,'ANNUAL_CARD_NOT_APPROVED','Cartão via API ainda não autorizado na conta SyncPay.');
   throw new ApiError(503,'ANNUAL_PROVIDER_ERROR','Não foi possível concluir na SyncPay. Não repita o pagamento sem conferir o pedido.');
  }
  try{return await r.json() as unknown;}catch{throw new ApiError(503,'ANNUAL_INVALID_PROVIDER_REPLY','Não foi possível confirmar a resposta da SyncPay. Não repita o pagamento.');}
 }
 
-export function normalizeAnnualCardProof(raw:unknown,expect:{id:string;amountCents:number}){
- const data=lookupSchema.parse(raw).data.transaction;
+export function annualPixLiveEnabled(){
+ return process.env.FIO_ENABLE_ANNUAL_PIX==='true' &&
+  process.env.FIO_ENABLE_ANNUAL_ORDER_DRAFTS==='true' &&
+  Boolean(process.env.SYNCPAY_CLIENT_ID&&process.env.SYNCPAY_CLIENT_SECRET);
+}
+
+export function normalizeAnnualCardProof(raw:unknown,expect:{id:string;amountCents:number;methods?:readonly AnnualMethod[]}){
+ const parsed=lookupSchema.parse(raw).data;
+ const data=parsed.transaction;
  if(data.reference_id!==expect.id)throw new Error('ANNUAL_TRANSACTION_ID_MISMATCH');
+ if(!(expect.methods??['credit_card']).includes(data.payment_method))throw new Error('ANNUAL_METHOD_MISMATCH');
  // Require explicit credit_card + BRL on the authenticated provider V2 lookup.
  const price=Number(data.amount);
  if(!Number.isFinite(price)||Math.round(price*100)!==expect.amountCents)throw new Error('ANNUAL_AMOUNT_MISMATCH');
- if(data.status!=='completed')return {state:data.status as 'pending'|'failed'|'refunded'|'med',paidAt:null};
+ const pixCode=data.payment_method==='pix'?(parsed.payment?.pix?.code??null):null;
+ if(data.status!=='completed')return {state:data.status as 'pending'|'failed'|'refunded'|'med',paidAt:null,pixCode};
  // The creation timestamp MUST NEVER become a payment timestamp.
  if(!data.paid_at||!Number.isFinite(Date.parse(data.paid_at)))throw new Error('ANNUAL_PAID_DATE_MISSING');
- return {state:'completed' as const,paidAt:new Date(data.paid_at).toISOString()};
+ return {state:'completed' as const,paidAt:new Date(data.paid_at).toISOString(),pixCode:null};
 }
 
 function publicState(row:AnnualRow){return {orderId:row.id,state:row.state,canRetry:false,automaticRenewal:false};}
@@ -154,6 +174,35 @@ export async function submitAnnualCreditCard(ctx:TenantContext,req:Request,raw:u
  return {orderId:order.id,state:'review',automaticRenewal:false,message:'Cobrança enviada. Aguardando aprovação da SyncPay.'};
 }
 
+const ANY_ANNUAL_METHOD=['credit_card','pix'] as const;
+
+/** Anual por Pix: UMA cobrança avulsa (cash-in), sem recorrência.
+ * O acesso só é liberado após GET autenticado na API V2 confirmar o pagamento. */
+export async function submitAnnualPix(ctx:TenantContext,raw:unknown,fetcher:typeof fetch=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Apenas o responsável pode contratar.');
+ if(!annualPixLiveEnabled())throw new ApiError(503,'ANNUAL_CHECKOUT_DISABLED','Pix anual ainda não liberado.');
+ const input=pixRequestSchema.parse(raw);
+ const order=await rowForShop(ctx.shopId,ctx.userId,input.orderId);
+ if(order.state!=='preparing')throw new ApiError(409,'ANNUAL_ORDER_ALREADY_SENT','Já existe um pagamento gerado para este pedido. Confira o status antes de gerar outro.');
+ const phone=annualBuyerPhone(input.phone);
+ const user=await db().auth.admin.getUserById(ctx.userId);
+ if(user.error||!user.data.user?.email)throw new ApiError(400,'ANNUAL_EMAIL_REQUIRED','Sua conta precisa de email válido.');
+ const submitted=await db().rpc('fio_begin_annual_submission_v1',{p_shop:ctx.shopId,p_order:order.id,p_actor:ctx.userId,p_installments:1});
+ dbError(submitted.error);
+ if(submitted.data!==true)throw new ApiError(409,'ANNUAL_ORDER_ALREADY_SENT','Pedido já enviado ou existe assinatura ativa. Confira antes de repetir.');
+ const payload={
+  amount:order.base_amount_cents/100,
+  description:`FIO anual ${order.plan_code} - ${order.id}`,
+  webhook_url:'https://usefio.vercel.app/api/webhooks/syncpay-annual',
+  client:{name:ctx.member.display_name,cpf:input.document,email:user.data.user.email,phone}
+ };
+ const response=pixSubmissionSchema.parse(await provider(fetcher,'/cash-in',{method:'POST',body:JSON.stringify(payload)}));
+ const saved=await db().rpc('fio_bind_annual_transaction_v1',{p_shop:ctx.shopId,p_order:order.id,p_transaction:response.identifier});
+ dbError(saved.error);
+ if(saved.data!==true)throw new ApiError(503,'ANNUAL_BIND_UNCERTAIN','O Pix foi gerado, mas não pôde ser vinculado. Não pague; fale com o suporte.');
+ return {orderId:order.id,state:'review',automaticRenewal:false,pixCode:response.pix_code,message:'Pix gerado. Pague no app do banco; o plano é liberado após a confirmação.'};
+}
+
 /** Polling performs an authenticated GET of the real transaction before settlement. */
 export async function checkAnnualCreditCard(ctx:TenantContext,orderId:unknown,fetcher:typeof fetch=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Apenas o responsável pode consultar.');
@@ -162,9 +211,9 @@ export async function checkAnnualCreditCard(ctx:TenantContext,orderId:unknown,fe
  if(row.state!=='review'||!row.provider_transaction_id)return publicState(row);
  const external=await provider(fetcher,`/api/partner/v2/transactions/${encodeURIComponent(row.provider_transaction_id)}`);
  let proof:ReturnType<typeof normalizeAnnualCardProof>;
- try{proof=normalizeAnnualCardProof(external,{id:row.provider_transaction_id,amountCents:row.base_amount_cents});}
+ try{proof=normalizeAnnualCardProof(external,{id:row.provider_transaction_id,amountCents:row.base_amount_cents,methods:ANY_ANNUAL_METHOD});}
  catch{throw new ApiError(503,'ANNUAL_PROOF_UNVERIFIED','A cobrança precisa de revisão. O acesso não foi liberado.');}
- if(proof.state!=='completed')return {...publicState(row),providerStatus:proof.state};
+ if(proof.state!=='completed')return {...publicState(row),providerStatus:proof.state,...(proof.pixCode?{pixCode:proof.pixCode}:{})};
  const settled=await db().rpc('fio_settle_annual_order_v10',{
   p_order_id:row.id,p_external_id:row.external_id,p_transaction_id:row.provider_transaction_id,
   p_merchant_base_cents:row.base_amount_cents,p_paid_at:proof.paidAt
@@ -237,7 +286,7 @@ export async function handleAnnualCreditCardWebhook(req:Request,res:ExpressRespo
   // Estorno/chargeback confirmado no provedor remove apenas o acesso anual
   // que ainda corresponde a este pedido, preservando dados da barbearia.
   const detail=await provider(fetcher,`/api/partner/v2/transactions/${encodeURIComponent(id)}`);
-  const proof=normalizeAnnualCardProof(detail,{id,amountCents:row.base_amount_cents});
+  const proof=normalizeAnnualCardProof(detail,{id,amountCents:row.base_amount_cents,methods:ANY_ANNUAL_METHOD});
   if(proof.state==='refunded'){
    const revoked=await database.rpc('fio_reverse_annual_order_v13',{
     p_order_id:row.id,p_transaction_id:id
