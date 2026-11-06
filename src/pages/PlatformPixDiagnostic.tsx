@@ -26,6 +26,8 @@ export function PlatformPixDiagnostic({session,ready}:{session:Session|null;read
  const [busy,setBusy]=useState(false);
  const [tried,setTried]=useState(false);
  const [message,setMessage]=useState('');
+ const [unstickSlug,setUnstickSlug]=useState('');
+ const [unstickMessage,setUnstickMessage]=useState('');
  const [cardBusy,setCardBusy]=useState(false);
  const [cardTried,setCardTried]=useState(false);
  const [cardMessage,setCardMessage]=useState('');
@@ -49,6 +51,13 @@ export function PlatformPixDiagnostic({session,ready}:{session:Session|null;read
   }catch(error){
    setMessage(error instanceof Error?error.message:'Falha ao consultar. O Pix Automatico continua desativado.');
   }finally{setBusy(false);}
+ }
+ async function runUnstick(){
+  const slug=unstickSlug.trim().toLowerCase();
+  if(!allowed||!/^[a-z0-9-]{3,60}$/.test(slug))return;
+  if(!window.confirm('Fechar o pedido anual travado de '+slug+'? Use apenas se nenhum Pix ou cartão foi gerado para ele.'))return;
+  try{const r=await api<{closed:number}>('/platform/annual-unstick',undefined,{slug,confirmed:true});setUnstickMessage(r.closed?'Pedido destravado. A barbearia pode tentar de novo.':'Nenhum pedido travado encontrado.');}
+  catch(error){setUnstickMessage(error instanceof Error?error.message:'Falha ao destravar.');}
  }
  async function runCard(){
   if(cardBusy||cardTried||!allowed)return;
@@ -94,6 +103,12 @@ export function PlatformPixDiagnostic({session,ready}:{session:Session|null;read
      ?<button className="primary" type="button" disabled={cardBusy||cardTried} onClick={()=>void runCard()}>{cardBusy?'Consultando a SyncPay...':'Verificar permissao de cartao'}</button>
      :<p>Disponivel somente para administradores da plataforma.</p>}
     {cardMessage&&<p role="status" style={{marginTop:20,overflowWrap:'anywhere'}}>{cardMessage}</p>}
+   </section>
+   <section className="pf-panel" style={{padding:24,marginTop:24}}>
+    <h2>Destravar pedido anual</h2>
+    <p>Fecha um pedido anual que ficou travado sem cobranca gerada na SyncPay (por exemplo, apos erro de conexao). Pedidos com Pix ou cartao ja gerado nao sao alterados.</p>
+    {allowed===true?<div style={{display:'flex',gap:8,flexWrap:'wrap'}}><input aria-label="Link da barbearia" placeholder="link-da-barbearia" value={unstickSlug} onChange={e=>setUnstickSlug(e.target.value)}/><button type="button" className="primary" onClick={()=>void runUnstick()}>Destravar</button></div>:<p>Disponivel somente para administradores da plataforma.</p>}
+    {unstickMessage&&<p role="status" style={{marginTop:12}}>{unstickMessage}</p>}
    </section>
    <section className="pf-panel" style={{padding:24,marginTop:24}}>
     <h2>Diagnostico do checkout anual SyncPay</h2>

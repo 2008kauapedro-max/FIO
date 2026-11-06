@@ -468,6 +468,18 @@ export function createApp(authenticator: Authenticator=authenticate) {
   z.object({confirmed:z.literal(true)}).strict().parse(req.body);
   res.set('Cache-Control','no-store').json(await diagnosePixAutomaticoPermission());
  });
+ app.post('/api/platform/annual-unstick',rateLimitByUser('annual-unstick',3_600_000,10),async(req,res)=>{
+  await requirePlatformAdmin(res.locals.auth as AuthContext);
+  const v=z.object({slug:z.string().regex(/^[a-z0-9-]{3,60}$/),confirmed:z.literal(true)}).strict().parse(req.body);
+  const db=serviceDb();
+  const shop=await db.from('barbershops').select('id').eq('slug',v.slug).maybeSingle();dbError(shop.error);
+  if(!shop.data)throw new ApiError(404,'NOT_FOUND','Barbearia não encontrada.');
+  // Só pedidos que nunca receberam identificador de cobrança da SyncPay.
+  const closed=await db.from('fio_annual_orders').update({state:'failed',updated_at:new Date().toISOString()})
+   .eq('barbershop_id',shop.data.id).in('state',['preparing','submitting']).is('provider_transaction_id',null).select('id');
+  dbError(closed.error);
+  res.set('Cache-Control','no-store').json({closed:(closed.data??[]).length});
+ });
  app.post('/api/platform/card-probe',rateLimitByUser('card-probe-platform',86_400_000,1),async(req,res)=>{
   await requirePlatformAdmin(res.locals.auth as AuthContext);
   z.object({confirmed:z.literal(true)}).strict().parse(req.body);
@@ -529,7 +541,9 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const c=ctx(res);requireOwner(c);res.json({chargeEnabled:annualCreditCardLiveEnabled(),pixEnabled:annualPixLiveEnabled(),maxInstallments:1});
  });
  app.post('/api/saas/annual/pix',rateLimitByUser('annual-pix',600000,2),async(req,res)=>{
-  const c=ctx(res);requireOwner(c);res.status(202).json(await submitAnnualPix(c,req.body));
+  const c=ctx(res);requireOwner(c);
+  try{res.status(202).json(await submitAnnualPix(c,req.body));}
+  catch(error){console.warn(JSON.stringify({event:'annual_pix_failed',code:error instanceof ApiError?error.code:error instanceof ZodError?'INVALID_INPUT':'INTERNAL'}));throw error;}
  });
  app.post('/api/saas/annual/card',rateLimitByUser('annual-card',600000,2),async(req,res)=>{
   const c=ctx(res);requireOwner(c);res.status(202).json(await submitAnnualCreditCard(c,req,req.body));

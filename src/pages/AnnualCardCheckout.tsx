@@ -103,7 +103,7 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
    setNotice('Pix gerado. Pague no app do banco; o plano é liberado sozinho assim que o pagamento for confirmado.');
   }catch(e){
    if(e instanceof RequestError&&e.code==='ANNUAL_PROVIDER_REJECTED'){setOrderId(null);setOrderState('none');setError(e.message);}
-   else if(submitted){setOrderState('submitting');setError('Não foi possível confirmar se o Pix foi gerado. NÃO gere outro; toque em Verificar pagamento ou procure o suporte.');}
+   else if(submitted){setOrderState('submitting');setError('Não foi possível confirmar se o Pix foi gerado. NÃO gere outro; toque em Verificar pagamento ou procure o suporte.'+(e instanceof RequestError?` (código: ${e.code})`:''));}
    else setError(failure(e));
   }finally{setBusy(false);}
  }

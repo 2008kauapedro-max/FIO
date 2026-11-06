@@ -77,7 +77,11 @@ async function provider(fetcher:typeof fetch,path:string,init?:RequestInit){
   // A POST response may have been lost AFTER being processed. Never retry.
   throw new ApiError(503,'ANNUAL_UNCERTAIN','A SyncPay pode ter recebido a operação. Não tente pagar de novo; consulte o status ou o suporte.');
  }
+ const logPath=path.replace(/\/transactions\/[^/?]+/,'/transactions/:id');
  if(!r.ok){
+  let detail='';
+  try{const body=await r.clone().json() as Record<string,unknown>;detail=String(body?.message??body?.error??'').slice(0,200);}catch{/* corpo nao-JSON */}
+  console.warn(JSON.stringify({event:'syncpay_annual_http',path:logPath,status:r.status,detail}));
   // Resposta 4xx recebida = recusa definitiva: a SyncPay nao criou cobranca.
   if(init?.method==='POST'&&r.status>=400&&r.status<500&&![408,409,429].includes(r.status))
    throw new ApiError(422,'ANNUAL_PROVIDER_REJECTED',r.status===403
@@ -87,7 +91,22 @@ async function provider(fetcher:typeof fetch,path:string,init?:RequestInit){
   if(r.status===403)throw new ApiError(503,'ANNUAL_CARD_NOT_APPROVED','Cartão via API ainda não autorizado na conta SyncPay.');
   throw new ApiError(503,'ANNUAL_PROVIDER_ERROR','Não foi possível concluir na SyncPay. Não repita o pagamento sem conferir o pedido.');
  }
- try{return await r.json() as unknown;}catch{throw new ApiError(503,'ANNUAL_INVALID_PROVIDER_REPLY','Não foi possível confirmar a resposta da SyncPay. Não repita o pagamento.');}
+ try{
+  const json=await r.json() as unknown;
+  if(init?.method==='POST')console.info(JSON.stringify({event:'syncpay_annual_http',path:logPath,status:r.status,keys:json&&typeof json==='object'?Object.keys(json as object).slice(0,12):[]}));
+  return json;
+ }catch{throw new ApiError(503,'ANNUAL_INVALID_PROVIDER_REPLY','Não foi possível confirmar a resposta da SyncPay. Não repita o pagamento.');}
+}
+/** Aceita {pix_code,identifier} na raiz ou dentro de data. */
+function parsePixSubmission(raw:unknown){
+ const root=(raw&&typeof raw==='object'?raw:{}) as Record<string,unknown>;
+ const candidate=root.data&&typeof root.data==='object'&&!('pix_code' in root)?root.data:root;
+ const parsed=pixSubmissionSchema.safeParse(candidate);
+ if(!parsed.success){
+  console.warn(JSON.stringify({event:'syncpay_annual_pix_shape',keys:Object.keys(candidate as object).slice(0,12)}));
+  throw new ApiError(503,'ANNUAL_UNCERTAIN','A SyncPay respondeu em formato inesperado. Não pague nenhum Pix ainda; fale com o suporte.');
+ }
+ return parsed.data;
 }
 
 export function annualPixLiveEnabled(){
@@ -211,7 +230,7 @@ export async function submitAnnualPix(ctx:TenantContext,raw:unknown,fetcher:type
   webhook_url:'https://usefio.vercel.app/api/webhooks/syncpay-annual',
   client:{name:ctx.member.display_name,cpf:input.document,email:user.data.user.email,phone}
  };
- const response=pixSubmissionSchema.parse(await provider(fetcher,'/cash-in',{method:'POST',body:JSON.stringify(payload)}).catch(e=>closeRejectedOrder(order.id,e)));
+ const response=parsePixSubmission(await provider(fetcher,'/cash-in',{method:'POST',body:JSON.stringify(payload)}).catch(e=>closeRejectedOrder(order.id,e)));
  const saved=await db().rpc('fio_bind_annual_transaction_v1',{p_shop:ctx.shopId,p_order:order.id,p_transaction:response.identifier});
  dbError(saved.error);
  if(saved.data!==true)throw new ApiError(503,'ANNUAL_BIND_UNCERTAIN','O Pix foi gerado, mas não pôde ser vinculado. Não pague; fale com o suporte.');
