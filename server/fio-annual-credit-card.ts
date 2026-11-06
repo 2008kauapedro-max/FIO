@@ -100,10 +100,10 @@ export function normalizeAnnualCardProof(raw:unknown,expect:{id:string;amountCen
  const price=Number(data.amount);
  if(!Number.isFinite(price)||Math.round(price*100)!==expect.amountCents)throw new Error('ANNUAL_AMOUNT_MISMATCH');
  const pixCode=data.payment_method==='pix'?(parsed.payment?.pix?.code??null):null;
- if(data.status!=='completed')return {state:data.status as 'pending'|'failed'|'refunded'|'med',paidAt:null,pixCode};
+ if(data.status!=='completed')return {state:data.status as 'pending'|'failed'|'refunded'|'med',paidAt:null,...(pixCode?{pixCode}:{})} as {state:'pending'|'failed'|'refunded'|'med'|'completed';paidAt:string|null;pixCode?:string};
  // The creation timestamp MUST NEVER become a payment timestamp.
  if(!data.paid_at||!Number.isFinite(Date.parse(data.paid_at)))throw new Error('ANNUAL_PAID_DATE_MISSING');
- return {state:'completed' as const,paidAt:new Date(data.paid_at).toISOString(),pixCode:null};
+ return {state:'completed',paidAt:new Date(data.paid_at).toISOString()} as {state:'pending'|'failed'|'refunded'|'med'|'completed';paidAt:string|null;pixCode?:string};
 }
 
 function publicState(row:AnnualRow){return {orderId:row.id,state:row.state,canRetry:false,automaticRenewal:false};}
