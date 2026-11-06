@@ -6,7 +6,7 @@ import type { LegalDocument } from './legal.js';
  * A disponibilidade de métodos/taxas/prazos deve ser confirmada antes do lançamento.
  */
 const EMAIL='usefiooficial@gmail.com';
-const UPDATED='08 de outubro de 2026';
+const UPDATED='05 de novembro de 2026';
 
 export const REFUND_POLICY:LegalDocument={
  title:'Política de Cancelamento e Reembolso',updated:UPDATED,contactEmail:EMAIL,
@@ -150,7 +150,7 @@ export const CARD_GUIDE:LegalDocument={
  title:'Cartão de Crédito — Recorrência e Parcelamento',updated:UPDATED,contactEmail:EMAIL,
  intro:[
   'Uma assinatura mensal no cartão e uma compra anual parcelada são contratos financeiros diferentes. Este guia explica ambos para evitar confusões na contratação e no cancelamento.',
-  'IMPORTANTE: a disponibilidade de cartão na SyncPay dependerá da habilitação da conta e da validação da API/checkout. Este guia não torna o método disponível por si só.'
+  'No momento, o FIO oferece cartão de crédito na assinatura mensal e no plano anual em pagamento único (1x). O parcelamento do anual só será oferecido quando o valor total com juros puder ser exibido antes da confirmação.'
  ],sections:[
   {title:'1. Cartão para mensalidades recorrentes',paragraphs:[
    'Quando habilitada e autorizada, a recorrência mensal cobra o valor contratado em cada período, enquanto a assinatura permanecer ativa. O cliente deverá ver valor, data prevista, cancelamento e condições de falha antes de autorizar.',

@@ -14,7 +14,7 @@ export type LegalDocument={
 
 export const PRIVACY_POLICY:LegalDocument={
  title:'Política de Privacidade do FIO',
- updated:'08 de outubro de 2026',
+ updated:'05 de novembro de 2026',
  contactEmail:'usefiooficial@gmail.com',
  intro:[
   'Esta Política explica de forma transparente como o FIO trata dados pessoais durante o uso da plataforma de gestão, agenda, página pública, aplicativos, suporte, cobrança e recursos relacionados.',
@@ -36,7 +36,8 @@ export const PRIVACY_POLICY:LegalDocument={
     'Barbearia e equipe — nome do estabelecimento, identidade visual, contatos, endereço informado, profissionais, serviços, horários e configurações. Finalidade: entregar as funções de gestão contratadas. Base aplicável: execução do serviço e do contrato.',
     'Clientes e agenda — nome, telefone, vínculo de conta quando existente, agendamentos, histórico de atendimento, avaliações, pacotes e informações necessárias à agenda. Finalidade: permitir à barbearia organizar e prestar seus atendimentos. Nessa operação, a base legal do tratamento perante o cliente deve ser definida pela barbearia controladora; o FIO trata os dados para executar as funções solicitadas.',
     'Cobrança do FIO — plano, ciclo, valor, identificadores da assinatura no provedor, situação da cobrança e datas relacionadas. Finalidade: criar, confirmar, conciliar, cancelar e dar suporte à assinatura. Base aplicável: execução do contrato e, quando necessário, cumprimento de obrigação legal ou exercício regular de direitos.',
-    'CPF ou CNPJ informado no checkout — utilizado para identificar o pagador perante a SyncPay. O número é enviado ao provedor para processamento da contratação e não é armazenado pelo FIO em seu banco de aplicação.',
+    'CPF ou CNPJ e telefone do pagador informados no checkout — utilizados para identificar o pagador perante a SyncPay e autorizar a cobrança. São enviados ao provedor para processamento da contratação e não são armazenados pelo FIO em seu banco de aplicação.',
+    'Dados do cartão — quando o pagamento é feito por cartão, o número, a validade e o código de segurança (CVV) são digitados em página da SyncPay ou enviados diretamente do dispositivo do usuário para a SyncPay. O servidor do FIO não recebe nem armazena esses dados; recebe apenas um código de referência (token), a bandeira e os quatro últimos dígitos, usados para identificar a cobrança.',
     'Suporte, auditoria e segurança — mensagens enviadas ao suporte, identificadores técnicos de requisição e eventos de auditoria necessários. Finalidade: responder solicitações, investigar falhas, prevenir abuso, manter a segurança e exercer direitos. Bases aplicáveis: execução do serviço e legítimo interesse, conforme a finalidade concreta.',
     'Assistente de IA — mensagens enviadas ao assistente, histórico necessário à conversa e uma projeção limitada dos dados autorizados para o papel do usuário. Finalidade: responder ao pedido feito dentro do recurso de IA. Base aplicável: execução do serviço solicitado. O FIO não envia ao provedor chaves privadas ou credenciais da plataforma como parte normal dessa funcionalidade.',
     'Notificações push — endpoint e chaves técnicas fornecidas pelo navegador/dispositivo, além das preferências escolhidas. Finalidade: entregar notificações solicitadas. A permissão pode ser revogada no dispositivo ou no FIO.'
@@ -47,7 +48,7 @@ export const PRIVACY_POLICY:LegalDocument={
    bullets:[
     'Supabase — autenticação, banco de dados, armazenamento e recursos de infraestrutura relacionados ao backend.',
     'Vercel — hospedagem e execução da aplicação web e do backend publicado.',
-    'SyncPay — processamento das assinaturas e cobranças Pix dos planos pagos do FIO e, quando habilitadas, outras modalidades de pagamento expressamente apresentadas na contratação.',
+    'SyncPay — processamento das assinaturas e cobranças dos planos pagos do FIO, por Pix, Pix Automático e cartão de crédito, conforme as modalidades apresentadas na contratação.',
     'Cloudflare Turnstile — proteção contra automação abusiva e bots em fluxos de autenticação.',
     'Google — quando o usuário escolhe Entrar com Google; também poderá ser utilizado para envio dos e-mails transacionais caso o SMTP Gmail seja habilitado.',
     'Groq — processamento das solicitações enviadas ao recurso de inteligência artificial, dentro do contexto limitado preparado pelo servidor.',
@@ -63,7 +64,7 @@ export const PRIVACY_POLICY:LegalDocument={
     'Dados de conta, perfil, barbearia e operação permanecem enquanto a conta ou o espaço estiver ativo e enquanto forem necessários para a prestação do serviço.',
     'Cancelar um plano pago não apaga automaticamente a conta nem os registros operacionais da barbearia.',
     'Mensagens e histórico do Assistente permanecem associados à conta enquanto o histórico correspondente for mantido no serviço, podendo ser incluídos em um pedido verificado de exclusão.',
-    'Registros de cobrança mantidos pelo FIO, como identificadores do provedor, estado da assinatura e datas, são preservados enquanto necessários à execução do contrato, conciliação, prevenção de fraude, cumprimento de obrigações ou exercício de direitos. O CPF/CNPJ digitado no checkout não é salvo no banco da aplicação.',
+    'Registros de cobrança mantidos pelo FIO, como identificadores do provedor, estado da assinatura e datas, são preservados enquanto necessários à execução do contrato, conciliação, prevenção de fraude, cumprimento de obrigações ou exercício de direitos. O CPF/CNPJ, o telefone do pagador e os dados do cartão digitados no checkout não são salvos no banco da aplicação.',
     'Dados de suporte e auditoria são mantidos pelo período necessário para tratar a solicitação, investigar incidentes, prevenir abuso e resguardar direitos.',
     'Quando o tratamento terminar ou um pedido válido de exclusão for concluído, os dados serão eliminados ou anonimizados dentro dos limites técnicos, salvo quando sua conservação for permitida ou exigida pela legislação aplicável.'
    ],
@@ -116,7 +117,7 @@ export const PRIVACY_POLICY:LegalDocument={
 
 export const TERMS_OF_USE:LegalDocument={
  title:'Termos de Uso do FIO',
- updated:'08 de outubro de 2026',
+ updated:'05 de novembro de 2026',
  contactEmail:'usefiooficial@gmail.com',
  intro:[
   'Estes Termos regulam o acesso e o uso do FIO. Ao criar uma conta, administrar uma barbearia ou contratar um plano pago, o usuário concorda com as regras aplicáveis ao recurso utilizado.',
@@ -151,7 +152,7 @@ export const TERMS_OF_USE:LegalDocument={
    title:'4. Cobrança, Pix, cancelamento e reembolso',
    bullets:[
     'As novas contratações pagas são oferecidas nos ciclos mensal e anual mostrados no checkout.',
-    'A cobrança Pix atualmente integrada ao FIO é processada pela SyncPay. Novas modalidades, como Pix Automático e cartão, só poderão ser oferecidas após integração e liberação operacionais. O FIO somente libera planos pagos após confirmação válida da cobrança pelo provedor.',
+    'As cobranças do FIO são processadas pela SyncPay. No plano mensal, o pagamento é recorrente por Pix Automático ou cartão de crédito. No plano anual, o pagamento é único, sem renovação automática, por Pix ou cartão de crédito, conforme as opções exibidas no checkout. O FIO somente libera planos pagos após confirmação válida da cobrança pelo provedor.',
     'O usuário deve conferir valor e recebedor no aplicativo do banco antes de pagar qualquer Pix.',
     'O cancelamento de renovações futuras deverá ser solicitado ao provedor e acompanhado até a confirmação. No Pix Automático, quando habilitado, também deve ser encerrada a autorização de recorrência; cancelar não significa apagar dados ou reembolsar automaticamente valores anteriores.',
     'Nas contratações online em que o direito de arrependimento for aplicável, o fluxo do FIO permite solicitar reembolso integral da primeira contratação dentro da janela de 7 dias. Após esse período, o cancelamento não gera automaticamente devolução do período já pago, sem prejuízo de direitos previstos em lei.'
