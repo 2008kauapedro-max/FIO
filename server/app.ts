@@ -622,7 +622,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   if(result.error||!result.data.user)throw new ApiError(404,'NOT_FOUND','Acesso não encontrado.');
   res.json({email:result.data.user.email??''});
  });
- app.post('/api/staff',rateLimitByUser('staff-provisioning',3_600_000,3),async(req,res)=>{
+ app.post('/api/staff',rateLimitByUser('staff-provisioning',3_600_000,10),async(req,res)=>{
   const c=ctx(res);requireOwner(c);
   const v=z.object({name:z.string().trim().min(2).max(100),email:z.email().max(254),temporaryPassword:z.string().min(8).max(128),phone:z.string().trim().min(8).max(24)}).strict().parse(req.body);
   const admin=serviceDb();
