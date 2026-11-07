@@ -66,7 +66,7 @@ describe('cancelar Pix anual esquecido',()=>{
  it('Pix cancelado e pago depois e reaberto e liquidado, nunca perdido',()=>{
   const src=readFileSync('server/fio-annual-credit-card.ts','utf8');
   expect(src).toContain("if(row.state==='cancelled'){");
-  expect(src).toContain("await recoverLatePaidPix(c).catch(()=>undefined)".slice(0,0)||'recoverLatePaidPix');
+  expect(src).toContain('export async function recoverLatePaidPix');
   const app=readFileSync('server/app.ts','utf8');
   expect(app).toContain('await recoverLatePaidPix(c).catch(()=>undefined);');
   expect(app).toContain("app.post('/api/saas/annual/pix/cancel'");
