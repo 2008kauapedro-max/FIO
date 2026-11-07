@@ -54,3 +54,26 @@ describe('recusa definitiva da SyncPay',()=>{
   expect((src.match(/\.catch\(e=>closeRejectedOrder\(order\.id,e\)\)/g)??[]).length).toBe(2);
  });
 });
+describe('cancelar Pix anual esquecido',()=>{
+ it('so cancela Pix pendente, depois de consultar a SyncPay; se ja pago, libera em vez de cancelar',()=>{
+  const src=readFileSync('server/fio-annual-credit-card.ts','utf8');
+  const fn=src.slice(src.indexOf('export async function cancelAnnualPix'),src.indexOf('export async function recoverLatePaidPix'));
+  expect(fn).toContain("methods:['pix']");
+  expect(fn.indexOf("/api/partner/v2/transactions/")).toBeLessThan(fn.indexOf("state:'cancelled'"));
+  expect(fn).toContain("if(proof.state==='completed')return checkAnnualCreditCard(ctx,row.id,fetcher);");
+  expect(fn).toContain(".eq('state','review')");
+ });
+ it('Pix cancelado e pago depois e reaberto e liquidado, nunca perdido',()=>{
+  const src=readFileSync('server/fio-annual-credit-card.ts','utf8');
+  expect(src).toContain("if(row.state==='cancelled'){");
+  expect(src).toContain("await recoverLatePaidPix(c).catch(()=>undefined)".slice(0,0)||'recoverLatePaidPix');
+  const app=readFileSync('server/app.ts','utf8');
+  expect(app).toContain('await recoverLatePaidPix(c).catch(()=>undefined);');
+  expect(app).toContain("app.post('/api/saas/annual/pix/cancel'");
+ });
+ it('tela nao bloqueia com pedido encerrado e oferece cancelar o Pix',()=>{
+  const ui=readFileSync('src/pages/AnnualCardCheckout.tsx','utf8');
+  expect(ui).toContain("const CLOSED=['failed','cancelled','refunded'];");
+  expect(ui).toContain('Cancelar este Pix e gerar outro');
+ });
+});

@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react';
-import {ArrowLeft,Copy,CreditCard,QrCode,RefreshCw,ShieldCheck} from 'lucide-react';
+import {ArrowLeft,Copy,CreditCard,QrCode,RefreshCw,ShieldCheck,X} from 'lucide-react';
 import {QRCodeSVG} from 'qrcode.react';
 import {api,RequestError} from '../lib/api';
 import {tokenizeAnnualCard} from '../lib/syncpay-public-card';
@@ -9,6 +9,8 @@ type AnnualStatus={orderId?:string;state:string;paid?:boolean;providerStatus?:st
 type AnnualConfig={chargeEnabled:boolean;pixEnabled?:boolean;maxInstallments:number};
 type AnnualPrepare={id:string;state:string;automaticRenewal:false};
 type Method='pix'|'card';
+// Pedidos encerrados nunca bloqueiam uma nova compra.
+const CLOSED=['failed','cancelled','refunded'];
 
 export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPaid}:{
  shopId:string;plan:PaidAnnual;planName:string;priceCents:number;
@@ -56,7 +58,7 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
    const card=Boolean(cfg.chargeEnabled&&cfg.maxInstallments>=1);
    setChargeEnabled(card);setPixEnabled(Boolean(cfg.pixEnabled));
    setMethod(cfg.pixEnabled||!card?'pix':'card');
-   if(status.orderId&&status.state!=='none'&&status.state!=='disabled'){
+   if(status.orderId&&!['none','disabled',...CLOSED].includes(status.state)){
     setOrderId(status.orderId);setOrderState(status.state);
    }
   }).catch(e=>{if(current)setError(failure(e));}).finally(()=>{if(current)setReady(true);});
@@ -68,6 +70,7 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
   setBusy(true);setError('');
   try{
    const s=await api<AnnualStatus>(`/saas/annual/card-status?orderId=${encodeURIComponent(orderId)}`,shopId);
+   if(CLOSED.includes(s.state)){setOrderId(null);setOrderState('none');setPixCode('');setNotice('Esse pedido foi encerrado. Você já pode gerar um novo pagamento.');return;}
    setOrderState(s.state);
    if(s.pixCode)setPixCode(s.pixCode);
    if(s.paid===true||s.state==='paid')await onPaid();
@@ -134,6 +137,19 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
   }finally{setNumber('');setCvv('');setBusy(false);}
  }
 
+ async function cancelPix(){
+  if(!orderId||busy)return;
+  if(!window.confirm('Cancelar este Pix e gerar outro? Se você já pagou, NÃO cancele: toque em Verificar pagamento.'))return;
+  setBusy(true);setError('');setNotice('');
+  try{
+   const r=await api<AnnualStatus>('/saas/annual/pix/cancel',shopId,{orderId});
+   if(r.paid===true||r.state==='paid'){await onPaid();return;}
+   setOrderId(null);setOrderState('none');setPixCode('');
+   setNotice('Pix cancelado. Você já pode gerar um novo.');
+  }catch(e){setError(failure(e));}
+  finally{setBusy(false);}
+ }
+
  async function copyPix(){
   try{await navigator.clipboard.writeText(pixCode);setNotice('Código Pix copiado. Cole no app do banco em "Pix Copia e Cola".');}
   catch{setError('Não foi possível copiar. Selecione o código e copie manualmente.');}
@@ -178,6 +194,7 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
    </ol>
    <label className="fio-payflow-field"><span>Pix Copia e Cola</span><input readOnly value={pixCode} onFocus={e=>e.currentTarget.select()}/></label>
    <button type="button" className="fio-payflow-secondary" onClick={()=>void copyPix()}><Copy size={16}/> Copiar código Pix</button>
+   <button type="button" className="fio-payflow-secondary" disabled={busy} onClick={()=>void cancelPix()}><X size={16}/> Cancelar este Pix e gerar outro</button>
   </div>:null}
 
   {!blocked&&ready&&(pixEnabled||canCard)?<div className="fio-payflow-methods" role="radiogroup" aria-label="Forma de pagamento">

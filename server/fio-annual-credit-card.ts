@@ -238,6 +238,69 @@ export async function submitAnnualPix(ctx:TenantContext,raw:unknown,fetcher:type
 }
 
 /** Polling performs an authenticated GET of the real transaction before settlement. */
+/** Cancela um Pix anual ainda NAO pago, para o dono poder gerar outro.
+ * Antes de cancelar, consulta a SyncPay: se ja foi pago, liquida em vez de cancelar. */
+export async function cancelAnnualPix(ctx:TenantContext,orderId:unknown,fetcher:typeof fetch=fetch){
+ if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Apenas o responsável pode cancelar.');
+ const id=z.uuid().parse(orderId),row=await rowForShop(ctx.shopId,ctx.userId,id);
+ if(row.state!=='review'||!row.provider_transaction_id)throw new ApiError(409,'ANNUAL_NOT_CANCELLABLE','Este pedido não tem um Pix pendente para cancelar.');
+ const external=await provider(fetcher,`/api/partner/v2/transactions/${encodeURIComponent(row.provider_transaction_id)}`);
+ let proof:ReturnType<typeof normalizeAnnualCardProof>;
+ try{proof=normalizeAnnualCardProof(external,{id:row.provider_transaction_id,amountCents:row.base_amount_cents,methods:['pix']});}
+ catch{throw new ApiError(409,'ANNUAL_NOT_CANCELLABLE','Só é possível cancelar Pix ainda não pago. Cobranças no cartão não podem ser canceladas aqui.');}
+ if(proof.state==='completed')return checkAnnualCreditCard(ctx,row.id,fetcher);
+ const closed=await db().from('fio_annual_orders').update({state:'cancelled',updated_at:new Date().toISOString()})
+  .eq('id',row.id).eq('state','review').select('id');
+ dbError(closed.error);
+ if(!(closed.data??[]).length)throw new ApiError(409,'ANNUAL_NOT_CANCELLABLE','O pedido mudou de situação. Atualize a página.');
+ return {orderId:row.id,state:'cancelled',canRetry:true,automaticRenewal:false};
+}
+
+/** Rede de seguranca sem depender do webhook: ao abrir a tela anual, confere
+ * Pix cancelados nos ultimos 3 dias; se algum foi pago, reabre e libera o plano. */
+export async function recoverLatePaidPix(ctx:TenantContext,fetcher:typeof fetch=fetch){
+ if(ctx.member.role!=='OWNER'||!annualPixLiveEnabled())return;
+ const since=new Date(Date.now()-3*86_400_000).toISOString();
+ const found=await db().from('fio_annual_orders')
+  .select('id,barbershop_id,actor_user_id,base_amount_cents,provider_transaction_id')
+  .eq('barbershop_id',ctx.shopId).eq('state','cancelled').not('provider_transaction_id','is',null)
+  .gte('updated_at',since).order('updated_at',{ascending:false}).limit(3);
+ if(found.error)return;
+ for(const row of found.data??[]){
+  try{
+   const tx=String(row.provider_transaction_id);
+   const detail=await provider(fetcher,`/api/partner/v2/transactions/${encodeURIComponent(tx)}`);
+   const proof=normalizeAnnualCardProof(detail,{id:tx,amountCents:row.base_amount_cents,methods:ANY_ANNUAL_METHOD});
+   if(proof.state==='completed'&&await reopenCancelledPaidOrder(row)){
+    await checkAnnualCreditCard({shopId:row.barbershop_id,userId:row.actor_user_id,member:{role:'OWNER'}} as TenantContext,row.id,fetcher);
+    return;
+   }
+  }catch{ /* conferencia oportunista: nunca bloqueia a tela */ }
+ }
+}
+
+/** Pix cancelado pago depois: reabre o pedido para liquidar, liberando o acesso.
+ * Se houver outro Pix ainda pendente, ele e cancelado no lugar (nunca um pago). */
+async function reopenCancelledPaidOrder(row:{id:string;barbershop_id:string}){
+ const database=db();
+ const other=await database.from('fio_annual_orders').select('id,state')
+  .eq('barbershop_id',row.barbershop_id).in('state',['preparing','submitting','checkout_ready','review']).neq('id',row.id);
+ dbError(other.error);
+ for(const o of other.data??[]){
+  if(o.state==='preparing'||o.state==='review'){
+   const c=await database.from('fio_annual_orders').update({state:'cancelled',updated_at:new Date().toISOString()}).eq('id',o.id).eq('state',o.state);
+   dbError(c.error);
+  }
+ }
+ const reopened=await database.from('fio_annual_orders').update({state:'review',updated_at:new Date().toISOString()})
+  .eq('id',row.id).eq('state','cancelled').select('id');
+ if(reopened.error||!(reopened.data??[]).length){
+  console.warn(JSON.stringify({event:'annual_late_payment_needs_review',orderId:row.id}));
+  return false;
+ }
+ return true;
+}
+
 export async function checkAnnualCreditCard(ctx:TenantContext,orderId:unknown,fetcher:typeof fetch=fetch){
  if(ctx.member.role!=='OWNER')throw new ApiError(403,'FORBIDDEN','Apenas o responsável pode consultar.');
  const id=z.uuid().parse(orderId),row=await rowForShop(ctx.shopId,ctx.userId,id);
@@ -313,7 +376,14 @@ export async function handleAnnualCreditCardWebhook(req:Request,res:ExpressRespo
  if(!row){res.status(204).end();return;}
  // Tanto o webhook 'created' quanto o 'updated' apenas disparam um GET autenticado.
  // 'completed' no POST do webhook nao concede acesso diretamente.
- if(row.state==='review'){
+ if(row.state==='cancelled'){
+  const detail=await provider(fetcher,`/api/partner/v2/transactions/${encodeURIComponent(id)}`);
+  const proof=normalizeAnnualCardProof(detail,{id,amountCents:row.base_amount_cents,methods:ANY_ANNUAL_METHOD});
+  if(proof.state==='completed'&&await reopenCancelledPaidOrder(row)){
+   await checkAnnualCreditCard({shopId:row.barbershop_id,userId:row.actor_user_id,
+    member:{role:'OWNER'}} as TenantContext,row.id,fetcher);
+  }
+ }else if(row.state==='review'){
   await checkAnnualCreditCard({shopId:row.barbershop_id,userId:row.actor_user_id,
    member:{role:'OWNER'}} as TenantContext,row.id,fetcher);
  }else if(row.state==='paid'){
