@@ -535,7 +535,7 @@ export default function App(){
   case '/configuracoes':content=<SettingsPage {...props}/>;break;
   case '/suporte':content=<FioSupport {...props}/>;break;
   case '/feed':content=<Feed {...props}/>;break;
-  case '/assistente':content=<AssistantChat role={role} plan={data.plan} aiEnabled={data.aiEnabled} shopId={data.shop.id} shopName={data.shop.public_title||data.shop.name} shopLogo={data.shop.logo_url||undefined} demo={demo} base={base}/>;break;
+  case '/assistente':content=role==='CLIENT'?<Dashboard {...props}/>:<AssistantChat role={role} plan={data.plan} aiEnabled={data.aiEnabled} shopId={data.shop.id} shopName={data.shop.public_title||data.shop.name} shopLogo={data.shop.logo_url||undefined} demo={demo} base={base}/>;break;
   default:content=<Dashboard {...props}/>;
  }
  const toggleTheme=()=>setTheme(t=>t==='dark'?'light':'dark');
