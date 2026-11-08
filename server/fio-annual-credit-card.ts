@@ -82,6 +82,9 @@ async function provider(fetcher:typeof fetch,path:string,init?:RequestInit){
   let detail='';
   try{const body=await r.clone().json() as Record<string,unknown>;detail=String(body?.message??body?.error??'').slice(0,200);}catch{/* corpo nao-JSON */}
   console.warn(JSON.stringify({event:'syncpay_annual_http',path:logPath,status:r.status,detail}));
+  // Limite de valor da conta: recusa explicita, nenhuma cobranca criada.
+  if(init?.method==='POST'&&/max_cashin|exceeds/i.test(detail))
+   throw new ApiError(422,'ANNUAL_PROVIDER_REJECTED','O valor passou do limite de Pix liberado na conta SyncPay. Nenhuma cobrança foi criada; use o cartão ou tente novamente mais tarde.');
   // Resposta 4xx recebida = recusa definitiva: a SyncPay nao criou cobranca.
   if(init?.method==='POST'&&r.status>=400&&r.status<500&&![408,409,429].includes(r.status))
    throw new ApiError(422,'ANNUAL_PROVIDER_REJECTED',r.status===403

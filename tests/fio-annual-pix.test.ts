@@ -77,3 +77,11 @@ describe('cancelar Pix anual esquecido',()=>{
   expect(ui).toContain('Cancelar este Pix e gerar outro');
  });
 });
+describe('limite de valor da conta SyncPay',()=>{
+ it('500 com max_cashin e recusa definitiva: libera o pedido para nova tentativa',()=>{
+  const src=readFileSync('server/fio-annual-credit-card.ts','utf8');
+  const i=src.indexOf('/max_cashin|exceeds/i');
+  expect(i).toBeGreaterThan(-1);
+  expect(src.slice(i,i+200)).toContain("'ANNUAL_PROVIDER_REJECTED'");
+ });
+});
