@@ -6,7 +6,7 @@ import {tokenizeAnnualCard} from '../lib/syncpay-public-card';
 
 type PaidAnnual='SOLO'|'SOLO_PREMIUM'|'PRO'|'PREMIUM';
 type AnnualStatus={orderId?:string;state:string;paid?:boolean;providerStatus?:string;message?:string;pixCode?:string};
-type AnnualConfig={chargeEnabled:boolean;pixEnabled?:boolean;maxInstallments:number};
+type AnnualConfig={chargeEnabled:boolean;pixEnabled?:boolean;pixMaxCents?:number;maxInstallments:number};
 type AnnualPrepare={id:string;state:string;automaticRenewal:false};
 type Method='pix'|'card';
 // Pedidos encerrados nunca bloqueiam uma nova compra.
@@ -56,14 +56,16 @@ export function AnnualCardCheckout({shopId,plan,planName,priceCents,onBack,onPai
   ]).then(async ([cfg,status])=>{
    if(!current)return;
    const card=Boolean(cfg.chargeEnabled&&cfg.maxInstallments>=1);
-   setChargeEnabled(card);setPixEnabled(Boolean(cfg.pixEnabled));
-   setMethod(cfg.pixEnabled||!card?'pix':'card');
+   // Pix à vista só quando o valor cabe no limite por Pix da conta SyncPay.
+   const pixFits=Boolean(cfg.pixEnabled)&&priceCents<=(cfg.pixMaxCents??200000);
+   setChargeEnabled(card);setPixEnabled(pixFits);
+   setMethod(pixFits||!card?'pix':'card');
    if(status.orderId&&!['none','disabled',...CLOSED].includes(status.state)){
     setOrderId(status.orderId);setOrderState(status.state);
    }
   }).catch(e=>{if(current)setError(failure(e));}).finally(()=>{if(current)setReady(true);});
   return()=>{current=false;};
- },[shopId]);
+ },[shopId,priceCents]);
 
  async function verify(){
   if(!orderId||busy)return;

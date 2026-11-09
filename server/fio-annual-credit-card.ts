@@ -112,6 +112,12 @@ function parsePixSubmission(raw:unknown){
  return parsed.data;
 }
 
+/** Limite por Pix avulso da conta SyncPay (centavos). Padrão R$ 2.000,00. */
+export function annualPixMaxCents(){
+ const raw=Number(process.env.FIO_ANNUAL_PIX_MAX_CENTS??'200000');
+ return Number.isInteger(raw)&&raw>0?raw:200000;
+}
+
 export function annualPixLiveEnabled(){
  return process.env.FIO_ENABLE_ANNUAL_PIX==='true' &&
   process.env.FIO_ENABLE_ANNUAL_ORDER_DRAFTS==='true' &&
@@ -220,6 +226,7 @@ export async function submitAnnualPix(ctx:TenantContext,raw:unknown,fetcher:type
  if(!annualPixLiveEnabled())throw new ApiError(503,'ANNUAL_CHECKOUT_DISABLED','Pix anual ainda não liberado.');
  const input=pixRequestSchema.parse(raw);
  const order=await rowForShop(ctx.shopId,ctx.userId,input.orderId);
+ if(order.base_amount_cents>annualPixMaxCents())throw new ApiError(422,'ANNUAL_PIX_OVER_LIMIT','Este plano passa do limite do Pix à vista. Use o cartão de crédito.');
  if(order.state!=='preparing')throw new ApiError(409,'ANNUAL_ORDER_ALREADY_SENT','Já existe um pagamento gerado para este pedido. Confira o status antes de gerar outro.');
  const phone=annualBuyerPhone(input.phone);
  const user=await db().auth.admin.getUserById(ctx.userId);

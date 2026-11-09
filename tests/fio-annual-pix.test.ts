@@ -85,3 +85,18 @@ describe('limite de valor da conta SyncPay',()=>{
   expect(src.slice(i,i+200)).toContain("'ANNUAL_PROVIDER_REJECTED'");
  });
 });
+describe('limite por Pix à vista',()=>{
+ it('padrão R$ 2.000 e configurável; plano acima do limite só no cartão',async()=>{
+  const {annualPixMaxCents}=await import('../server/fio-annual-credit-card');
+  expect(annualPixMaxCents()).toBe(200000);
+  vi.stubEnv('FIO_ANNUAL_PIX_MAX_CENTS','300000');
+  expect(annualPixMaxCents()).toBe(300000);
+  vi.stubEnv('FIO_ANNUAL_PIX_MAX_CENTS','abc');
+  expect(annualPixMaxCents()).toBe(200000);
+  const src=readFileSync('server/fio-annual-credit-card.ts','utf8');
+  const fn=src.slice(src.indexOf('export async function submitAnnualPix'));
+  expect(fn.indexOf('annualPixMaxCents()')).toBeLessThan(fn.indexOf('fio_begin_annual_submission_v1'));
+  const ui=readFileSync('src/pages/AnnualCardCheckout.tsx','utf8');
+  expect(ui).toContain('priceCents<=(cfg.pixMaxCents??200000)');
+ });
+});
