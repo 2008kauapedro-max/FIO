@@ -321,7 +321,9 @@ export default function App(){
  useEffect(()=>{if(!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;void refresh().catch(()=>undefined);},[location.pathname,session?.user.id,shopId,isPlatform,isPublicPortal,onboardingShopId,refresh]);
  useEffect(()=>{if(!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;const sync=()=>void refresh().catch(()=>undefined);const visible=()=>{if(document.visibilityState==='visible')sync();};window.addEventListener('focus',sync);window.addEventListener('online',sync);document.addEventListener('visibilitychange',visible);const timer=window.setInterval(sync,60000);return()=>{window.removeEventListener('focus',sync);window.removeEventListener('online',sync);document.removeEventListener('visibilitychange',visible);window.clearInterval(timer);};},[session?.user.id,shopId,isPlatform,isPublicPortal,onboardingShopId,refresh]);
  useEffect(()=>{
-  if(!supabase||!session||!shopId||isPlatform||isPublicPortal||onboardingShopId)return;
+  // Tempo real só para a equipe: clientes usam a sincronização por foco/60s.
+  // Economiza conexões Realtime (limite de 200 simultâneas no plano gratuito do Supabase).
+  if(!supabase||!session||!shopId||isPlatform||isPublicPortal||onboardingShopId||(activeRole!=='OWNER'&&activeRole!=='BARBER'))return;
   let refreshTimer:number|undefined;
   const scheduleRefresh=(showNew:boolean,createdBy?:string,appointmentId?:string)=>{
    if(refreshTimer)window.clearTimeout(refreshTimer);

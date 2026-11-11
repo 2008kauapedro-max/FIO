@@ -169,7 +169,9 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const priorityIds=priorityResult.data?.ordered_plan_ids??[];
   const asset=(path:string|null)=>path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${path}`:null;
   const instagram=shop.data.instagram?`@${String(shop.data.instagram).replace(/^@+/,'').trim()}`:null;
-  res.set('Cache-Control','no-store').json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:fioVisibleClientPlans(publicPlans.data??[],effectivePublicPlan,priorityIds)});
+  // Cache curto na CDN da Vercel: com muita gente abrindo o mesmo link, o banco
+  // responde no máximo uma vez a cada 10s por barbearia. Mudanças aparecem em até 10s.
+  res.set('Cache-Control','public, max-age=0, s-maxage=10').json({shop:{...shop.data,instagram,logo_url:shop.data.logo_url||asset(shop.data.logo_asset_path),cover_url:shop.data.cover_url||asset(shop.data.cover_asset_path),background_url:shop.data.background_url||asset(shop.data.background_asset_path)},palette:palette.data,services:services.data??[],team:team.data??[],subscriptionPlans:fioVisibleClientPlans(publicPlans.data??[],effectivePublicPlan,priorityIds)});
  });
 
  app.get('/api/public/share/:slug',rateLimit('public-share',{windowMs:60_000,max:60}),async(req,res)=>{
@@ -337,7 +339,7 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const icon=shop.data.logo_url||(shop.data.logo_asset_path&&process.env.SUPABASE_URL?`${process.env.SUPABASE_URL}/storage/v1/object/public/branding-assets/${shop.data.logo_asset_path}`:null);
   if(!icon) throw new ApiError(409,'SHOP_LOGO_REQUIRED','A barbearia precisa de uma logo antes de disponibilizar o aplicativo.');
   const theme=shop.data.custom_accent||shop.data.accent_color||'#000000';
-  res.type('application/manifest+json').set('Cache-Control','no-store').send(JSON.stringify({id:`/client-app/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/login?shop=${encodeURIComponent(slug)}&audience=client`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
+  res.type('application/manifest+json').set('Cache-Control','public, max-age=0, s-maxage=60').send(JSON.stringify({id:`/client-app/${slug}`,name,short_name:name.slice(0,24),description:`Agendamentos e cuidados de ${name}.`,start_url:`/login?shop=${encodeURIComponent(slug)}&audience=client`,scope:'/',display:'standalone',background_color:'#000000',theme_color:theme,orientation:'portrait-primary',icons:[{src:icon,sizes:'any',purpose:'any'},{src:icon,sizes:'any',purpose:'maskable'}]}));
  });
  app.use('/api',async(req,res,next)=>{res.locals.auth=await authenticator(req);res.set('Cache-Control','private, no-store');next();});
  app.use('/api',rateLimitByUser('authenticated-api',60_000,180));

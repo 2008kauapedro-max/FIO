@@ -11,6 +11,10 @@ describe('agenda em tempo real',()=>{
   expect(app).toContain('barbershop_id=eq.${shopId}');
   expect(app).toContain("setToast('Novo agendamento feito por '+name+'.')");
  });
+ it('tempo real só para dono e funcionários',()=>{
+  const app=readFileSync(resolve('src/App.tsx'),'utf8');
+  expect(app).toContain("(activeRole!=='OWNER'&&activeRole!=='BARBER'))return;");
+ });
  it('sincroniza quando o app volta ao foco ou a internet retorna',()=>{
   const app=readFileSync(resolve('src/App.tsx'),'utf8');
   expect(app).toContain("window.addEventListener('focus',sync)");

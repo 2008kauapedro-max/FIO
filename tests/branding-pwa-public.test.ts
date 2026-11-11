@@ -18,8 +18,9 @@ describe('branding público e PWA por barbearia',()=>{
  it('não reutiliza branding público antigo depois de salvar',()=>{
   const server=readFileSync(resolve('server/app.ts'),'utf8');
   const portal=readFileSync(resolve('src/pages/PublicPortal.tsx'),'utf8');
-  expect(server).toContain("res.set('Cache-Control','no-store').json({shop:");
-  expect(server).toContain("set('Cache-Control','no-store').send(JSON.stringify");
+  // Cache só na CDN e curto (10s no site, 60s no manifest); o navegador nunca guarda.
+  expect(server).toContain("res.set('Cache-Control','public, max-age=0, s-maxage=10').json({shop:");
+  expect(server).toContain("set('Cache-Control','public, max-age=0, s-maxage=60').send(JSON.stringify");
   expect(server).toContain("p_setup:{customAccent:v.accentColor}");
   expect(portal).toContain("cache:'no-store'");
   expect(portal).toContain("backgroundImage:data.shop.background_url");
