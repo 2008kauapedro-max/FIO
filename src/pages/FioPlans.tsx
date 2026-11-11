@@ -97,6 +97,8 @@ export function FioPlans(p:WorkspaceProps){
  const [legacyPixCheckoutConfigured,setLegacyPixCheckoutConfigured]=useState(false);
  const [syncpayCardConfigured,setSyncpayCardConfigured]=useState(false);
  const [hostedCardConfigured,setHostedCardConfigured]=useState(false);
+ // Venda anual fica escondida até FIO_SHOW_ANNUAL_PLANS=true no servidor.
+ const [annualSalesVisible,setAnnualSalesVisible]=useState(false);
  const [payerPhone,setPayerPhone]=useState(p.data.membership.phone??'');
  const [cardNumber,setCardNumber]=useState('');
  const [cardHolder,setCardHolder]=useState('');
@@ -137,12 +139,13 @@ export function FioPlans(p:WorkspaceProps){
  useEffect(()=>{
   let active=true;
 
-  void api<{configured:boolean;stripeConfigured:boolean;pixAutomaticoConfigured:boolean;syncpayCardConfigured:boolean;legacyPixCheckoutConfigured:boolean;hostedCardConfigured:boolean;subscription:BillingState|null}>(
+  void api<{configured:boolean;stripeConfigured:boolean;pixAutomaticoConfigured:boolean;syncpayCardConfigured:boolean;legacyPixCheckoutConfigured:boolean;hostedCardConfigured:boolean;annualSalesVisible?:boolean;subscription:BillingState|null}>(
    '/saas/billing',
    p.data.shop.id
   )
    .then(result=>{
     if(!active)return;
+    setAnnualSalesVisible(Boolean(result.annualSalesVisible));
     setBilling(result.subscription);
     setBillingConfigured(result.configured);
     setStripeConfigured(false); // V26: never offer NEW Stripe sales; historical contracts still manageable.
@@ -1425,14 +1428,14 @@ export function FioPlans(p:WorkspaceProps){
    <button type="button" className="fio-payflow-secondary" disabled={busy} onClick={()=>void refreshBilling(false)}>Atualizar status</button>
   </div>}
   <div className="fio-payflow-plan-controls">
-  <div className="fio-payflow-cycle" role="tablist" aria-label={t('fp.subscriptionPeriod')}>
+  {annualSalesVisible&&<div className="fio-payflow-cycle" role="tablist" aria-label={t('fp.subscriptionPeriod')}>
    <button type="button" className={cycle==='annual'?'active':''} aria-selected={cycle==='annual'} onClick={()=>setCycle('annual')}>
     Anual <small>-20%</small>
    </button>
    <button type="button" className={cycle==='monthly'?'active':''} aria-selected={cycle==='monthly'} onClick={()=>setCycle('monthly')}>
     Mensal
    </button>
-  </div>
+  </div>}
 
   <div className="fio-payflow-tabs" role="tablist" aria-label={t('fp.title')}>
    {visiblePlans.map(plan=>

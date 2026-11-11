@@ -575,16 +575,16 @@ export function createApp(authenticator: Authenticator=authenticate) {
   const c=ctx(res);requireOwner(c);
   const annual=await getActiveAnnualBilling(c.shopId,serviceDb());
   if(annual){
-   res.json({configured:false,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured(),hostedCardConfigured:syncpayHostedCardConfigured(),subscription:annual});
+   res.json({configured:false,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured(),hostedCardConfigured:syncpayHostedCardConfigured(),annualSalesVisible:process.env.FIO_SHOW_ANNUAL_PLANS==='true',subscription:annual});
    return;
   }
   const stripe=await getStripeBilling(c);
   if(stripe){
-   res.json({configured:false,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured(),hostedCardConfigured:syncpayHostedCardConfigured(),subscription:stripe});
+   res.json({configured:false,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured(),hostedCardConfigured:syncpayHostedCardConfigured(),annualSalesVisible:process.env.FIO_SHOW_ANNUAL_PLANS==='true',subscription:stripe});
    return;
   }
   const billing=await getSyncpayBilling(c);
-  res.json({...billing,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured(),hostedCardConfigured:syncpayHostedCardConfigured()});
+  res.json({...billing,stripeConfigured:stripeCheckoutConfigured(),pixAutomaticoConfigured:syncpayPixAutomaticoConfigured(),syncpayCardConfigured:syncpayCardConfigured(),legacyPixCheckoutConfigured:syncpayLegacyPixCheckoutConfigured(),hostedCardConfigured:syncpayHostedCardConfigured(),annualSalesVisible:process.env.FIO_SHOW_ANNUAL_PLANS==='true'});
  });
  app.post('/api/services',async(req,res)=>{
   const c=ctx(res);requireOwner(c);
