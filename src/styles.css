@@ -6060,3 +6060,7 @@ body:has(.workspace),
 @media print{
  .app-shell:has(.simple-agenda-shell) .bottom-nav{display:none!important;}
 }
+.offline-bar{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:2147483000;padding:5px max(12px,env(safe-area-inset-right)) 5px max(12px,env(safe-area-inset-left));background:#c62828;color:#fff;font-size:12.5px;font-weight:600;line-height:1.3;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.18);pointer-events:none;animation:offline-bar-in .18s ease-out}
+.offline-bar.is-back{background:#2e7d32}
+@keyframes offline-bar-in{from{transform:translateY(-100%);opacity:0}to{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){.offline-bar{animation:none}}

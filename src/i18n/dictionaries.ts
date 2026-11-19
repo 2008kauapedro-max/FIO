@@ -1790,3 +1790,10 @@ Object.assign(it,{
  "app.noticeNow":"ora",
  "app.noticeOpenAgenda":"Apri agenda"
 });
+
+Object.assign(ptBR,{"offline.bar":"Você está offline. Verifique sua internet.","offline.back":"Conexão restabelecida."});
+Object.assign(en,{"offline.bar":"You are offline. Check your connection.","offline.back":"Back online."});
+Object.assign(es,{"offline.bar":"Estás sin conexión. Revisa tu internet.","offline.back":"Conexión restablecida."});
+Object.assign(fr,{"offline.bar":"Vous êtes hors ligne. Vérifiez votre connexion.","offline.back":"Connexion rétablie."});
+Object.assign(de,{"offline.bar":"Du bist offline. Prüfe deine Internetverbindung.","offline.back":"Wieder online."});
+Object.assign(it,{"offline.bar":"Sei offline. Controlla la connessione.","offline.back":"Connessione ripristinata."});
